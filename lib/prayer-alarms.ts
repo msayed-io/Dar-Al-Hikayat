@@ -16,6 +16,8 @@ import { CITIES, type CityData } from "./prayer-cities";
 
 interface PrayerAlarmPlugin {
   requestNotificationPermission(): Promise<{ granted: boolean }>;
+  requestExactAlarmPermission(): Promise<{ granted: boolean }>;
+  canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
   scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<void>;
   cancelAllAlarms(): Promise<void>;
 }
@@ -101,7 +103,7 @@ function alarmBody(prayerId: string, type: "exact" | "pre"): string {
 }
 
 /** طلب صلاحية الإشعارات */
-async function requestNotificationPermission(): Promise<boolean> {
+export async function requestNotificationPermission(): Promise<boolean> {
   if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) return true;
   try {
     const { granted } = await PrayerAlarm.requestNotificationPermission();
@@ -109,6 +111,30 @@ async function requestNotificationPermission(): Promise<boolean> {
   } catch (e) {
     console.error("Notification permission error:", e);
     return false;
+  }
+}
+
+/** طلب صلاحية التنبيهات الدقيقة */
+export async function requestExactAlarmPermission(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) return true;
+  try {
+    const { granted } = await PrayerAlarm.requestExactAlarmPermission();
+    return granted;
+  } catch (e) {
+    console.error("Exact alarm permission error:", e);
+    return false;
+  }
+}
+
+/** التحقق من إمكانية جدولة تنبيهات دقيقة */
+export async function checkExactAlarmPermission(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) return true;
+  try {
+    const { canSchedule } = await PrayerAlarm.canScheduleExactAlarms();
+    return canSchedule;
+  } catch (e) {
+    console.error("Check exact alarm permission error:", e);
+    return true;
   }
 }
 

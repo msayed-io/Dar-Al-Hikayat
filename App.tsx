@@ -10,6 +10,7 @@ import LocationPickerPage from "./components/LocationPickerPage";
 import LocationBottomSheet from "./components/LocationBottomSheet";
 import { AppProvider, useApp } from "./contexts/AppContext";
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+import { PermissionsGuard } from "./components/PermissionsGuard";
 
 // The main component that manages views and persistent navigation
 const AppContent = () => {
@@ -342,9 +343,11 @@ function App() {
         <SplashScreen onFinish={() => setShowSplash(false)} />
       ) : (
         <BiometricGuard>
-          <div className="animate-in fade-in duration-700 min-h-screen">
-            <AppContent />
-          </div>
+          <PermissionsGuard>
+            <div className="animate-in fade-in duration-700 min-h-screen">
+              <AppContent />
+            </div>
+          </PermissionsGuard>
         </BiometricGuard>
       )}
     </AppProvider>

@@ -858,13 +858,7 @@ const DarAlHikayatMaster: React.FC = () => {
     });
     try {
       const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${safeTitle}.docx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await downloadBlob(blob, `${safeTitle}.docx`);
     } catch (error) {
       console.error("Error exporting:", error);
       alert("حدث خطأ أثناء تصدير الملف.");
