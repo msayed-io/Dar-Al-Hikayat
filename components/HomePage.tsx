@@ -980,7 +980,7 @@ const HomePage: React.FC = () => {
       )}
 
       <div
-        className="relative z-10 max-w-md mx-auto min-h-screen flex flex-col shadow-2xl"
+        className="relative z-10 max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto min-h-screen flex flex-col shadow-2xl"
         style={{
           backgroundColor: currentTheme.isDark
             ? "rgba(0,0,0,0.2)"
@@ -992,7 +992,7 @@ const HomePage: React.FC = () => {
           className={`fixed top-0 left-0 right-0 z-50 p-2 transition-all duration-500 ease-out pointer-events-none ${showUI ? "translate-y-0" : "-translate-y-full opacity-0"}`}
           style={{ top: 0 }}
         >
-          <div className="max-w-md mx-auto relative flex items-center justify-between pointer-events-none">
+          <div className="max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto relative flex items-center justify-between pointer-events-none">
             {isSearchOpen ? (
               /* Full-Width Search Floating Capsule */
               <div
@@ -1317,7 +1317,7 @@ const HomePage: React.FC = () => {
         >
 
           <div
-            className={`${viewMode === "grid" ? "grid grid-cols-2 gap-3" : "space-y-4"}`}
+            className={`${viewMode === "grid" ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" : "space-y-4"}`}
           >
             {filteredNotes.length > 0 ? (
               filteredNotes.map((note) => {
