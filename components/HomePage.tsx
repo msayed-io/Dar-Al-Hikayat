@@ -980,11 +980,9 @@ const HomePage: React.FC = () => {
       )}
 
       <div
-        className="relative z-10 max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto min-h-screen flex flex-col shadow-2xl"
+        className="relative z-10 w-full max-w-7xl mx-auto min-h-screen flex flex-col"
         style={{
-          backgroundColor: currentTheme.isDark
-            ? "rgba(0,0,0,0.2)"
-            : "rgba(255,255,255,0.2)",
+          backgroundColor: "transparent",
         }}
       >
         {/* --- FLOATING HEADER CAPSULES SYSTEM (Apple Concentric Geometry) --- */}
@@ -992,7 +990,7 @@ const HomePage: React.FC = () => {
           className={`fixed top-0 left-0 right-0 z-50 p-2 transition-all duration-500 ease-out pointer-events-none ${showUI ? "translate-y-0" : "-translate-y-full opacity-0"}`}
           style={{ top: 0 }}
         >
-          <div className="max-w-md md:max-w-2xl lg:max-w-3xl xl:max-w-4xl mx-auto relative flex items-center justify-between pointer-events-none">
+          <div className="w-full max-w-7xl mx-auto relative flex items-center justify-between pointer-events-none px-4 sm:px-6 lg:px-8">
             {isSearchOpen ? (
               /* Full-Width Search Floating Capsule */
               <div
@@ -1317,7 +1315,7 @@ const HomePage: React.FC = () => {
         >
 
           <div
-            className={`${viewMode === "grid" ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3" : "space-y-4"}`}
+            className={`${viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" : "max-w-2xl sm:max-w-3xl mx-auto space-y-4 w-full"}`}
           >
             {filteredNotes.length > 0 ? (
               filteredNotes.map((note) => {
@@ -1331,8 +1329,8 @@ const HomePage: React.FC = () => {
                     onTouchEnd={handleTouchEnd}
                     onClick={() => handleCardClick(note)}
                     className={`
-                        group relative rounded-2xl backdrop-blur-md shadow-sm transition-all duration-300 cursor-pointer overflow-hidden
-                        ${viewMode === "grid" ? "p-3 aspect-[4/5] flex flex-col justify-between" : "p-4 hover:-translate-y-0.5 hover:shadow-md"}
+                        group relative rounded-2xl backdrop-blur-md shadow-sm transition-all duration-300 cursor-pointer overflow-hidden w-full
+                        ${viewMode === "grid" ? "p-4 min-h-[200px] sm:min-h-[220px] h-auto flex flex-col justify-between hover:-translate-y-0.5 hover:shadow-md" : "p-4 hover:-translate-y-0.5 hover:shadow-md"}
                       `}
                     style={{
                       backgroundColor: isSelected
@@ -1363,53 +1361,55 @@ const HomePage: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="relative z-10 flex flex-col h-full">
-                      <div
-                        className={`flex justify-between items-start ${viewMode === "grid" ? "mb-2 flex-col gap-1" : "mb-1.5"}`}
-                      >
-                        <h2
-                          className={`${viewMode === "grid" ? "text-base line-clamp-2" : "text-lg"} font-zain-bold leading-relaxed`}
-                          style={{ color: currentTheme.accent }}
+                    <div className="relative z-10 flex flex-col h-full justify-between flex-1">
+                      <div>
+                        <div
+                          className={`flex justify-between items-start ${viewMode === "grid" ? "mb-2 flex-col gap-1" : "mb-1.5"}`}
                         >
-                          {note.title}
-                        </h2>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full border font-zain-reg pt-0.5 ${viewMode === "grid" ? "self-start" : ""}`}
-                          style={{
-                            borderColor: `${currentTheme.accent}30`,
-                            color: currentTheme.secondary,
-                            backgroundColor: `${currentTheme.bg}50`,
-                          }}
-                        >
-                          {note.category}
-                        </span>
+                          <h2
+                            className={`${viewMode === "grid" ? "text-base line-clamp-2" : "text-lg"} font-zain-bold leading-relaxed`}
+                            style={{ color: currentTheme.accent }}
+                          >
+                            {note.title}
+                          </h2>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border font-zain-reg pt-0.5 ${viewMode === "grid" ? "self-start" : ""}`}
+                            style={{
+                              borderColor: `${currentTheme.accent}30`,
+                              color: currentTheme.secondary,
+                              backgroundColor: `${currentTheme.bg}50`,
+                            }}
+                          >
+                            {note.category}
+                          </span>
+                        </div>
+
+                        {/* Lock Content Mask */}
+                        {note.isLocked ? (
+                          <div className="flex flex-col items-center justify-center opacity-40 py-4">
+                            <Lock
+                              className="w-5 h-5 mb-1.5"
+                              style={{ color: currentTheme.text }}
+                            />
+                            <p
+                              className="text-xs font-zain-reg text-center"
+                              style={{ color: currentTheme.text }}
+                            >
+                              حكاية مغلقة بأمر الكاتب
+                            </p>
+                          </div>
+                        ) : (
+                          <p
+                            className={`text-sm leading-relaxed font-zain-reg mb-3 ${viewMode === "grid" ? "line-clamp-3" : "line-clamp-2"}`}
+                            style={{ color: currentTheme.text, opacity: 0.8 }}
+                          >
+                            {note.preview}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Lock Content Mask */}
-                      {note.isLocked ? (
-                        <div className="flex-1 flex flex-col items-center justify-center opacity-40 py-2">
-                          <Lock
-                            className="w-5 h-5 mb-1.5"
-                            style={{ color: currentTheme.text }}
-                          />
-                          <p
-                            className="text-xs font-zain-reg text-center"
-                            style={{ color: currentTheme.text }}
-                          >
-                            حكاية مغلقة بأمر الكاتب
-                          </p>
-                        </div>
-                      ) : (
-                        <p
-                          className={`text-sm leading-5 font-zain-reg mb-2 ${viewMode === "grid" ? "line-clamp-4 flex-1" : "line-clamp-2"}`}
-                          style={{ color: currentTheme.text, opacity: 0.8 }}
-                        >
-                          {note.preview}
-                        </p>
-                      )}
-
                       <div
-                        className={`flex justify-between items-center border-t pt-2 ${viewMode === "grid" ? "mt-auto" : "mt-1"}`}
+                        className={`flex justify-between items-center border-t pt-2 ${viewMode === "grid" ? "mt-4" : "mt-1"}`}
                         style={{ borderColor: currentTheme.border }}
                       >
                         <span
