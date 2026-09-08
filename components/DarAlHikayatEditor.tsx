@@ -44,6 +44,7 @@ import {
   KeyRound,
   Highlighter,
   Eraser,
+  Save,
 } from "lucide-react";
 import {
   Document,
@@ -1138,9 +1139,6 @@ const DarAlHikayatMaster: React.FC = () => {
     }
     
     updatedSelection.removeAllRanges();
-    const finalRange = document.createRange();
-    finalRange.selectNodeContents(span);
-    updatedSelection.addRange(finalRange);
     
     triggerEditorUpdates();
   };
@@ -1151,6 +1149,7 @@ const DarAlHikayatMaster: React.FC = () => {
 
     const range = selection.getRangeAt(0);
     clearHighlightFromSelection(selection, range);
+    selection.removeAllRanges();
     triggerEditorUpdates();
   };
 
@@ -1180,10 +1179,10 @@ const DarAlHikayatMaster: React.FC = () => {
       
       // Intelligent positioning: if selection is too close to top of screen, show toolbar BELOW selection
       // Otherwise, show it ABOVE selection with safe space to avoid overlapping system Copy/Paste popups
-      const showBelow = rect.top < 85;
+      const showBelow = rect.top < 120;
       const top = showBelow
-        ? rect.bottom + window.scrollY + 18
-        : rect.top + window.scrollY - 62;
+        ? rect.bottom + window.scrollY + 60
+        : rect.top + window.scrollY - 95;
       
       const left = Math.max(60, Math.min(window.innerWidth - 60, rect.left + rect.width / 2));
       
@@ -1395,13 +1394,13 @@ const DarAlHikayatMaster: React.FC = () => {
           return;
         }
         if (isSavedMode) {
-          if (!e.target.closest("header, .session-card, .toc-card")) {
+          if (!e.target.closest("header, .session-card, .toc-card, .export-dialog, .confirm-dialog, .lock-dialog")) {
             handleReturnToEdit();
           }
         } else {
           if (
             !e.target.closest(
-              "button, footer, .novel-menu, .color-grid, .toc-card, .stats-panel, .lock-dialog",
+              "button, footer, .novel-menu, .color-grid, .toc-card, .stats-panel, .export-dialog, .confirm-dialog, .lock-dialog",
             )
           ) {
             setShowUI(true);
@@ -1460,31 +1459,46 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Confirm Dialog */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
-            className={`backdrop-blur-xl border rounded-2xl shadow-2xl w-full max-w-xs p-6 ${isDialogClosing ? "animate-out fade-out-50 zoom-out-95" : "animate-in fade-in-0 zoom-in-95"}`}
+            className={`confirm-dialog border shadow-2xl text-center ${isDialogClosing ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
             style={{
-              backgroundColor: currentTheme.glass,
+              width: "260px",
+              maxWidth: "calc(100vw - 32px)",
+              borderRadius: "28px",
+              padding: "24px 20px",
+              backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
+              boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
             }}
           >
+            <div className="flex justify-center mb-3">
+              <Save
+                className="w-8 h-8"
+                style={{ color: currentTheme.accent }}
+              />
+            </div>
             <h2
-              className="text-xl font-zain-bold text-center mb-6"
+              className="text-lg font-zain-bold mb-5 tracking-tight leading-tight"
               style={{ color: currentTheme.text }}
             >
               هل تريد حفظ التغييرات؟
             </h2>
-            <div className="flex justify-end items-center gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={handleConfirmDiscard}
-                className="px-5 py-2 rounded-lg font-zain-reg hover:bg-black/5"
-                style={{ color: currentTheme.secondary }}
+                className="flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95"
+                style={{ 
+                  backgroundColor: "transparent",
+                  borderColor: currentTheme.border,
+                  color: currentTheme.text 
+                }}
               >
                 تجاهل
               </button>
               <button
                 onClick={handleConfirmSave}
-                className="px-5 py-2 rounded-lg font-zain-bold text-[#121A1B] hover:opacity-90"
+                className="flex-1 py-2 rounded-full font-zain-bold text-sm transition-all active:scale-95 shadow-sm text-[#121A1B]"
                 style={{ backgroundColor: currentTheme.accent }}
               >
                 حفظ
@@ -1494,35 +1508,35 @@ const DarAlHikayatMaster: React.FC = () => {
         </div>
       )}
 
-      {/* Export Dialog */}
+      {/* Export Dialog - Compact & Rounded Redesign */}
       {showExportDialog && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
-            className={`backdrop-blur-xl border rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95`}
+            className="export-dialog border shadow-2xl text-center animate-in zoom-in-95 duration-200"
             style={{
-              backgroundColor: currentTheme.glass,
+              width: "300px",
+              maxWidth: "calc(100vw - 32px)",
+              borderRadius: "28px",
+              padding: "24px 20px",
+              backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
+              boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
             }}
           >
-            <div className="flex justify-center mb-4">
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center shadow-inner"
-                style={{ backgroundColor: `${currentTheme.accent}15` }}
-              >
-                <FileDown
-                  className="w-6 h-6"
-                  style={{ color: currentTheme.accent }}
-                />
-              </div>
+            <div className="flex justify-center mb-3">
+              <FileDown
+                className="w-8 h-8"
+                style={{ color: currentTheme.accent }}
+              />
             </div>
             <h2
-              className="text-xl font-zain-bold text-center mb-2"
+              className="text-lg font-zain-bold mb-1 tracking-tight leading-tight"
               style={{ color: currentTheme.text }}
             >
-              تجهيز الحكاية للتصدير كـ{exportFormat === "pdf" ? "PDF" : "Word"}
+              تصدير الحكاية كـ {exportFormat === "pdf" ? "PDF" : "Word"}
             </h2>
             <p
-              className="text-xs text-center font-zain-reg mb-4 opacity-70"
+              className="text-[11px] font-zain-reg mb-5 opacity-70 leading-relaxed max-w-[220px] mx-auto"
               style={{ color: currentTheme.text }}
             >
               اختر اسماً لملف{" "}
@@ -1531,24 +1545,24 @@ const DarAlHikayatMaster: React.FC = () => {
             </p>
 
             {/* اختيار تنسيق التصدير (كما في الإنتاج) */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 p-1 rounded-full border" style={{ borderColor: currentTheme.border, backgroundColor: `${currentTheme.accent}05` }}>
               <button
                 onClick={() => setExportFormat("pdf")}
-                className={`flex-1 py-2.5 rounded-xl font-zain-bold text-sm border transition-all active:scale-95 ${
+                className={`flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95 ${
                   exportFormat === "pdf" ? "" : "opacity-60"
                 }`}
                 style={{
                   backgroundColor:
                     exportFormat === "pdf"
-                      ? `${currentTheme.accent}15`
+                      ? currentTheme.accent
                       : "transparent",
                   borderColor:
                     exportFormat === "pdf"
-                      ? `${currentTheme.accent}30`
-                      : currentTheme.border,
+                      ? "transparent"
+                      : "transparent",
                   color:
                     exportFormat === "pdf"
-                      ? currentTheme.accent
+                      ? currentTheme.bg
                       : currentTheme.text,
                 }}
               >
@@ -1556,21 +1570,21 @@ const DarAlHikayatMaster: React.FC = () => {
               </button>
               <button
                 onClick={() => setExportFormat("docx")}
-                className={`flex-1 py-2.5 rounded-xl font-zain-bold text-sm border transition-all active:scale-95 ${
+                className={`flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95 ${
                   exportFormat === "docx" ? "" : "opacity-60"
                 }`}
                 style={{
                   backgroundColor:
                     exportFormat === "docx"
-                      ? `${currentTheme.accent}15`
+                      ? currentTheme.accent
                       : "transparent",
                   borderColor:
                     exportFormat === "docx"
-                      ? `${currentTheme.accent}30`
-                      : currentTheme.border,
+                      ? "transparent"
+                      : "transparent",
                   color:
                     exportFormat === "docx"
-                      ? currentTheme.accent
+                      ? currentTheme.bg
                       : currentTheme.text,
                 }}
               >
@@ -1582,18 +1596,24 @@ const DarAlHikayatMaster: React.FC = () => {
               type="text"
               value={exportFileName}
               onChange={(e) => setExportFileName(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl text-center outline-none border focus:border-opacity-100 transition-all font-zain-bold mb-4"
+              className="w-full h-11 rounded-full text-center outline-none border focus:border-opacity-100 transition-all font-zain-bold mb-4 text-sm px-4"
               style={{
-                backgroundColor: "rgba(0,0,0,0.05)",
-                borderColor: `${currentTheme.accent}50`,
+                backgroundColor: "rgba(0,0,0,0.03)",
+                borderColor: currentTheme.border,
                 color: currentTheme.text,
               }}
+              placeholder="اسم الملف..."
             />
-            <div className="flex justify-end items-center gap-3">
+            
+            <div className="flex gap-2">
               <button
                 onClick={() => setShowExportDialog(false)}
-                className="px-5 py-2 rounded-lg font-zain-reg hover:bg-black/5"
-                style={{ color: currentTheme.secondary }}
+                className="flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95"
+                style={{ 
+                  backgroundColor: "transparent",
+                  borderColor: currentTheme.border,
+                  color: currentTheme.text 
+                }}
               >
                 إلغاء
               </button>
@@ -1607,7 +1627,7 @@ const DarAlHikayatMaster: React.FC = () => {
                   }
                   setShowExportDialog(false);
                 }}
-                className="px-5 py-2 rounded-lg font-zain-bold text-[#121A1B] hover:opacity-90"
+                className="flex-1 py-2 rounded-full font-zain-bold text-sm transition-all active:scale-95 shadow-sm text-[#121A1B]"
                 style={{
                   backgroundColor: currentTheme.accent,
                   opacity: isExporting ? 0.6 : 1,
@@ -1615,9 +1635,7 @@ const DarAlHikayatMaster: React.FC = () => {
               >
                 {isExporting
                   ? "جاري التصدير..."
-                  : exportFormat === "pdf"
-                    ? "تصدير PDF"
-                    : "تصدير Word"}
+                  : "تصدير"}
               </button>
             </div>
           </div>

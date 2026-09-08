@@ -193,355 +193,363 @@ const PrayerPage: React.FC = () => {
   return (
     <div
       dir="rtl"
-      className="min-h-[100dvh] w-full relative overflow-x-hidden font-zain-reg transition-colors duration-500 select-none flex flex-col items-center justify-between"
+      className="min-h-screen w-full relative overflow-x-hidden font-zain-reg transition-colors duration-500 select-none"
       style={{
         backgroundColor: currentTheme.bg,
         color: currentTheme.text,
+        paddingBottom: "140px",
       }}
     >
-      <div className="w-full max-w-[420px] min-h-[100dvh] flex flex-col justify-between px-4 pt-8 sm:pt-10 pb-28 gap-4 sm:gap-6">
+      <div
+        className="min-h-[calc(100vh-140px)] w-full flex flex-col justify-center items-center py-8 px-4 gap-y-6 sm:gap-y-8"
+      >
         {/* ═══════════════════════════════════════════════════════════════
             CURRENT PRAYER & TIMER CARD (Top Section)
             ═══════════════════════════════════════════════════════════════ */}
-        <section className="w-full">
-          <div
-            className="relative overflow-hidden border p-5 sm:p-6 transition-all"
-            style={{
-              borderRadius: "32px",
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              backdropFilter: "blur(24px)",
-              WebkitBackdropFilter: "blur(24px)",
-              boxShadow: `0 18px 40px -8px ${currentTheme.shadow}`,
-            }}
-          >
-            <div className="flex items-center justify-between">
-              {/* Right Column: Prayer Info */}
-              <div className="flex flex-col items-start">
+        <section
+          className="w-full"
+          style={{ maxWidth: "420px" }}
+        >
+        <div
+          className="relative overflow-hidden border p-5 sm:p-6 transition-all"
+          style={{
+            borderRadius: "32px",
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            boxShadow: `0 18px 40px -8px ${currentTheme.shadow}`,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            {/* Right Column: Prayer Info */}
+            <div className="flex flex-col items-start">
+              <p
+                className="text-xs font-zain-bold mb-1 opacity-75"
+                style={{ color: currentTheme.secondary }}
+              >
+                الصلاة الحالية
+              </p>
+              <p
+                className="text-3xl sm:text-4xl font-zain-xbold leading-none tracking-tight mb-2"
+                style={{ color: currentTheme.text }}
+              >
+                {calculationData.current.name}
+              </p>
+              <p
+                className="text-xs font-zain-bold"
+                style={{ color: currentTheme.accent }}
+              >
+                التالية: {calculationData.next.name}
+              </p>
+            </div>
+
+            {/* Left Column: Circular Progress Gauge Countdown */}
+            <div className="relative h-20 w-20 sm:h-22 sm:w-22 shrink-0 drop-shadow-sm flex items-center justify-center">
+              <svg
+                className="h-full w-full -rotate-90"
+                viewBox="0 0 100 100"
+                role="img"
+                aria-label="مؤشر مرور الوقت"
+              >
+                {/* Background Ring */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={RING_RADIUS}
+                  stroke={currentTheme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}
+                  strokeWidth="6"
+                  fill="none"
+                />
+                {/* Dynamic Progress Ring */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={RING_RADIUS}
+                  stroke={currentTheme.accent}
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  fill="none"
+                  strokeDasharray={RING_LENGTH}
+                  strokeDashoffset={ringOffset}
+                  className="transition-all duration-1000 ease-in-out"
+                />
+              </svg>
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center text-center mt-0.5"
+                style={{ color: currentTheme.text }}
+              >
                 <p
-                  className="text-xs font-zain-bold mb-1 opacity-75"
+                  className="text-[9px] font-zain-bold opacity-75 mb-0.5"
                   style={{ color: currentTheme.secondary }}
                 >
-                  الصلاة الحالية
+                  متبقي
                 </p>
-                <p
-                  className="text-3xl sm:text-4xl font-zain-xbold leading-none tracking-tight mb-2"
-                  style={{ color: currentTheme.text }}
-                >
-                  {calculationData.current.name}
-                </p>
-                <p
-                  className="text-xs font-zain-bold"
-                  style={{ color: currentTheme.accent }}
-                >
-                  التالية: {calculationData.next.name}
+                <p className="text-[10px] sm:text-[11px] font-zain-xbold tabular-nums tracking-tight">
+                  {calculationData.countdownLabel}
                 </p>
               </div>
-
-              {/* Left Column: Circular Progress Gauge Countdown */}
-              <div className="relative h-20 w-20 sm:h-22 sm:w-22 shrink-0 drop-shadow-sm flex items-center justify-center">
-                <svg
-                  className="h-full w-full -rotate-90"
-                  viewBox="0 0 100 100"
-                  role="img"
-                  aria-label="مؤشر مرور الوقت"
-                >
-                  {/* Background Ring */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r={RING_RADIUS}
-                    stroke={currentTheme.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}
-                    strokeWidth="6"
-                    fill="none"
-                  />
-                  {/* Dynamic Progress Ring */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r={RING_RADIUS}
-                    stroke={currentTheme.accent}
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                    fill="none"
-                    strokeDasharray={RING_LENGTH}
-                    strokeDashoffset={ringOffset}
-                    className="transition-all duration-1000 ease-in-out"
-                  />
-                </svg>
-                <div
-                  className="absolute inset-0 flex flex-col items-center justify-center text-center mt-0.5"
-                  style={{ color: currentTheme.text }}
-                >
-                  <p
-                    className="text-[9px] font-zain-bold opacity-75 mb-0.5"
-                    style={{ color: currentTheme.secondary }}
-                  >
-                    متبقي
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] font-zain-xbold tabular-nums tracking-tight">
-                    {calculationData.countdownLabel}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Date Footer */}
-            <div
-              className="mt-4 border-t pt-3 flex items-center justify-between text-xs font-zain-bold"
-              style={{ borderColor: currentTheme.border }}
-            >
-              <span style={{ color: currentTheme.secondary }}>
-                {dateStrings.gregorianDate}
-              </span>
-              <span style={{ color: currentTheme.accent }}>
-                {dateStrings.hijriDate}
-              </span>
             </div>
           </div>
+
+          {/* Date Footer */}
+          <div
+            className="mt-4 border-t pt-3 flex items-center justify-between text-xs font-zain-bold"
+            style={{ borderColor: currentTheme.border }}
+          >
+            <span style={{ color: currentTheme.secondary }}>
+              {dateStrings.gregorianDate}
+            </span>
+            <span style={{ color: currentTheme.accent }}>
+              {dateStrings.hijriDate}
+            </span>
+          </div>
+        </div>
         </section>
 
         {/* ═══════════════════════════════════════════════════════════════
-            PRAYER TIMES SECTION: Today's Schedule (Middle Section)
+            PRAYER TIMES SECTION: Today's Schedule & Alarm Toggles
             ═══════════════════════════════════════════════════════════════ */}
-        <section className="w-full flex-1 flex flex-col justify-center py-1">
-          {/* Section Header */}
-          <div className="mb-2.5 flex items-center justify-between">
-            <h3
-              className="text-xl sm:text-2xl font-zain-xbold"
-              style={{ color: currentTheme.text }}
-            >
-              مواقيت اليوم
-            </h3>
-            <button
-              type="button"
-              onClick={openLocationSheet}
-              className="rounded-full border shadow-xs cursor-pointer transition-all active:scale-95 text-xs sm:text-sm font-zain-bold"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                padding: "4px 12px",
-                whiteSpace: "nowrap",
-                backgroundColor: `${currentTheme.accent}15`,
-                borderColor: `${currentTheme.accent}30`,
-                color: currentTheme.accent,
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
-              }}
-              title="تحديد موقع الصلاة"
-            >
-              <MapPin style={{ width: "16px", height: "16px", flexShrink: 0, marginTop: "-2px" }} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px", lineHeight: 1 }}>{cityName}</span>
-            </button>
-          </div>
-
-          {/* Unified Prayer Times Panel */}
-          <div
-            className="border p-2.5 sm:p-3 space-y-1.5 transition-all"
+        <section
+          className="w-full"
+          style={{ maxWidth: "420px" }}
+        >
+        {/* Section Header */}
+        <div className="mb-3 flex items-center justify-between">
+          <h3
+            className="text-xl sm:text-2xl font-zain-xbold"
+            style={{ color: currentTheme.text }}
+          >
+            مواقيت اليوم
+          </h3>
+          <button
+            type="button"
+            onClick={openLocationSheet}
+            className="rounded-full border shadow-xs cursor-pointer transition-all active:scale-95 text-xs sm:text-sm font-zain-bold"
             style={{
-              borderRadius: "24px",
-              backgroundColor: currentTheme.glass,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              padding: "4px 12px",
+              whiteSpace: "nowrap",
+              backgroundColor: `${currentTheme.accent}15`,
+              borderColor: `${currentTheme.accent}30`,
+              color: currentTheme.accent,
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
+            title="تحديد موقع الصلاة"
+          >
+            <MapPin style={{ width: "16px", height: "16px", flexShrink: 0, marginTop: "-2px" }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px", lineHeight: 1 }}>{cityName}</span>
+          </button>
+        </div>
+
+        {/* Unified Prayer Times Panel */}
+        <div
+          className="border p-2.5 sm:p-3 space-y-1.5 transition-all"
+          style={{
+            borderRadius: "24px",
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            boxShadow: `0 14px 32px -6px ${currentTheme.shadow}`,
+          }}
+        >
+          {calculationData.augmented.map((prayer) => {
+            const isHighlighted = prayer.isNext; // Highlight next upcoming prayer
+            const hasAlarm = prayerAlarms[prayer.key] ?? false;
+
+            return (
+              <div
+                key={prayer.key}
+                className={`relative flex items-center justify-between px-3.5 py-2.5 transition-all duration-200 ${
+                  isHighlighted ? "shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
+                style={{
+                  borderRadius: "16px",
+                  backgroundColor: isHighlighted ? `${currentTheme.accent}18` : "transparent",
+                  borderColor: isHighlighted ? `${currentTheme.accent}35` : "transparent",
+                  borderWidth: "1px",
+                }}
+              >
+                {/* Right: Prayer Name & Status */}
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-sm sm:text-base font-zain-bold ${
+                      isHighlighted ? "font-zain-xbold" : ""
+                    }`}
+                    style={{
+                      color: isHighlighted ? currentTheme.accent : currentTheme.text,
+                    }}
+                  >
+                    {prayer.name}
+                  </span>
+                  {prayer.isCurrent && (
+                    <span
+                      className="text-[10px] font-zain-bold px-2 py-0.5 border leading-none"
+                      style={{
+                        borderRadius: "9999px",
+                        backgroundColor: `${currentTheme.accent}25`,
+                        borderColor: `${currentTheme.accent}40`,
+                        color: currentTheme.accent,
+                      }}
+                    >
+                      الآن
+                    </span>
+                  )}
+                  {prayer.isNext && (
+                    <span
+                      className="text-[10px] font-zain-bold px-2 py-0.5 border leading-none"
+                      style={{
+                        borderRadius: "9999px",
+                        backgroundColor: currentTheme.accent,
+                        borderColor: currentTheme.accent,
+                        color: currentTheme.bg,
+                      }}
+                    >
+                      التالية
+                    </span>
+                  )}
+                </div>
+
+                {/* Left: Time Display */}
+                <div className="flex items-center justify-end">
+                  <span
+                    className={`text-sm sm:text-base font-zain-xbold tabular-nums tracking-tight ${
+                      isHighlighted ? "scale-105" : ""
+                    }`}
+                    style={{
+                      color: isHighlighted ? currentTheme.accent : currentTheme.text,
+                    }}
+                  >
+                    {prayer.timeFormatted}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════
+            COLLAPSIBLE SECONDARY TIMES ("أوقات أخرى")
+            ═══════════════════════════════════════════════════════════════ */}
+        <div className="relative flex items-center justify-center my-5">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div
+              className="w-full border-t"
+              style={{ borderColor: currentTheme.border }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSecondaryTimesExpanded(!isSecondaryTimesExpanded)}
+            className="relative flex items-center gap-1.5 px-3.5 py-1.5 border shadow-xs text-xs font-zain-bold cursor-pointer transition-all active:scale-95"
+            style={{
+              borderRadius: "9999px",
+              backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              boxShadow: `0 14px 32px -6px ${currentTheme.shadow}`,
+              color: currentTheme.secondary,
             }}
           >
-            {calculationData.augmented.map((prayer) => {
-              const isHighlighted = prayer.isNext; // Highlight next upcoming prayer
+            <span>أوقات أخرى</span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform duration-300 ${
+                isSecondaryTimesExpanded ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </div>
 
-              return (
-                <div
-                  key={prayer.key}
-                  className={`relative flex items-center justify-between px-3.5 py-2.5 transition-all duration-200 ${
-                    isHighlighted ? "shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5"
-                  }`}
-                  style={{
-                    borderRadius: "16px",
-                    backgroundColor: isHighlighted ? `${currentTheme.accent}18` : "transparent",
-                    borderColor: isHighlighted ? `${currentTheme.accent}35` : "transparent",
-                    borderWidth: "1px",
-                  }}
-                >
-                  {/* Right: Prayer Name & Status */}
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-sm sm:text-base font-zain-bold ${
-                        isHighlighted ? "font-zain-xbold" : ""
-                      }`}
-                      style={{
-                        color: isHighlighted ? currentTheme.accent : currentTheme.text,
-                      }}
-                    >
-                      {prayer.name}
-                    </span>
-                    {prayer.isCurrent && (
-                      <span
-                        className="text-[10px] font-zain-bold px-2 py-0.5 border leading-none"
-                        style={{
-                          borderRadius: "9999px",
-                          backgroundColor: `${currentTheme.accent}25`,
-                          borderColor: `${currentTheme.accent}40`,
-                          color: currentTheme.accent,
-                        }}
-                      >
-                        الآن
-                      </span>
-                    )}
-                    {prayer.isNext && (
-                      <span
-                        className="text-[10px] font-zain-bold px-2 py-0.5 border leading-none"
-                        style={{
-                          borderRadius: "9999px",
-                          backgroundColor: currentTheme.accent,
-                          borderColor: currentTheme.accent,
-                          color: currentTheme.bg,
-                        }}
-                      >
-                        التالية
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Left: Time Display */}
-                  <div className="flex items-center justify-end">
-                    <span
-                      className={`text-sm sm:text-base font-zain-xbold tabular-nums tracking-tight ${
-                        isHighlighted ? "scale-105" : ""
-                      }`}
-                      style={{
-                        color: isHighlighted ? currentTheme.accent : currentTheme.text,
-                      }}
-                    >
-                      {prayer.timeFormatted}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════════════════════════
-            COLLAPSIBLE SECONDARY TIMES ("أوقات أخرى") (Bottom Section)
-            ═══════════════════════════════════════════════════════════════ */}
-        <section className="w-full">
-          <div className="relative flex items-center justify-center my-2">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div
-                className="w-full border-t"
-                style={{ borderColor: currentTheme.border }}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsSecondaryTimesExpanded(!isSecondaryTimesExpanded)}
-              className="relative flex items-center gap-1.5 px-3.5 py-1.5 border shadow-xs text-xs font-zain-bold cursor-pointer transition-all active:scale-95"
-              style={{
-                borderRadius: "9999px",
-                backgroundColor: currentTheme.bg,
-                borderColor: currentTheme.border,
-                color: currentTheme.secondary,
-              }}
+        {/* List of Secondary Times */}
+        <AnimatePresence>
+          {isSecondaryTimesExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              className="overflow-hidden"
             >
-              <span>أوقات أخرى</span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 transition-transform duration-300 ${
-                  isSecondaryTimesExpanded ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* List of Secondary Times */}
-          <AnimatePresence>
-            {isSecondaryTimesExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                className="overflow-hidden mt-3"
+              <div
+                className="border p-4 space-y-3 shadow-md"
+                style={{
+                  borderRadius: "20px",
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
+                }}
               >
-                <div
-                  className="border p-4 space-y-3 shadow-md"
-                  style={{
-                    borderRadius: "20px",
-                    backgroundColor: currentTheme.glass,
-                    borderColor: currentTheme.border,
-                    backdropFilter: "blur(20px)",
-                    WebkitBackdropFilter: "blur(20px)",
-                  }}
-                >
-                  {/* 1. Duha */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="font-zain-bold text-sm"
-                      style={{ color: currentTheme.text }}
-                    >
-                      صلاة الضحى
-                    </span>
-                    <span
-                      className="font-zain-xbold text-sm tabular-nums"
-                      style={{ color: currentTheme.accent }}
-                    >
-                      {secondaryTimes.duha}
-                    </span>
-                  </div>
-
-                  {/* 2. Midnight */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="font-zain-bold text-sm"
-                      style={{ color: currentTheme.text }}
-                    >
-                      منتصف الليل الشرعي
-                    </span>
-                    <span
-                      className="font-zain-xbold text-sm tabular-nums"
-                      style={{ color: currentTheme.accent }}
-                    >
-                      {secondaryTimes.midnight}
-                    </span>
-                  </div>
-
-                  {/* 3. First Third */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="font-zain-bold text-sm"
-                      style={{ color: currentTheme.text }}
-                    >
-                      الثلث الأول من الليل
-                    </span>
-                    <span
-                      className="font-zain-xbold text-sm tabular-nums"
-                      style={{ color: currentTheme.accent }}
-                    >
-                      {secondaryTimes.firstThird}
-                    </span>
-                  </div>
-
-                  {/* 4. Last Third */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="font-zain-bold text-sm"
-                      style={{ color: currentTheme.text }}
-                    >
-                      الثلث الأخير (وقت السحر)
-                    </span>
-                    <span
-                      className="font-zain-xbold text-sm tabular-nums"
-                      style={{ color: currentTheme.accent }}
-                    >
-                      {secondaryTimes.lastThird}
-                    </span>
-                  </div>
+                {/* 1. Duha */}
+                <div className="flex items-center justify-between">
+                  <span
+                    className="font-zain-bold text-sm"
+                    style={{ color: currentTheme.text }}
+                  >
+                    صلاة الضحى
+                  </span>
+                  <span
+                    className="font-zain-xbold text-sm tabular-nums"
+                    style={{ color: currentTheme.accent }}
+                  >
+                    {secondaryTimes.duha}
+                  </span>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
+                {/* 2. Midnight */}
+                <div className="flex items-center justify-between">
+                  <span
+                    className="font-zain-bold text-sm"
+                    style={{ color: currentTheme.text }}
+                  >
+                    منتصف الليل الشرعي
+                  </span>
+                  <span
+                    className="font-zain-xbold text-sm tabular-nums"
+                    style={{ color: currentTheme.accent }}
+                  >
+                    {secondaryTimes.midnight}
+                  </span>
+                </div>
+
+                {/* 3. First Third */}
+                <div className="flex items-center justify-between">
+                  <span
+                    className="font-zain-bold text-sm"
+                    style={{ color: currentTheme.text }}
+                  >
+                    الثلث الأول من الليل
+                  </span>
+                  <span
+                    className="font-zain-xbold text-sm tabular-nums"
+                    style={{ color: currentTheme.accent }}
+                  >
+                    {secondaryTimes.firstThird}
+                  </span>
+                </div>
+
+                {/* 4. Last Third */}
+                <div className="flex items-center justify-between">
+                  <span
+                    className="font-zain-bold text-sm"
+                    style={{ color: currentTheme.text }}
+                  >
+                    الثلث الأخير (وقت السحر)
+                  </span>
+                  <span
+                    className="font-zain-xbold text-sm tabular-nums"
+                    style={{ color: currentTheme.accent }}
+                  >
+                    {secondaryTimes.lastThird}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         </section>
       </div>
     </div>

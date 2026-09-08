@@ -285,8 +285,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       (cleanContent.length > 100 ? "..." : "");
 
     if (noteData.id) {
-      setNotes((prevNotes) =>
-        prevNotes.map((n) =>
+      setNotes((prevNotes) => {
+        const updated = prevNotes.map((n) =>
           n.id === noteData.id
             ? {
                 ...n,
@@ -305,8 +305,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
                     : n.password,
               }
             : n,
-        ),
-      );
+        );
+        if (currentView === "editor" && selectedNote?.id === noteData.id) {
+           const updatedNote = updated.find((n) => n.id === noteData.id);
+           if (updatedNote) setSelectedNote(updatedNote);
+        }
+        return updated;
+      });
     } else {
       const newNote: Note = {
         id: Date.now(),
@@ -320,6 +325,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         password: noteData.password || "",
       };
       setNotes((prevNotes) => [newNote, ...prevNotes]);
+      if (currentView === "editor") {
+        setSelectedNote(newNote);
+      }
     }
   };
 
