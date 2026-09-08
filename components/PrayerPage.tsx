@@ -200,12 +200,37 @@ const PrayerPage: React.FC = () => {
         paddingBottom: "140px",
       }}
     >
+      {/* --- FLOATING HEADER CAPSULES SYSTEM (Apple Concentric Geometry) --- */}
+      <header
+        className="fixed top-0 left-0 right-0 z-50 p-2 pointer-events-none"
+        style={{ top: 0 }}
+      >
+        <div className="max-w-md mx-auto relative flex items-center justify-between pointer-events-none">
+          {/* Right Capsule: Brand Title (Clean typography only) */}
+          <div
+            className="pointer-events-auto h-11 px-5 rounded-full border shadow-lg flex items-center justify-center backdrop-blur-xl transition-transform hover:scale-[1.02]"
+            style={{
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              boxShadow: `0 8px 20px -4px ${currentTheme.shadow}`,
+            }}
+          >
+            <span
+              className="font-zain-xbold text-lg leading-none pt-0.5 tracking-wide select-none"
+              style={{ color: currentTheme.accent }}
+            >
+              دَارُ الحِكَايَاتِ
+            </span>
+          </div>
+        </div>
+      </header>
+
       <div
         className="min-h-[calc(100vh-140px)] w-full flex flex-col items-center px-4"
         style={{
-          paddingTop: "128px", // Generous space from the top of the viewport to prevent stickiness
+          paddingTop: "104px", // Adjusted balanced space from the top of the viewport
           paddingBottom: "48px",
-          rowGap: "48px", // Clear vertical gaps between sections
+          rowGap: "32px", // Moderated elegant vertical gaps between sections
         }}
       >
         {/* ═══════════════════════════════════════════════════════════════
@@ -327,7 +352,7 @@ const PrayerPage: React.FC = () => {
           className="w-full"
           style={{ 
             maxWidth: "420px",
-            marginTop: "40px", // Generous gap below the top card
+            marginTop: "24px", // Balanced gap below the top card
           }}
         >
         {/* Section Header */}
@@ -461,8 +486,8 @@ const PrayerPage: React.FC = () => {
         <div 
           className="relative flex items-center justify-center"
           style={{
-            marginTop: "64px", // Distinct safe distance below today's prayer times
-            marginBottom: "40px", // Margin bottom to prevent stacking on secondary panels
+            marginTop: "40px", // Moderated spacing below today's prayer times
+            marginBottom: "24px", // Adjusted margin bottom to prevent over-stretching
           }}
         >
           <div className="absolute inset-0 flex items-center" aria-hidden="true">
