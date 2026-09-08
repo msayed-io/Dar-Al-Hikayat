@@ -201,7 +201,12 @@ const PrayerPage: React.FC = () => {
       }}
     >
       <div
-        className="min-h-[calc(100vh-140px)] w-full flex flex-col justify-center items-center py-8 px-4 gap-y-6 sm:gap-y-8"
+        className="min-h-[calc(100vh-140px)] w-full flex flex-col items-center px-4"
+        style={{
+          paddingTop: "128px", // Generous space from the top of the viewport to prevent stickiness
+          paddingBottom: "48px",
+          rowGap: "48px", // Clear vertical gaps between sections
+        }}
       >
         {/* ═══════════════════════════════════════════════════════════════
             CURRENT PRAYER & TIMER CARD (Top Section)
@@ -211,9 +216,10 @@ const PrayerPage: React.FC = () => {
           style={{ maxWidth: "420px" }}
         >
         <div
-          className="relative overflow-hidden border p-5 sm:p-6 transition-all"
+          className="relative overflow-hidden border transition-all"
           style={{
             borderRadius: "32px",
+            padding: "24px", // Safe, uniform padding
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
             backdropFilter: "blur(24px)",
@@ -245,7 +251,10 @@ const PrayerPage: React.FC = () => {
             </div>
 
             {/* Left Column: Circular Progress Gauge Countdown */}
-            <div className="relative h-20 w-20 sm:h-22 sm:w-22 shrink-0 drop-shadow-sm flex items-center justify-center">
+            <div 
+              className="relative shrink-0 drop-shadow-sm flex items-center justify-center"
+              style={{ width: "80px", height: "80px" }}
+            >
               <svg
                 className="h-full w-full -rotate-90"
                 viewBox="0 0 100 100"
@@ -294,8 +303,12 @@ const PrayerPage: React.FC = () => {
 
           {/* Date Footer */}
           <div
-            className="mt-4 border-t pt-3 flex items-center justify-between text-xs font-zain-bold"
-            style={{ borderColor: currentTheme.border }}
+            className="border-t flex items-center justify-between text-xs font-zain-bold"
+            style={{ 
+              borderColor: currentTheme.border,
+              marginTop: "16px",
+              paddingTop: "12px",
+            }}
           >
             <span style={{ color: currentTheme.secondary }}>
               {dateStrings.gregorianDate}
@@ -312,10 +325,16 @@ const PrayerPage: React.FC = () => {
             ═══════════════════════════════════════════════════════════════ */}
         <section
           className="w-full"
-          style={{ maxWidth: "420px" }}
+          style={{ 
+            maxWidth: "420px",
+            marginTop: "40px", // Generous gap below the top card
+          }}
         >
         {/* Section Header */}
-        <div className="mb-3 flex items-center justify-between">
+        <div 
+          className="flex items-center justify-between"
+          style={{ marginBottom: "16px" }}
+        >
           <h3
             className="text-xl sm:text-2xl font-zain-xbold"
             style={{ color: currentTheme.text }}
@@ -348,9 +367,11 @@ const PrayerPage: React.FC = () => {
 
         {/* Unified Prayer Times Panel */}
         <div
-          className="border p-2.5 sm:p-3 space-y-1.5 transition-all"
+          className="border transition-all flex flex-col"
           style={{
             borderRadius: "24px",
+            padding: "16px", // Fixed uniform padding
+            rowGap: "6px", // Safe, consistent spacing between items
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
             backdropFilter: "blur(20px)",
@@ -365,7 +386,7 @@ const PrayerPage: React.FC = () => {
             return (
               <div
                 key={prayer.key}
-                className={`relative flex items-center justify-between px-3.5 py-2.5 transition-all duration-200 ${
+                className={`relative flex items-center justify-between transition-all duration-200 ${
                   isHighlighted ? "shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5"
                 }`}
                 style={{
@@ -373,6 +394,7 @@ const PrayerPage: React.FC = () => {
                   backgroundColor: isHighlighted ? `${currentTheme.accent}18` : "transparent",
                   borderColor: isHighlighted ? `${currentTheme.accent}35` : "transparent",
                   borderWidth: "1px",
+                  padding: "10px 14px", // Fixed item padding
                 }}
               >
                 {/* Right: Prayer Name & Status */}
@@ -436,7 +458,13 @@ const PrayerPage: React.FC = () => {
         {/* ═══════════════════════════════════════════════════════════════
             COLLAPSIBLE SECONDARY TIMES ("أوقات أخرى")
             ═══════════════════════════════════════════════════════════════ */}
-        <div className="relative flex items-center justify-center my-5">
+        <div 
+          className="relative flex items-center justify-center"
+          style={{
+            marginTop: "64px", // Distinct safe distance below today's prayer times
+            marginBottom: "40px", // Margin bottom to prevent stacking on secondary panels
+          }}
+        >
           <div className="absolute inset-0 flex items-center" aria-hidden="true">
             <div
               className="w-full border-t"
@@ -446,12 +474,13 @@ const PrayerPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsSecondaryTimesExpanded(!isSecondaryTimesExpanded)}
-            className="relative flex items-center gap-1.5 px-3.5 py-1.5 border shadow-xs text-xs font-zain-bold cursor-pointer transition-all active:scale-95"
+            className="relative flex items-center gap-1.5 border shadow-xs text-xs font-zain-bold cursor-pointer transition-all active:scale-95"
             style={{
               borderRadius: "9999px",
               backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
               color: currentTheme.secondary,
+              padding: "8px 20px", // Ample click area and premium layout spacing
             }}
           >
             <span>أوقات أخرى</span>
@@ -474,9 +503,11 @@ const PrayerPage: React.FC = () => {
               className="overflow-hidden"
             >
               <div
-                className="border p-4 space-y-3 shadow-md"
+                className="border shadow-md flex flex-col"
                 style={{
                   borderRadius: "20px",
+                  padding: "20px", // Secure professional container padding
+                  rowGap: "16px", // Evenly spaced rows to eliminate overcrowding
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
                   backdropFilter: "blur(20px)",
