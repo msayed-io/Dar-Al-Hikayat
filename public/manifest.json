@@ -1,0 +1,16 @@
+{
+  "name": "دَارُ الحِكَايَاتِ",
+  "short_name": "الحكايات",
+  "description": "محرابٌ مقدس لفنانة السرد.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#caa472",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ]
+}

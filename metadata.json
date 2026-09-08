@@ -1,0 +1,10 @@
+{
+  "name": "Dar-Al-Hikayat",
+  "description": "Imported from GitHub: msayed-io/Dar-Al-Hikayat-Restored",
+    "requestFramePermissions": [
+      "geolocation"
+    ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

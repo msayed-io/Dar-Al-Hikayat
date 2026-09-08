@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dar Al Hikayat</string>
+    <string name="title_activity_main">Dar Al Hikayat</string>
+    <string name="package_name">com.daralhikayat.app</string>
+    <string name="custom_url_scheme">com.daralhikayat.app</string>
+</resources>

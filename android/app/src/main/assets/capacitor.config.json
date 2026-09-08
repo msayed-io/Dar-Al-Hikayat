@@ -1,0 +1,6 @@
+{
+	"appId": "com.daralhikayat.app",
+	"appName": "Dar Al Hikayat",
+	"webDir": "dist",
+	"bundledWebRuntime": false
+}
