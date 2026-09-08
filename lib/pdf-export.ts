@@ -14,15 +14,76 @@ function buildStoryHtml(
   secondary: string
 ): string {
   const align = styles.textAlign || "right";
-  const contentHtml = content
-    .split(/\n/)
-    .map(
-      (line) =>
-        `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align};">${escapeHtml(
-          line || " "
-        )}</p>`
-    )
-    .join("");
+  
+  // Parse content using DOMParser to support rich spans and highlights
+  const doc = new DOMParser().parseFromString(content, "text/html");
+  let contentHtml = "";
+  
+  // Check if we have rich HTML tags
+  if (doc.querySelector("div") || doc.querySelector("p") || doc.querySelector("span") || doc.querySelector("br")) {
+    const spans = doc.querySelectorAll("span");
+    spans.forEach((span) => {
+      if (span.classList.contains("highlight") || span.classList.contains("hl")) {
+        if (!span.style.backgroundColor) {
+          span.style.backgroundColor = "#FFE600";
+          span.style.color = "#000000";
+        }
+        span.style.borderRadius = "2px";
+        span.style.padding = "0 3px";
+        span.style.fontWeight = "600";
+      } else {
+        // Unwrap any non-highlight spans to keep the document clean
+        const textNode = doc.createTextNode(span.textContent || "");
+        span.replaceWith(textNode);
+      }
+    });
+
+    const paragraphs: string[] = [];
+    const children = Array.from(doc.body.childNodes);
+    let currentParagraph = "";
+
+    children.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        currentParagraph += child.textContent;
+      } else if (child instanceof HTMLElement) {
+        if (child.tagName === "BR") {
+          paragraphs.push(currentParagraph);
+          currentParagraph = "";
+        } else if (child.tagName === "DIV" || child.tagName === "P") {
+          if (currentParagraph) {
+            paragraphs.push(currentParagraph);
+            currentParagraph = "";
+          }
+          paragraphs.push(child.innerHTML);
+        } else {
+          currentParagraph += child.outerHTML;
+        }
+      }
+    });
+    if (currentParagraph) {
+      paragraphs.push(currentParagraph);
+    }
+
+    contentHtml = paragraphs
+      .map((p) => {
+        const trimmed = p.trim();
+        if (!trimmed) return "";
+        return `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align};">${trimmed}</p>`;
+      })
+      .filter(Boolean)
+      .join("");
+  } else {
+    // Legacy plain text fallback
+    contentHtml = content
+      .split(/\n/)
+      .map(
+        (line) =>
+          `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align};">${escapeHtml(
+            line || " "
+          )}</p>`
+      )
+      .join("");
+  }
 
   return `<html dir="rtl" lang="ar">
 <head>

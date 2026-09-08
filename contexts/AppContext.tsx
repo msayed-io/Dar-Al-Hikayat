@@ -278,9 +278,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       month: "long",
       year: "numeric",
     });
+    // Strip HTML tags so the home list previews are pristine and text-only
+    const cleanContent = noteData.content.replace(/<[^>]*>/g, " ").trim();
     const previewText =
-      noteData.content.substring(0, 100) +
-      (noteData.content.length > 100 ? "..." : "");
+      cleanContent.substring(0, 100) +
+      (cleanContent.length > 100 ? "..." : "");
 
     if (noteData.id) {
       setNotes((prevNotes) =>

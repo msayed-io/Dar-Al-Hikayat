@@ -42,6 +42,8 @@ import {
   Lock,
   Unlock,
   KeyRound,
+  Highlighter,
+  Eraser,
 } from "lucide-react";
 import {
   Document,
@@ -272,15 +274,21 @@ const ChapterItem = React.memo(
     canBeDeleted: boolean;
     containerRef: (el: HTMLDivElement | null) => void;
   }) => {
-    const textAreaRef = useRef<HTMLTextAreaElement>(null);
+    const divRef = useRef<HTMLDivElement>(null);
     const { fontSize, fontWeight, textAlign, textColor, accentColor } = styles;
 
-    // Apply the intelligent text flow system
-    useAutosizeTextArea(textAreaRef, chapter.content, [
-      fontSize,
-      fontWeight,
-      textAlign,
-    ]);
+    // Sync content updates (e.g. undo, redo, or initial load)
+    useEffect(() => {
+      if (divRef.current && divRef.current.innerHTML !== chapter.content) {
+        divRef.current.innerHTML = chapter.content;
+      }
+    }, [chapter.content]);
+
+    const handleInput = () => {
+      if (divRef.current) {
+        onUpdate(chapter.id, "content", divRef.current.innerHTML);
+      }
+    };
 
     return (
       <>
@@ -323,13 +331,15 @@ const ChapterItem = React.memo(
             />
           </div>
 
-          <textarea
-            ref={textAreaRef}
-            value={chapter.content}
-            onChange={(e) => onUpdate(chapter.id, "content", e.target.value)}
-            readOnly={isSavedMode}
-            placeholder="اكتب محتوى الفصل هنا..."
-            className="w-full bg-transparent border-none outline-none resize-none leading-loose overflow-hidden"
+          <div
+            ref={divRef}
+            contentEditable={!isSavedMode}
+            onInput={handleInput}
+            data-chapter-id={chapter.id}
+            data-placeholder="اكتب محتوى الفصل هنا..."
+            className={`w-full bg-transparent border-none outline-none resize-none leading-loose overflow-hidden min-h-[200px] editor-container ${
+              !chapter.content || chapter.content === "<br>" ? "is-empty" : ""
+            }`}
             style={{
               fontSize: `${fontSize}px`,
               fontFamily: "'Zain', sans-serif",
@@ -338,7 +348,8 @@ const ChapterItem = React.memo(
               color: textColor,
               lineHeight: 2.2,
               minHeight: "200px",
-              willChange: "height", // Performance hint for the browser
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
             }}
             spellCheck={false}
           />
@@ -422,7 +433,21 @@ const DarAlHikayatMaster: React.FC = () => {
   );
   const [newPassword, setNewPassword] = useState("");
 
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [toolbarVisible, setToolbarVisible] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
+  const [selectedHighlightColor, setSelectedHighlightColor] = useState<{ name: string; bg: string; text: string }>({
+    name: "أصفر ساطع",
+    bg: "#FFE600",
+    text: "#000000",
+  });
+
+  // Sync content state to standard editor div (for Undo/Redo/external updates)
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== content) {
+      editorRef.current.innerHTML = content;
+    }
+  }, [content]);
   const typingTimeoutRef = useRef<any>(null);
   const chapterRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const zikrTimeoutRef = useRef<any>(null);
@@ -687,9 +712,18 @@ const DarAlHikayatMaster: React.FC = () => {
     const safeTitle = displayTitle.replace(/[\\/:*?"<>|]/g, "_");
     setIsExporting(true);
     try {
+      const pdfContent = isNovelMode
+        ? chapters
+            .map((c) => {
+              const chTitle = c.title ? `<h2 style="font-family: 'Zain', sans-serif; font-weight: 900; font-size: 20px; color: ${currentTheme.accent}; text-align: center; margin-top: 30px; margin-bottom: 15px;">${c.title}</h2>` : "";
+              return `${chTitle}${c.content}`;
+            })
+            .join("<div style='text-align: center; margin: 30px 0; color: #A7AA63; font-size: 20px;'>❦</div>")
+        : content;
+
       const blob = await exportStoryToPdf(
         displayTitle,
-        content,
+        pdfContent,
         {
           fontSize,
           fontWeight: activeFontWeight,
@@ -718,6 +752,21 @@ const DarAlHikayatMaster: React.FC = () => {
   const handleExportDOCX = async (fileName?: string) => {
     const displayTitle = fileName || title || "بدون عنوان";
     const safeTitle = displayTitle.replace(/[\\/:*?"<>|]/g, "_");
+    
+    const stripHtml = (html: string): string => {
+      const parsedDoc = new DOMParser().parseFromString(html, "text/html");
+      parsedDoc.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+      parsedDoc.querySelectorAll("div").forEach((div) => {
+        const textNode = parsedDoc.createTextNode("\n" + div.textContent);
+        div.replaceWith(textNode);
+      });
+      parsedDoc.querySelectorAll("p").forEach((p) => {
+        const textNode = parsedDoc.createTextNode("\n" + p.textContent);
+        p.replaceWith(textNode);
+      });
+      return (parsedDoc.body.textContent || "").trim();
+    };
+
     const getDocxAlignment = (align: NoteStyles["textAlign"]) => {
       switch (align) {
         case "center":
@@ -759,13 +808,14 @@ const DarAlHikayatMaster: React.FC = () => {
             }),
           );
         }
-        chapter.content.split("\n").forEach((line) => {
+        stripHtml(chapter.content).split("\n").forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return;
           children.push(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: line,
-
+                  text: trimmed,
                   size: Number(fontSize) * 1.5,
                 }),
               ],
@@ -780,15 +830,16 @@ const DarAlHikayatMaster: React.FC = () => {
         }
       });
     } else {
-      content
+      stripHtml(content)
         .split("\n")
-        .forEach((line) =>
+        .forEach((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return;
           children.push(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: line,
-
+                  text: trimmed,
                   size: Number(fontSize) * 1.5,
                 }),
               ],
@@ -796,8 +847,8 @@ const DarAlHikayatMaster: React.FC = () => {
               bidirectional: true,
               spacing: { after: 200, line: 360 },
             }),
-          ),
-        );
+          );
+        });
     }
     const doc = new Document({
       creator: "دَارُ الحِكَايَاتِ",
@@ -819,9 +870,8 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleContentChange = (newContent: string) => {
     if (isSavedMode || isNovelMode) return;
-    const newContent = e.target.value;
     setContent(newContent);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
@@ -921,13 +971,231 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
-  // Update dependencies to include showUI, so height recalculates when padding changes
-  useAutosizeTextArea(editorRef, content, [
-    fontSize,
-    activeFontWeight,
-    textAlign,
-    showUI,
-  ]);
+  const checkIfSelectionIsInsideEditor = (range: Range) => {
+    let node: Node | null = range.startContainer;
+    while (node) {
+      if (node instanceof HTMLElement) {
+        if (node.classList.contains("editor-container")) {
+          return true;
+        }
+      }
+      node = node.parentNode;
+    }
+    return false;
+  };
+
+  const getChapterIdFromSelection = (range: Range): string | null => {
+    let node: Node | null = range.startContainer;
+    while (node) {
+      if (node instanceof HTMLElement && node.hasAttribute("data-chapter-id")) {
+        return node.getAttribute("data-chapter-id");
+      }
+      node = node.parentNode;
+    }
+    return null;
+  };
+
+  const triggerEditorUpdates = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    
+    if (isNovelMode) {
+      const chapterId = getChapterIdFromSelection(range);
+      if (chapterId) {
+        const chapterEl = document.querySelector(`[data-chapter-id="${chapterId}"]`);
+        if (chapterEl instanceof HTMLElement) {
+          const newHtml = chapterEl.innerHTML;
+          
+          setChapters((prev) => {
+            const updated = prev.map((c) =>
+              c.id === chapterId ? { ...c, content: newHtml } : c
+            );
+            
+            if (isSavedMode) {
+              const finalContent = updated
+                .map((c) => `${c.title}${TITLE_CONTENT_SEPARATOR}${c.content}`)
+                .join(CHAPTER_SEPARATOR);
+              if (onSave) {
+                onSave({
+                  id: noteId,
+                  title: title,
+                  content: finalContent,
+                  styles: {
+                    fontSize,
+                    fontWeight: activeFontWeight,
+                    textAlign,
+                    textColor,
+                    paperStyleIndex: activePaperStyleIndex,
+                  },
+                  isLocked: noteIsLocked,
+                  password: notePassword,
+                });
+              }
+            } else {
+              setIsDirty(true);
+            }
+            return updated;
+          });
+        }
+      }
+    } else {
+      if (editorRef.current) {
+        const newHtml = editorRef.current.innerHTML;
+        setContent(newHtml);
+        
+        if (isSavedMode) {
+          if (onSave) {
+            onSave({
+              id: noteId,
+              title: title,
+              content: newHtml,
+              styles: {
+                fontSize,
+                fontWeight: activeFontWeight,
+                textAlign,
+                textColor,
+                paperStyleIndex: activePaperStyleIndex,
+              },
+              isLocked: noteIsLocked,
+              password: notePassword,
+            });
+          }
+        } else {
+          setIsDirty(true);
+        }
+      }
+    }
+  };
+
+  const clearHighlightFromSelection = (selection: Selection, range: Range) => {
+    const container = range.commonAncestorContainer;
+    const elementsToUnwrap = new Set<HTMLElement>();
+    
+    let parent: Node | null = container;
+    while (parent) {
+      if (parent instanceof HTMLElement && (parent.classList.contains("highlight") || parent.classList.contains("hl"))) {
+        elementsToUnwrap.add(parent);
+      }
+      parent = parent.parentNode;
+    }
+    
+    const searchTarget = container instanceof HTMLElement ? container : container.parentNode;
+    if (searchTarget instanceof HTMLElement) {
+      const highlights = searchTarget.querySelectorAll(".highlight, .hl");
+      highlights.forEach((hl) => {
+        if (hl instanceof HTMLElement && (selection.containsNode(hl, true) || range.intersectsNode(hl))) {
+          elementsToUnwrap.add(hl);
+        }
+      });
+    }
+    
+    elementsToUnwrap.forEach((el) => {
+      if (el.parentNode) {
+        const fragment = document.createDocumentFragment();
+        while (el.firstChild) {
+          fragment.appendChild(el.firstChild);
+        }
+        el.parentNode.replaceChild(fragment, el);
+      }
+    });
+
+    if (searchTarget instanceof HTMLElement) {
+      searchTarget.normalize();
+    }
+  };
+
+  const applyHighlight = (colorObj?: { name: string; bg: string; text: string }) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+    const activeColor = colorObj || selectedHighlightColor;
+    const range = selection.getRangeAt(0);
+
+    // Clear existing highlight layers first so colors never stack on top of each other
+    clearHighlightFromSelection(selection, range);
+
+    const updatedSelection = window.getSelection();
+    if (!updatedSelection || updatedSelection.isCollapsed || updatedSelection.rangeCount === 0) return;
+    const newRange = updatedSelection.getRangeAt(0);
+
+    const span = document.createElement("span");
+    span.className = "highlight";
+    span.style.backgroundColor = activeColor.bg;
+    span.style.color = activeColor.text;
+    span.style.borderRadius = "3px";
+    span.style.padding = "0 4px";
+    span.style.fontWeight = "600";
+    span.style.boxDecorationBreak = "clone";
+    (span.style as any).webkitBoxDecorationBreak = "clone";
+    
+    try {
+      newRange.surroundContents(span);
+    } catch (e) {
+      const extract = newRange.extractContents();
+      span.appendChild(extract);
+      newRange.insertNode(span);
+    }
+    
+    updatedSelection.removeAllRanges();
+    const finalRange = document.createRange();
+    finalRange.selectNodeContents(span);
+    updatedSelection.addRange(finalRange);
+    
+    triggerEditorUpdates();
+  };
+
+  const removeHighlight = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    clearHighlightFromSelection(selection, range);
+    triggerEditorUpdates();
+  };
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        setToolbarVisible(false);
+        return;
+      }
+      
+      const range = selection.getRangeAt(0);
+      const text = selection.toString().trim();
+      
+      if (selection.isCollapsed || text.length === 0) {
+        setToolbarVisible(false);
+        return;
+      }
+      
+      const isInside = checkIfSelectionIsInsideEditor(range);
+      if (!isInside) {
+        setToolbarVisible(false);
+        return;
+      }
+      
+      const rect = range.getBoundingClientRect();
+      
+      // Intelligent positioning: if selection is too close to top of screen, show toolbar BELOW selection
+      // Otherwise, show it ABOVE selection with safe space to avoid overlapping system Copy/Paste popups
+      const showBelow = rect.top < 85;
+      const top = showBelow
+        ? rect.bottom + window.scrollY + 18
+        : rect.top + window.scrollY - 62;
+      
+      const left = Math.max(60, Math.min(window.innerWidth - 60, rect.left + rect.width / 2));
+      
+      setToolbarPosition({ top, left });
+      setToolbarVisible(true);
+    };
+    
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [isSavedMode, isNovelMode, chapters, content, selectedHighlightColor]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1149,6 +1417,25 @@ const DarAlHikayatMaster: React.FC = () => {
         .chapter-line { height: 1px; background: linear-gradient(90deg, transparent, #A7AA63, transparent); flex: 1; }
         .chapter-icon { color: #A7AA63; margin: 0 15px; font-size: 24px; }
         .custom-scroll::-webkit-scrollbar { width: 4px; } .custom-scroll::-webkit-scrollbar-thumb { background-color: ${currentTheme.accent}40; border-radius: 4px; }
+        .highlight, .hl {
+          background-color: ${currentTheme.accent}40;
+          border-radius: 2px;
+          padding: 0 2px;
+          box-decoration-break: clone;
+          -webkit-box-decoration-break: clone;
+        }
+        .editor-container[contenteditable="true"]:empty::before,
+        .editor-container[contenteditable="true"].is-empty::before {
+          content: attr(data-placeholder);
+          color: currentColor;
+          opacity: 0.5;
+          pointer-events: none;
+          display: block;
+        }
+        .editor-container[contenteditable="false"]:empty::before,
+        .editor-container[contenteditable="false"].is-empty::before {
+          content: "";
+        }
       `}</style>
 
       {/* Zikr Toast */}
@@ -1906,14 +2193,14 @@ const DarAlHikayatMaster: React.FC = () => {
       {/* Main Content Area */}
       <main id="story-content" className="w-full relative z-0 pb-36">
         {!isNovelMode ? (
-          <textarea
+          <div
             ref={editorRef}
-            value={content}
-            onChange={handleContentChange}
-            readOnly={isSavedMode}
-            placeholder="اكتب حكايتك هنا..."
-            // CRITICAL FIX: Removed dynamic padding. Uses fixed padding now to prevent layout thrashing.
-            className="w-full bg-transparent border-none outline-none resize-none px-6 leading-loose overflow-hidden pt-28"
+            contentEditable={!isSavedMode}
+            onInput={(e) => handleContentChange(e.currentTarget.innerHTML)}
+            data-placeholder="اكتب حكايتك هنا..."
+            className={`w-full bg-transparent border-none outline-none px-6 leading-loose pt-28 min-h-[60vh] editor-container ${
+              !content || content === "<br>" ? "is-empty" : ""
+            }`}
             style={{
               fontSize: `${fontSize}px`,
               fontFamily: "'Zain', sans-serif",
@@ -1921,8 +2208,8 @@ const DarAlHikayatMaster: React.FC = () => {
               textAlign: textAlign,
               color: textColor,
               lineHeight: 2.2,
-              minHeight: "60vh",
-              willChange: "height",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
             }}
             spellCheck={false}
           />
@@ -2425,6 +2712,87 @@ const DarAlHikayatMaster: React.FC = () => {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {toolbarVisible && (
+        <div
+          className="fixed z-50 flex items-center gap-1 p-0.5 px-1.5 rounded-full shadow-2xl backdrop-blur-md transition-all duration-200 ease-out border"
+          style={{
+            top: `${toolbarPosition.top - window.scrollY}px`,
+            left: `${toolbarPosition.left}px`,
+            transform: "translate(-50%, -100%)",
+            backgroundColor: currentTheme.isDark ? "rgba(20, 20, 22, 0.92)" : "rgba(255, 255, 255, 0.92)",
+            borderColor: currentTheme.border,
+            boxShadow: `0 8px 20px -6px rgba(0,0,0,0.12), 0 0 0 1px ${currentTheme.border}`,
+          }}
+          dir="rtl"
+        >
+          {/* Main Highlight Action */}
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              applyHighlight();
+            }}
+            className="group relative flex items-center justify-center p-1.5 rounded-full hover:bg-stone-200/50 dark:hover:bg-zinc-800/50 transition-colors"
+            style={{ color: selectedHighlightColor.bg }}
+          >
+            <Highlighter className="w-3.5 h-3.5" />
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center justify-center bg-zinc-900 text-white text-[10px] py-0.5 px-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+              تظليل النص
+            </span>
+          </button>
+
+          {/* Color Circles Selector */}
+          <div className="flex items-center gap-1.5 px-1">
+            {[
+              { name: "أصفر ساطع", bg: "#FFE600", text: "#000000" },
+              { name: "أخضر نضاح", bg: "#4ADE80", text: "#052C14" },
+              { name: "وردي زاهي", bg: "#FF729F", text: "#4C0019" },
+              { name: "أزرق سماوي", bg: "#38BDF8", text: "#03203C" },
+              { name: "برتقالي مشرق", bg: "#FB923C", text: "#3A1000" },
+            ].map((color) => (
+              <button
+                key={color.bg}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setSelectedHighlightColor(color);
+                  applyHighlight(color);
+                }}
+                className={`w-3.5 h-3.5 rounded-full transition-all focus:outline-none relative group ${
+                  selectedHighlightColor.bg === color.bg
+                    ? "ring-2 ring-stone-800 dark:ring-stone-100 scale-125 z-10"
+                    : "opacity-85 hover:opacity-100 hover:scale-110"
+                }`}
+                style={{ backgroundColor: color.bg }}
+              >
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center justify-center bg-zinc-900 text-white text-[10px] py-0.5 px-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+                  {color.name}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div
+            className="w-px h-3.5 self-center mx-0.5"
+            style={{ backgroundColor: currentTheme.border }}
+          />
+
+          {/* Remove Highlight Button */}
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              removeHighlight();
+            }}
+            className="group relative flex items-center justify-center p-1.5 rounded-full hover:bg-stone-200/50 dark:hover:bg-zinc-800/50 transition-colors"
+            style={{ color: currentTheme.text }}
+          >
+            <Eraser className="w-3.5 h-3.5" />
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center justify-center bg-zinc-900 text-white text-[10px] py-0.5 px-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+              إزالة التظليل
+            </span>
+          </button>
         </div>
       )}
     </div>
