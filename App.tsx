@@ -186,13 +186,15 @@ const AppContent = () => {
                   exit={{ opacity: 0, scale: 0.7 }}
                   transition={{ type: "spring", stiffness: 220, damping: 24, mass: 0.8 }}
                   onClick={() => openEditor(null)}
-                  className="pointer-events-auto w-12 h-12 rounded-full border shadow-xl flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-110 active:scale-95 flex-shrink-0 cursor-pointer"
+                  className="pointer-events-auto w-12 h-12 rounded-full border flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer"
                   style={{
                     borderRadius: "9999px",
-                    backgroundColor: currentTheme.accent,
-                    color: currentTheme.bg,
-                    borderColor: currentTheme.border,
-                    boxShadow: `0 10px 26px -2px ${currentTheme.accent}55`,
+                    backgroundColor: currentTheme.isDark ? "#1C2526" : currentTheme.accent,
+                    color: currentTheme.isDark ? currentTheme.accent : currentTheme.bg,
+                    borderColor: currentTheme.isDark ? "rgba(226, 223, 210, 0.15)" : currentTheme.border,
+                    boxShadow: currentTheme.isDark
+                      ? "0 6px 18px -3px rgba(0, 0, 0, 0.45)"
+                      : `0 6px 18px -3px ${currentTheme.shadow}`,
                   }}
                   title="حكاية جديدة"
                 >

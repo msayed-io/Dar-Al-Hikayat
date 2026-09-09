@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="colorPrimary">#0F1617</color>
+    <color name="colorPrimaryDark">#0B1011</color>
+    <color name="colorAccent">#A7AA63</color>
 
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
@@ -13,13 +16,9 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-        <item name="android:windowFullscreen">true</item>
-    </style>
-
-
-    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:windowBackground">#0F1617</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <item name="android:windowFullscreen">true</item>
     </style>

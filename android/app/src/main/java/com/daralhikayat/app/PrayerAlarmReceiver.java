@@ -1,150 +1,171 @@
 package com.daralhikayat.app;
 
 import android.app.AlarmManager;
-import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import androidx.core.app.NotificationCompat;
-import com.aparajita.capacitor.biometricauth.BiometricAuthNative;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-
 public class PrayerAlarmReceiver extends BroadcastReceiver {
-    private static final String CHANNEL_ID = "prayer_reminders";
+    public static final String CHANNEL_ID = "prayer_reminders";
+    public static final String CHANNEL_NAME = "تذكيرات الصلاة";
     private static final String KEY_ALARMS = "scheduled_alarms";
     private static final String PREFS_NAME = "dar_prayer_alarms";
 
     @Override
     public void onReceive(Context context, Intent intent) {
         if ("com.daralhikayat.app.PRAYER_ALARM".equals(intent.getAction())) {
-            String stringExtra = intent.getStringExtra(BiometricAuthNative.RESULT_TYPE);
-            String stringExtra2 = intent.getStringExtra("title");
-            String stringExtra3 = intent.getStringExtra("body");
-            String stringExtra4 = intent.getStringExtra("prayerId");
-            int intExtra = intent.getIntExtra("id", 0);
-            if ("reschedule".equals(stringExtra)) {
+            String type = intent.getStringExtra("type");
+            String title = intent.getStringExtra("title");
+            String body = intent.getStringExtra("body");
+            String prayerId = intent.getStringExtra("prayerId");
+            int id = intent.getIntExtra("id", 0);
+
+            if ("reschedule".equals(type)) {
                 rescheduleAlarmsFromCache(context);
             } else {
                 triggerVibration(context);
-                showNotification(context, intExtra, stringExtra2, stringExtra3, stringExtra4);
+                showNotification(context, id, title, body, prayerId);
             }
         }
     }
 
-    private void showNotification(Context context, int i, String str, String str2, String str3) {
-        Notification.Builder builder;
-        Notification.Builder builder2;
-        try {
-            try {
-                NotificationManager notificationManager = (NotificationManager) context.getSystemService("notification");
-                if (notificationManager == null) {
-                    return;
+    public static void ensureNotificationChannel(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                NotificationChannel channel = notificationManager.getNotificationChannel(CHANNEL_ID);
+                if (channel == null) {
+                    channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
+                    channel.setDescription("تذكيرات مواقيت الصلاة والأذان");
+                    channel.enableVibration(true);
+                    channel.setVibrationPattern(new long[]{0, 400, 200, 600});
+                    channel.enableLights(true);
+                    channel.setLightColor(0xFFA7AA63);
+                    channel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+                    notificationManager.createNotificationChannel(channel);
                 }
-                if (Build.VERSION.SDK_INT >= 26) {
-                    builder2 = new Notification.Builder(context, CHANNEL_ID);
-                } else {
-                    builder2 = new Notification.Builder(context);
-                    builder2.setVibrate(new long[]{0, 400, 200, 600});
-                    builder2.setDefaults(2);
-                }
-                builder2.setSmallIcon(R.mipmap.ic_launcher).setContentTitle(str).setContentText(str2).setStyle(new Notification.BigTextStyle().bigText(str2)).setAutoCancel(true).setPriority(1).setCategory(NotificationCompat.CATEGORY_ALARM).setVisibility(1).setOnlyAlertOnce(true);
-                notificationManager.notify(i, builder2.build());
-            } catch (Exception unused) {
-                NotificationManager notificationManager2 = (NotificationManager) context.getSystemService("notification");
-                if (notificationManager2 == null) {
-                    return;
-                }
-                if (Build.VERSION.SDK_INT >= 26) {
-                    builder = new Notification.Builder(context, CHANNEL_ID);
-                } else {
-                    builder = new Notification.Builder(context);
-                }
-                builder.setContentTitle(str).setContentText(str2).setAutoCancel(true).setPriority(1);
-                notificationManager2.notify(i, builder.build());
             }
-        } catch (Exception unused2) {
+        }
+    }
+
+    private void showNotification(Context context, int id, String title, String body, String prayerId) {
+        try {
+            NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager == null) {
+                return;
+            }
+
+            ensureNotificationChannel(context);
+
+            Intent openIntent = new Intent(context, MainActivity.class);
+            openIntent.setAction(Intent.ACTION_MAIN);
+            openIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+            openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            openIntent.putExtra("prayerId", prayerId);
+
+            int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+            PendingIntent pendingIntent = PendingIntent.getActivity(context, id, openIntent, pendingFlags);
+
+            int smallIconRes = R.drawable.ic_stat_prayer;
+            Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(smallIconRes)
+                    .setContentTitle(title != null ? title : "تذكير بموعد الصلاة")
+                    .setContentText(body != null ? body : "")
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent)
+                    .setSound(soundUri)
+                    .setVibrate(new long[]{0, 400, 200, 600});
+
+            notificationManager.notify(id, builder.build());
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
     private void triggerVibration(Context context) {
         try {
-            Vibrator vibrator = (Vibrator) context.getSystemService("vibrator");
+            Vibrator vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
             if (vibrator != null && vibrator.hasVibrator()) {
-                long[] jArr = {0, 400, 200, 600};
-                if (Build.VERSION.SDK_INT >= 26) {
-                    vibrator.vibrate(VibrationEffect.createWaveform(jArr, -1));
+                long[] pattern = {0, 400, 200, 600};
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1));
                 } else {
-                    vibrator.vibrate(jArr, -1);
+                    vibrator.vibrate(pattern, -1);
                 }
             }
-        } catch (Exception unused) {
+        } catch (Exception ignored) {
         }
     }
 
     private void rescheduleAlarmsFromCache(Context context) {
-        int i;
-        AlarmManager alarmManager;
         try {
-            SharedPreferences sharedPreferences = context.getSharedPreferences(PREFS_NAME, 0);
-            JSONArray jSONArray = new JSONArray(sharedPreferences.getString(KEY_ALARMS, "[]"));
-            AlarmManager alarmManager2 = (AlarmManager) context.getSystemService(NotificationCompat.CATEGORY_ALARM);
-            if (alarmManager2 == null) {
+            SharedPreferences sharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            JSONArray array = new JSONArray(sharedPreferences.getString(KEY_ALARMS, "[]"));
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager == null) {
                 return;
             }
-            long currentTimeMillis = System.currentTimeMillis();
-            int i2 = 0;
-            while (i2 < jSONArray.length()) {
-                JSONObject jSONObject = jSONArray.getJSONObject(i2);
-                AlarmManager alarmManager3 = alarmManager2;
-                long j = jSONObject.getLong("timestamp");
-                int i3 = jSONObject.getInt("id");
-                SharedPreferences sharedPreferences2 = sharedPreferences;
-                String string = jSONObject.getString("title");
-                JSONArray jSONArray2 = jSONArray;
-                String string2 = jSONObject.getString("body");
-                long j2 = currentTimeMillis;
-                String string3 = jSONObject.getString("prayerId");
-                String string4 = jSONObject.getString(BiometricAuthNative.RESULT_TYPE);
-                if (j <= j2) {
-                    i = i2;
-                    alarmManager = alarmManager3;
-                } else {
-                    i = i2;
-                    Intent intent = new Intent(context, (Class<?>) PrayerAlarmReceiver.class);
+
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject obj = array.getJSONObject(i);
+                long timestamp = obj.getLong("timestamp");
+                if (timestamp > now) {
+                    int id = obj.getInt("id");
+                    String title = obj.getString("title");
+                    String body = obj.getString("body");
+                    String prayerId = obj.getString("prayerId");
+                    String type = obj.optString("type", "exact");
+
+                    Intent intent = new Intent(context, PrayerAlarmReceiver.class);
                     intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
-                    intent.putExtra("id", i3);
-                    intent.putExtra("title", string);
-                    intent.putExtra("body", string2);
-                    intent.putExtra("prayerId", string3);
-                    intent.putExtra(BiometricAuthNative.RESULT_TYPE, string4);
-                    intent.putExtra("timestamp", j);
-                    PendingIntent broadcast = PendingIntent.getBroadcast(context, i3, intent, 201326592);
-                    alarmManager = alarmManager3;
+                    intent.putExtra("id", id);
+                    intent.putExtra("title", title);
+                    intent.putExtra("body", body);
+                    intent.putExtra("prayerId", prayerId);
+                    intent.putExtra("type", type);
+                    intent.putExtra("timestamp", timestamp);
+
+                    int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+                    }
+                    PendingIntent pendingIntent = PendingIntent.getBroadcast(context, id, intent, pendingFlags);
+
                     try {
-                        try {
-                            alarmManager.setExactAndAllowWhileIdle(0, j, broadcast);
-                        } catch (SecurityException unused) {
-                            alarmManager.set(0, j, broadcast);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
+                        } else {
+                            alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
                         }
-                    } catch (Exception unused2) {
+                    } catch (SecurityException se) {
+                        alarmManager.set(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
                     }
                 }
-                i2 = i + 1;
-                alarmManager2 = alarmManager;
-                sharedPreferences = sharedPreferences2;
-                jSONArray = jSONArray2;
-                currentTimeMillis = j2;
             }
             sharedPreferences.edit().putBoolean("needs_reschedule", false).apply();
-        } catch (Exception unused3) {
+        } catch (Exception ignored) {
         }
     }
 }

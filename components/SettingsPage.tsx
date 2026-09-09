@@ -32,6 +32,7 @@ const SettingsPage: React.FC = () => {
   const [showMethodList, setShowMethodList] = useState(false);
   const [citySearch, setCitySearch] = useState("");
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     const lockState = localStorage.getItem("dar_app_lock_enabled") === "true";
@@ -128,12 +129,21 @@ const SettingsPage: React.FC = () => {
   // إشعار تجريبي
   const handleTestNotification = useCallback(async () => {
     setIsSendingTest(true);
+    setTestFeedback(null);
     try {
-      await testPrayerNotification();
-    } catch (e) {
+      const result = await testPrayerNotification();
+      setTestFeedback(result);
+    } catch (e: any) {
       console.error("Test notification failed:", e);
+      setTestFeedback({
+        success: false,
+        message: `تعذر إرسال الإشعار: ${e?.message || "خطأ غير متوقع"}`,
+      });
     } finally {
-      setTimeout(() => setIsSendingTest(false), 2000);
+      setIsSendingTest(false);
+      setTimeout(() => {
+        setTestFeedback(null);
+      }, 5000);
     }
   }, []);
 
@@ -455,14 +465,14 @@ const SettingsPage: React.FC = () => {
                     اختبار الإشعار
                   </span>
                   <span className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text, lineHeight: "1.4" }}>
-                    اضغط لرؤية إشعار تجريبي خلال 5 ثوانٍ
+                    اضغط لإرسال إشعار تجريبي فوري واختبار المنبه
                   </span>
                 </div>
               </div>
               <button
                 onClick={handleTestNotification}
                 disabled={isSendingTest}
-                className="w-full font-zain-bold text-sm border transition-all active:scale-95 flex items-center justify-center"
+                className="w-full font-zain-bold text-sm border transition-all active:scale-95 flex items-center justify-center cursor-pointer"
                 style={{
                   backgroundColor: `${currentTheme.accent}15`,
                   borderColor: `${currentTheme.accent}30`,
@@ -479,8 +489,25 @@ const SettingsPage: React.FC = () => {
                 ) : (
                   <Bell className="w-4 h-4" />
                 )}
-                {isSendingTest ? "تم الإرسال..." : "اختبار إشعار الصلاة"}
+                {isSendingTest ? "جاري الإرسال..." : "اختبار إشعار الصلاة"}
               </button>
+
+              {testFeedback && (
+                <div
+                  className="mt-2 p-2 rounded-xl text-xs font-zain-bold text-center border transition-all animate-fadeIn"
+                  style={{
+                    backgroundColor: testFeedback.success
+                      ? "rgba(34, 197, 94, 0.1)"
+                      : "rgba(239, 68, 68, 0.1)",
+                    borderColor: testFeedback.success
+                      ? "rgba(34, 197, 94, 0.3)"
+                      : "rgba(239, 68, 68, 0.3)",
+                    color: testFeedback.success ? "#16a34a" : "#dc2626",
+                  }}
+                >
+                  {testFeedback.message}
+                </div>
+              )}
             </div>
           </div>
         </section>

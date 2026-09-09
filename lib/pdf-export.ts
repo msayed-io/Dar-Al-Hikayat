@@ -4,7 +4,7 @@
  */
 import type { NoteStyles } from "../contexts/AppContext";
 
-/** بناء محتوى الحكاية بتنسيق HTML قابل للطباعة (نفس قالب الإنتاج) */
+/** بناء محتوى الحكاية بتنسيق HTML قابل للطباعة (نفس قالب الإنتاج مع الحفاظ التام على التظليل) */
 function buildStoryHtml(
   title: string,
   content: string,
@@ -18,26 +18,56 @@ function buildStoryHtml(
   // Parse content using DOMParser to support rich spans and highlights
   const doc = new DOMParser().parseFromString(content, "text/html");
   let contentHtml = "";
-  
-  // Check if we have rich HTML tags
-  if (doc.querySelector("div") || doc.querySelector("p") || doc.querySelector("span") || doc.querySelector("br")) {
-    const spans = doc.querySelectorAll("span");
-    spans.forEach((span) => {
-      if (span.classList.contains("highlight") || span.classList.contains("hl")) {
-        if (!span.style.backgroundColor) {
-          span.style.backgroundColor = "#FFE600";
-          span.style.color = "#000000";
-        }
-        span.style.borderRadius = "2px";
-        span.style.padding = "0 3px";
-        span.style.fontWeight = "600";
-      } else {
-        // Unwrap any non-highlight spans to keep the document clean
-        const textNode = doc.createTextNode(span.textContent || "");
-        span.replaceWith(textNode);
-      }
-    });
 
+  // تطبيع وتثبيت جميع عناصر التظليل (Spans, Marks, Classes, Inline Styles)
+  const allElements = doc.querySelectorAll("span, mark, b, strong, em, i, u");
+  allElements.forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+
+    const isHighlight =
+      el.classList.contains("highlight") ||
+      el.classList.contains("hl") ||
+      el.tagName === "MARK" ||
+      Boolean(el.style.backgroundColor) ||
+      Boolean(el.style.background) ||
+      Boolean(el.getAttribute("style")?.includes("background"));
+
+    if (isHighlight) {
+      let bgCol = el.style.backgroundColor || el.style.background;
+      if (!bgCol || bgCol === "transparent" || bgCol === "inherit") {
+        const styleAttr = el.getAttribute("style") || "";
+        const bgMatch = styleAttr.match(/background(?:-color)?:\s*([^;]+)/i);
+        bgCol = bgMatch ? bgMatch[1].trim() : "#FFE600";
+      }
+      let txtCol = el.style.color;
+      if (!txtCol || txtCol === "inherit") {
+        txtCol = "#000000";
+      }
+
+      el.className = "highlight";
+      el.style.setProperty("background-color", bgCol, "important");
+      el.style.setProperty("color", txtCol, "important");
+      el.style.setProperty("display", "inline-block", "important");
+      el.style.setProperty("border-radius", "3px", "important");
+      el.style.setProperty("padding", "1px 5px", "important");
+      el.style.setProperty("margin", "0 1px", "important");
+      el.style.setProperty("font-weight", "600", "important");
+      el.style.setProperty("line-height", "1.4", "important");
+      el.style.setProperty("box-decoration-break", "clone", "important");
+      el.style.setProperty("-webkit-box-decoration-break", "clone", "important");
+      el.style.setProperty("-webkit-print-color-adjust", "exact", "important");
+      el.style.setProperty("print-color-adjust", "exact", "important");
+    } else if (el.tagName === "SPAN") {
+      // إزالة الوسوم المفرغة فقط دون لمس النصوص أو التنسيقات
+      if (!el.getAttribute("style") && !el.className) {
+        const textNode = doc.createTextNode(el.textContent || "");
+        el.replaceWith(textNode);
+      }
+    }
+  });
+
+  // Check if we have rich HTML tags
+  if (doc.querySelector("div") || doc.querySelector("p") || doc.querySelector("span") || doc.querySelector("mark") || doc.querySelector("br") || doc.querySelector("h2")) {
     const paragraphs: string[] = [];
     const children = Array.from(doc.body.childNodes);
     let currentParagraph = "";
@@ -55,6 +85,12 @@ function buildStoryHtml(
             currentParagraph = "";
           }
           paragraphs.push(child.innerHTML);
+        } else if (child.tagName === "H2" || child.tagName === "H1") {
+          if (currentParagraph) {
+            paragraphs.push(currentParagraph);
+            currentParagraph = "";
+          }
+          paragraphs.push(child.outerHTML);
         } else {
           currentParagraph += child.outerHTML;
         }
@@ -68,7 +104,11 @@ function buildStoryHtml(
       .map((p) => {
         const trimmed = p.trim();
         if (!trimmed) return "";
-        return `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align};">${trimmed}</p>`;
+        // إذا كان العنصر عنوان أو فاصل مزخرف، نعرضه كما هو دون وضعه في فقرة عادية
+        if (trimmed.startsWith("<h2") || trimmed.startsWith("<h1") || trimmed.includes("❦")) {
+          return trimmed;
+        }
+        return `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align}; white-space: pre-wrap; word-break: break-word;">${trimmed}</p>`;
       })
       .filter(Boolean)
       .join("");
@@ -78,7 +118,7 @@ function buildStoryHtml(
       .split(/\n/)
       .map(
         (line) =>
-          `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align};">${escapeHtml(
+          `<p style="font-family: 'Zain', sans-serif; font-weight: 400; font-size: ${styles.fontSize}px; color: ${styles.textColor || text}; line-height: 1.9; margin: 0 0 14px; text-align: ${align}; white-space: pre-wrap; word-break: break-word;">${escapeHtml(
             line || " "
           )}</p>`
       )
@@ -90,8 +130,30 @@ function buildStoryHtml(
 <meta charset="UTF-8">
 <style>
   @page { size: A4; margin: 0; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; direction: rtl; }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    direction: rtl;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .highlight, .hl, mark {
+    display: inline-block !important;
+    border-radius: 3px !important;
+    padding: 1px 5px !important;
+    margin: 0 1px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+    box-decoration-break: clone !important;
+    -webkit-box-decoration-break: clone !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 </style>
 </head>
 <body>

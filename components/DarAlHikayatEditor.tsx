@@ -57,6 +57,7 @@ import {
 } from "docx";
 import { useApp, NoteStyles } from "../contexts/AppContext";
 import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
+import { exportStoryToDocx } from "../lib/docx-export";
 
 // --- 20 Premium Ink Colors ---
 const inkColors = [
@@ -89,6 +90,7 @@ const paperStyles = [
     name: "استوديو حديث",
     icon: FileText,
     defaultTextColor: "#2C3E30",
+    darkTextColor: "#E2DFD2",
     isDark: false,
   },
   {
@@ -96,6 +98,7 @@ const paperStyles = [
     name: "كشكول كلاسيكي",
     icon: null,
     defaultTextColor: "#121A1B",
+    darkTextColor: "#E2DFD2",
     isDark: false,
   },
   {
@@ -103,6 +106,7 @@ const paperStyles = [
     name: "كتان فاخر",
     icon: Scroll,
     defaultTextColor: "#121A1B",
+    darkTextColor: "#E2DFD2",
     isDark: false,
   },
   {
@@ -110,6 +114,7 @@ const paperStyles = [
     name: "ورق عتيق",
     icon: Scroll,
     defaultTextColor: "#121A1B",
+    darkTextColor: "#DFD7C7",
     isDark: false,
   },
   {
@@ -117,6 +122,7 @@ const paperStyles = [
     name: "ليالي الصحراء",
     icon: Sparkles,
     defaultTextColor: "#F0E6D8",
+    darkTextColor: "#E2DFD2",
     isDark: true,
   },
   {
@@ -124,6 +130,7 @@ const paperStyles = [
     name: "مخطوطة الغابة",
     icon: Leaf,
     defaultTextColor: "#D4CBB6",
+    darkTextColor: "#D4CBB6",
     isDark: true,
   },
   {
@@ -131,20 +138,23 @@ const paperStyles = [
     name: "همس السحاب",
     icon: Cloud,
     defaultTextColor: "#483D8B",
+    darkTextColor: "#D0D6E2",
     isDark: false,
   },
   {
     id: "magma_ink",
     name: "حبر الصهارة",
     icon: Flame,
-    defaultTextColor: "#FFD700",
+    defaultTextColor: "#E5BE82",
+    darkTextColor: "#E5BE82",
     isDark: true,
   },
   {
     id: "aether_tablet",
     name: "لوح الأثير",
     icon: Cpu,
-    defaultTextColor: "#00FFFF",
+    defaultTextColor: "#70C2D0",
+    darkTextColor: "#A0D8E6",
     isDark: true,
   },
   {
@@ -152,6 +162,7 @@ const paperStyles = [
     name: "نصوص الأعماق",
     icon: Waves,
     defaultTextColor: "#96E0F0",
+    darkTextColor: "#96E0F0",
     isDark: true,
   },
   {
@@ -159,6 +170,7 @@ const paperStyles = [
     name: "ريشة الفلك",
     icon: Orbit,
     defaultTextColor: "#EBEBF5",
+    darkTextColor: "#EBEBF5",
     isDark: true,
   },
   {
@@ -166,6 +178,7 @@ const paperStyles = [
     name: "حديقة السكون",
     icon: Feather,
     defaultTextColor: "#333D40",
+    darkTextColor: "#E2DFD2",
     isDark: false,
   },
   {
@@ -173,6 +186,7 @@ const paperStyles = [
     name: "مخطوطة الدم",
     icon: BookHeart,
     defaultTextColor: "#F5EBE0",
+    darkTextColor: "#F5EBE0",
     isDark: true,
   },
   {
@@ -180,6 +194,7 @@ const paperStyles = [
     name: "سراب الذاكرة",
     icon: Hourglass,
     defaultTextColor: "#5A5A7A",
+    darkTextColor: "#D2D4DE",
     isDark: false,
   },
   {
@@ -187,6 +202,7 @@ const paperStyles = [
     name: "ورشة المخترع",
     icon: Cog,
     defaultTextColor: "#2E251F",
+    darkTextColor: "#DECDBB",
     isDark: false,
   },
 ];
@@ -436,9 +452,21 @@ const DarAlHikayatMaster: React.FC = () => {
   const [textAlign, setTextAlign] = useState<NoteStyles["textAlign"]>(
     initialStyles?.textAlign || "right",
   );
-  const [textColor, setTextColor] = useState(
-    initialStyles?.textColor || "#2C3E30",
-  );
+  const [textColor, setTextColor] = useState(() => {
+    if (initialStyles?.textColor) {
+      if (
+        currentTheme.isDark &&
+        (initialStyles.textColor === "#2C3E30" ||
+          initialStyles.textColor === "#121A1B" ||
+          initialStyles.textColor === "#000000" ||
+          initialStyles.textColor === "#333D40")
+      ) {
+        return currentTheme.text;
+      }
+      return initialStyles.textColor;
+    }
+    return currentTheme.isDark ? currentTheme.text : "#2C3E30";
+  });
   const [activePaperStyleIndex, setActivePaperStyleIndex] = useState(
     initialStyles?.paperStyleIndex || 0,
   );
@@ -533,12 +561,35 @@ const DarAlHikayatMaster: React.FC = () => {
       setFontSize(selectedNote.styles.fontSize || 16);
       setActiveFontWeight(selectedNote.styles.fontWeight || 400);
       setTextAlign(selectedNote.styles.textAlign || "right");
-      setTextColor(
-        selectedNote.styles.textColor ||
-          paperStyles[selectedNote.styles.paperStyleIndex || 0]
-            .defaultTextColor,
-      );
-      setActivePaperStyleIndex(selectedNote.styles.paperStyleIndex || 0);
+      const sIndex = selectedNote.styles.paperStyleIndex || 0;
+      let noteTextColor = selectedNote.styles.textColor;
+      if (currentTheme.isDark) {
+        if (
+          !noteTextColor ||
+          noteTextColor === "#2C3E30" ||
+          noteTextColor === "#121A1B" ||
+          noteTextColor === "#000000" ||
+          noteTextColor === "#333D40"
+        ) {
+          noteTextColor = paperStyles[sIndex]?.darkTextColor || currentTheme.text;
+        }
+      } else {
+        if (
+          !noteTextColor ||
+          noteTextColor === "#EAE6D2" ||
+          noteTextColor === "#E2DFD2" ||
+          noteTextColor === "#F0E6D8" ||
+          noteTextColor === "#FDFEFE" ||
+          noteTextColor === "#EBEBF5"
+        ) {
+          noteTextColor = paperStyles[sIndex]?.defaultTextColor || currentTheme.text;
+        }
+      }
+      setTextColor(noteTextColor);
+      setActivePaperStyleIndex(sIndex);
+    } else {
+      setTextColor(currentTheme.isDark ? currentTheme.text : "#2C3E30");
+      setActivePaperStyleIndex(0);
     }
     // Set Lock State
     setNoteIsLocked(selectedNote?.isLocked || false);
@@ -556,6 +607,32 @@ const DarAlHikayatMaster: React.FC = () => {
       },
     ]);
   }, [selectedNote, initialMode]);
+
+  // Sync text color when theme mode is switched (e.g. from light to dark or vice versa)
+  useEffect(() => {
+    if (currentTheme.isDark) {
+      if (
+        !textColor ||
+        textColor === "#2C3E30" ||
+        textColor === "#121A1B" ||
+        textColor === "#000000" ||
+        textColor === "#333D40"
+      ) {
+        setTextColor(currentTheme.text);
+      }
+    } else {
+      if (
+        textColor === "#EAE6D2" ||
+        textColor === "#E2DFD2" ||
+        textColor === "#F0E6D8" ||
+        textColor === "#FDFEFE" ||
+        textColor === "#EBEBF5" ||
+        textColor === "#D4CBB6"
+      ) {
+        setTextColor(currentTheme.text);
+      }
+    }
+  }, [currentTheme.isDark, currentTheme.text]);
 
   const pushHistory = (
     newContent: string,
@@ -744,20 +821,35 @@ const DarAlHikayatMaster: React.FC = () => {
     setIsDirty(false);
   };
 
-  // تصدير PDF (نفس آلية النسخة الإنتاجية)
+  // تصدير PDF مع المزامنة الفورية من الـ DOM والحفاظ التام على التظليلات
   const handleExportPDF = async (fileName?: string) => {
     const displayTitle = fileName || title || "بدون عنوان";
     const safeTitle = displayTitle.replace(/[\\/:*?"<>|]/g, "_");
     setIsExporting(true);
     try {
+      // مزامنة فورية ومباشرة من الـ DOM لضمان تصدير أحدث محتوى بما في ذلك التظليلات المضافة للتو
+      let currentChapters = chapters;
+      let currentContent = content;
+
+      if (isNovelMode) {
+        currentChapters = chapters.map((c) => {
+          const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+          return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+        });
+        setChapters(currentChapters);
+      } else if (editorRef.current) {
+        currentContent = editorRef.current.innerHTML;
+        setContent(currentContent);
+      }
+
       const pdfContent = isNovelMode
-        ? chapters
+        ? currentChapters
             .map((c) => {
               const chTitle = c.title ? `<h2 style="font-family: 'Zain', sans-serif; font-weight: 900; font-size: 20px; color: ${currentTheme.accent}; text-align: center; margin-top: 30px; margin-bottom: 15px;">${c.title}</h2>` : "";
               return `${chTitle}${c.content}`;
             })
             .join("<div style='text-align: center; margin: 30px 0; color: #A7AA63; font-size: 20px;'>❦</div>")
-        : content;
+        : currentContent;
 
       const blob = await exportStoryToPdf(
         displayTitle,
@@ -787,118 +879,45 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
+  // تصدير Word (.docx) مع المزامنة الفورية وتحويل التظليلات إلى Shading و Highlight في Word
   const handleExportDOCX = async (fileName?: string) => {
     const displayTitle = fileName || title || "بدون عنوان";
-    const safeTitle = displayTitle.replace(/[\\/:*?"<>|]/g, "_");
-    
-    const stripHtml = (html: string): string => {
-      const parsedDoc = new DOMParser().parseFromString(html, "text/html");
-      parsedDoc.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
-      parsedDoc.querySelectorAll("div").forEach((div) => {
-        const textNode = parsedDoc.createTextNode("\n" + div.textContent);
-        div.replaceWith(textNode);
-      });
-      parsedDoc.querySelectorAll("p").forEach((p) => {
-        const textNode = parsedDoc.createTextNode("\n" + p.textContent);
-        p.replaceWith(textNode);
-      });
-      return (parsedDoc.body.textContent || "").trim();
-    };
-
-    const getDocxAlignment = (align: NoteStyles["textAlign"]) => {
-      switch (align) {
-        case "center":
-          return AlignmentType.CENTER;
-        case "left":
-          return AlignmentType.LEFT;
-        case "justify":
-          return AlignmentType.JUSTIFIED; // <-- إضافة حالة الضبط
-        default:
-          return AlignmentType.RIGHT;
-      }
-    };
-    const children = [
-      new Paragraph({
-        children: [new TextRun({ text: displayTitle, bold: true, size: 48 })],
-        heading: HeadingLevel.HEADING_1,
-        alignment: AlignmentType.CENTER,
-        bidirectional: true,
-        spacing: { after: 400 },
-      }),
-    ];
-    if (isNovelMode) {
-      chapters.forEach((chapter, index) => {
-        if (chapter.title) {
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: chapter.title,
-                  bold: true,
-                  size: 36,
-                  color: "2C3E30",
-                }),
-              ],
-              heading: HeadingLevel.HEADING_2,
-              alignment: AlignmentType.CENTER,
-              bidirectional: true,
-              spacing: { before: 400, after: 200 },
-            }),
-          );
-        }
-        stripHtml(chapter.content).split("\n").forEach((line) => {
-          const trimmed = line.trim();
-          if (!trimmed) return;
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: trimmed,
-                  size: Number(fontSize) * 1.5,
-                }),
-              ],
-              alignment: getDocxAlignment(textAlign),
-              bidirectional: true,
-              spacing: { after: 200, line: 360 },
-            }),
-          );
-        });
-        if (index < chapters.length - 1) {
-          children.push(new Paragraph({ children: [new PageBreak()] }));
-        }
-      });
-    } else {
-      stripHtml(content)
-        .split("\n")
-        .forEach((line) => {
-          const trimmed = line.trim();
-          if (!trimmed) return;
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: trimmed,
-                  size: Number(fontSize) * 1.5,
-                }),
-              ],
-              alignment: getDocxAlignment(textAlign),
-              bidirectional: true,
-              spacing: { after: 200, line: 360 },
-            }),
-          );
-        });
-    }
-    const doc = new Document({
-      creator: "دَارُ الحِكَايَاتِ",
-      title: displayTitle,
-      sections: [{ properties: {}, children }],
-    });
+    setIsExporting(true);
     try {
-      const blob = await Packer.toBlob(doc);
-      await downloadBlob(blob, `${safeTitle}.docx`);
+      // مزامنة فورية ومباشرة من الـ DOM لضمان تصدير أحدث محتوى بما في ذلك التظليلات المضافة للتو
+      let currentChapters = chapters;
+      let currentContent = content;
+
+      if (isNovelMode) {
+        currentChapters = chapters.map((c) => {
+          const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+          return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+        });
+        setChapters(currentChapters);
+      } else if (editorRef.current) {
+        currentContent = editorRef.current.innerHTML;
+        setContent(currentContent);
+      }
+
+      await exportStoryToDocx({
+        title: displayTitle,
+        content: currentContent,
+        styles: {
+          fontSize,
+          fontWeight: activeFontWeight,
+          textAlign,
+          textColor,
+          paperStyleIndex: activePaperStyleIndex,
+        },
+        isNovelMode,
+        chapters: currentChapters,
+        accentColor: currentTheme.accent,
+      });
     } catch (error) {
-      console.error("Error exporting:", error);
-      alert("حدث خطأ أثناء تصدير الملف.");
+      console.error("Error exporting DOCX:", error);
+      alert("حدث خطأ أثناء تصدير ملف Word.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -958,7 +977,11 @@ const DarAlHikayatMaster: React.FC = () => {
   const switchTexture = () => {
     const newIndex = (activePaperStyleIndex + 1) % paperStyles.length;
     setActivePaperStyleIndex(newIndex);
-    setTextColor(paperStyles[newIndex].defaultTextColor);
+    const style = paperStyles[newIndex];
+    const newColor = currentTheme.isDark
+      ? style.darkTextColor || currentTheme.text
+      : style.defaultTextColor;
+    setTextColor(newColor);
     setIsDirty(true);
   };
   const updateTextColor = (c: string) => {
@@ -1063,13 +1086,16 @@ const DarAlHikayatMaster: React.FC = () => {
     return null;
   };
 
-  const triggerEditorUpdates = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
-    
+  const triggerEditorUpdates = (targetChapterId?: string) => {
     if (isNovelMode) {
-      const chapterId = getChapterIdFromSelection(range);
+      let chapterId = targetChapterId;
+      if (!chapterId) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          chapterId = getChapterIdFromSelection(selection.getRangeAt(0)) || undefined;
+        }
+      }
+      
       if (chapterId) {
         const chapterEl = document.querySelector(`[data-chapter-id="${chapterId}"]`);
         if (chapterEl instanceof HTMLElement) {
@@ -1080,55 +1106,61 @@ const DarAlHikayatMaster: React.FC = () => {
               c.id === chapterId ? { ...c, content: newHtml } : c
             );
             
-            if (isSavedMode) {
+            if (isSavedMode && onSave) {
               const finalContent = updated
                 .map((c) => `${c.title}${TITLE_CONTENT_SEPARATOR}${c.content}`)
                 .join(CHAPTER_SEPARATOR);
-              if (onSave) {
-                onSave({
-                  id: noteId,
-                  title: title,
-                  content: finalContent,
-                  styles: {
-                    fontSize,
-                    fontWeight: activeFontWeight,
-                    textAlign,
-                    textColor,
-                    paperStyleIndex: activePaperStyleIndex,
-                  },
-                  isLocked: noteIsLocked,
-                  password: notePassword,
-                });
-              }
+              onSave({
+                id: noteId,
+                title: title,
+                content: finalContent,
+                styles: {
+                  fontSize,
+                  fontWeight: activeFontWeight,
+                  textAlign,
+                  textColor,
+                  paperStyleIndex: activePaperStyleIndex,
+                },
+                isLocked: noteIsLocked,
+                password: notePassword,
+              });
             } else {
               setIsDirty(true);
             }
             return updated;
           });
         }
+      } else {
+        // إذا لم يكن هناك فصل محدد بالـ Selection، نحدث كافة الفصول من شجرة الـ DOM
+        setChapters((prev) => {
+          const updated = prev.map((c) => {
+            const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+            return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+          });
+          setIsDirty(true);
+          return updated;
+        });
       }
     } else {
       if (editorRef.current) {
         const newHtml = editorRef.current.innerHTML;
         setContent(newHtml);
         
-        if (isSavedMode) {
-          if (onSave) {
-            onSave({
-              id: noteId,
-              title: title,
-              content: newHtml,
-              styles: {
-                fontSize,
-                fontWeight: activeFontWeight,
-                textAlign,
-                textColor,
-                paperStyleIndex: activePaperStyleIndex,
-              },
-              isLocked: noteIsLocked,
-              password: notePassword,
-            });
-          }
+        if (isSavedMode && onSave) {
+          onSave({
+            id: noteId,
+            title: title,
+            content: newHtml,
+            styles: {
+              fontSize,
+              fontWeight: activeFontWeight,
+              textAlign,
+              textColor,
+              paperStyleIndex: activePaperStyleIndex,
+            },
+            isLocked: noteIsLocked,
+            password: notePassword,
+          });
         } else {
           setIsDirty(true);
         }
@@ -1179,6 +1211,7 @@ const DarAlHikayatMaster: React.FC = () => {
 
     const activeColor = colorObj || selectedHighlightColor;
     const range = selection.getRangeAt(0);
+    const targetChapterId = isNovelMode ? (getChapterIdFromSelection(range) || undefined) : undefined;
 
     // Clear existing highlight layers first so colors never stack on top of each other
     clearHighlightFromSelection(selection, range);
@@ -1192,7 +1225,8 @@ const DarAlHikayatMaster: React.FC = () => {
     span.style.backgroundColor = activeColor.bg;
     span.style.color = activeColor.text;
     span.style.borderRadius = "3px";
-    span.style.padding = "0 4px";
+    span.style.padding = "1px 5px";
+    span.style.margin = "0 1px";
     span.style.fontWeight = "600";
     span.style.boxDecorationBreak = "clone";
     (span.style as any).webkitBoxDecorationBreak = "clone";
@@ -1207,7 +1241,7 @@ const DarAlHikayatMaster: React.FC = () => {
     
     updatedSelection.removeAllRanges();
     
-    triggerEditorUpdates();
+    triggerEditorUpdates(targetChapterId);
   };
 
   const removeHighlight = () => {
@@ -1215,9 +1249,10 @@ const DarAlHikayatMaster: React.FC = () => {
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
 
     const range = selection.getRangeAt(0);
+    const targetChapterId = isNovelMode ? (getChapterIdFromSelection(range) || undefined) : undefined;
     clearHighlightFromSelection(selection, range);
     selection.removeAllRanges();
-    triggerEditorUpdates();
+    triggerEditorUpdates(targetChapterId);
   };
 
   useEffect(() => {
@@ -1333,13 +1368,118 @@ const DarAlHikayatMaster: React.FC = () => {
 
   const getBackgroundStyle = () => {
     const baseSize = Number(fontSize) * 2.2;
-    const style = paperStyles[activePaperStyleIndex];
+    const style = paperStyles[activePaperStyleIndex] || paperStyles[0];
     const styleId = style.id;
+
+    // Dark theme backgrounds: completely glare-free, matte, soothing dark tones for comfortable writing
+    if (currentTheme.isDark) {
+      if (styleId === "minimalist") {
+        return { backgroundColor: currentTheme.bg };
+      }
+      if (styleId === "classic") {
+        return {
+          backgroundColor: "#13191A",
+          backgroundImage: `linear-gradient(rgba(226, 223, 210, 0.04) 1px, transparent 1px)`,
+          backgroundSize: `100% ${baseSize}px`,
+          backgroundAttachment: "local",
+        };
+      }
+      if (styleId === "linen") {
+        return {
+          backgroundColor: "#141A1B",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/subtle-linen.png")',
+        };
+      }
+      if (styleId === "vintage") {
+        return {
+          backgroundColor: "#171512",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/parchment.png")',
+        };
+      }
+      if (styleId === "desert_nights") {
+        return {
+          backgroundColor: "#13151D",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/stardust.png")',
+        };
+      }
+      if (styleId === "forest_manuscript") {
+        return {
+          backgroundColor: "#151D1A",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/natural-paper.png")',
+        };
+      }
+      if (styleId === "cloud_whisper") {
+        return {
+          backgroundColor: "#151822",
+        };
+      }
+      if (styleId === "magma_ink") {
+        return {
+          backgroundColor: "#161616",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/rocky-wall.png")',
+        };
+      }
+      if (styleId === "aether_tablet") {
+        return {
+          backgroundColor: "#14191E",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/clean-gray-paper.png")',
+        };
+      }
+      if (styleId === "abyssal_texts") {
+        return {
+          backgroundColor: "#0D1318",
+        };
+      }
+      if (styleId === "celestial_quill") {
+        return {
+          backgroundColor: "#13111A",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/stardust.png")',
+        };
+      }
+      if (styleId === "serenity_garden") {
+        return {
+          backgroundColor: "#141718",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/sand.png")',
+        };
+      }
+      if (styleId === "crimson_codex") {
+        return {
+          backgroundColor: "#171212",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/black-felt.png")',
+        };
+      }
+      if (styleId === "memory_mirage") {
+        return {
+          backgroundColor: "#15161D",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/noisy.png")',
+        };
+      }
+      if (styleId === "inventor_workshop") {
+        return {
+          backgroundColor: "#181613",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/worn-dots.png")',
+        };
+      }
+      return { backgroundColor: currentTheme.bg };
+    }
+
+    // Light theme backgrounds: comfortable paper textures without aggressive glows
     if (styleId === "minimalist") return { backgroundColor: "#F4F1EA" };
     if (styleId === "classic")
       return {
         backgroundColor: "#fdfbf7",
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.08) 1px, transparent 1px)`,
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px)`,
         backgroundSize: `100% ${baseSize}px`,
         backgroundAttachment: "local",
       };
@@ -1354,7 +1494,6 @@ const DarAlHikayatMaster: React.FC = () => {
         backgroundColor: "#e3d0b1",
         backgroundImage:
           'url("https://www.transparenttextures.com/patterns/parchment.png")',
-        boxShadow: "inset 0 0 100px rgba(0,0,0,0.1)",
       };
     if (styleId === "desert_nights")
       return {
@@ -1367,7 +1506,6 @@ const DarAlHikayatMaster: React.FC = () => {
         backgroundColor: "#2A3F3A",
         backgroundImage:
           'url("https://www.transparenttextures.com/patterns/natural-paper.png")',
-        boxShadow: "inset 0 0 150px rgba(0,0,0,0.3)",
       };
     if (styleId === "cloud_whisper")
       return {
@@ -1378,26 +1516,22 @@ const DarAlHikayatMaster: React.FC = () => {
         backgroundColor: "#1C1C1C",
         backgroundImage:
           'url("https://www.transparenttextures.com/patterns/rocky-wall.png")',
-        boxShadow: "inset 0 -100px 80px -80px rgba(255, 80, 0, 0.3)",
       };
     if (styleId === "aether_tablet")
       return {
         backgroundColor: "#222831",
         backgroundImage:
           'url("https://www.transparenttextures.com/patterns/clean-gray-paper.png")',
-        boxShadow: "inset 0 0 40px rgba(0, 200, 200, 0.15)",
       };
     if (styleId === "abyssal_texts")
       return {
-        background: "radial-gradient(ellipse at bottom, #0d1b2a 0%, #000 100%)",
-        boxShadow: "inset 0 100px 100px -50px rgba(150, 224, 240, 0.1)",
+        backgroundColor: "#0d1b2a",
       };
     if (styleId === "celestial_quill")
       return {
-        background:
-          "linear-gradient(160deg, #000010 0%, #1a0033 50%, #330044 100%)",
+        backgroundColor: "#161022",
         backgroundImage:
-          'url("https://www.transparenttextures.com/patterns/stardust.png"), linear-gradient(160deg, #000010 0%, #1a0033 50%, #330044 100%)',
+          'url("https://www.transparenttextures.com/patterns/stardust.png")',
       };
     if (styleId === "serenity_garden")
       return {
@@ -1410,7 +1544,6 @@ const DarAlHikayatMaster: React.FC = () => {
         backgroundColor: "#1A0000",
         backgroundImage:
           'url("https://www.transparenttextures.com/patterns/black-felt.png")',
-        boxShadow: "inset 0 0 150px rgba(100, 0, 0, 0.5)",
       };
     if (styleId === "memory_mirage")
       return {
@@ -2787,12 +2920,12 @@ const DarAlHikayatMaster: React.FC = () => {
                     onClick={() => toggleTheme("night_whisper")}
                     className={`w-6 h-6 rounded-full border flex items-center justify-center ${currentTheme.mode === "night_whisper" ? "ring-1 ring-offset-1" : ""}`}
                     style={{
-                      backgroundColor: "#0F1617",
-                      borderColor: "#A7AA63",
+                      backgroundColor: "#111718",
+                      borderColor: "#9FA365",
                       ringColor: currentTheme.accent,
                     }}
                   >
-                    <Moon className="w-3 h-3 text-[#A7AA63]" />
+                    <Moon className="w-3 h-3 text-[#9FA365]" />
                   </button>
                 </div>
               </div>

@@ -382,23 +382,25 @@ const HomePage: React.FC = () => {
         .about-scroll::-webkit-scrollbar-thumb { background-color: ${currentTheme.accent}40; border-radius: 4px; }
       `}</style>
 
-      {/* Dynamic Background Blobs */}
-      <div
-        className="fixed top-[-10%] right-[-10%] w-96 h-96 rounded-full filter blur-[100px] pointer-events-none z-0 transition-all duration-700"
-        style={{
-          backgroundColor: currentTheme.accent,
-          opacity: currentTheme.isDark ? 0.08 : 0.15,
-        }}
-      ></div>
-      <div
-        className="fixed bottom-[-10%] left-[-10%] w-80 h-80 rounded-full filter blur-[120px] pointer-events-none z-0 transition-all duration-700"
-        style={{
-          backgroundColor: currentTheme.isDark
-            ? "#EAE6D2"
-            : currentTheme.accent,
-          opacity: currentTheme.isDark ? 0.03 : 0.1,
-        }}
-      ></div>
+      {/* Dynamic Background Blobs (Soft subtle atmosphere in light mode only; disabled in dark mode to prevent eye strain and background glare) */}
+      {!currentTheme.isDark && (
+        <>
+          <div
+            className="fixed top-[-10%] right-[-10%] w-96 h-96 rounded-full filter blur-[100px] pointer-events-none z-0 transition-all duration-700"
+            style={{
+              backgroundColor: currentTheme.accent,
+              opacity: 0.12,
+            }}
+          />
+          <div
+            className="fixed bottom-[-10%] left-[-10%] w-80 h-80 rounded-full filter blur-[120px] pointer-events-none z-0 transition-all duration-700"
+            style={{
+              backgroundColor: currentTheme.accent,
+              opacity: 0.08,
+            }}
+          />
+        </>
+      )}
 
       {/* --- UNLOCK MODAL (Matched to New Compact Security Design) --- */}
       {unlockModal.show && (
@@ -993,8 +995,8 @@ const HomePage: React.FC = () => {
                 className="pointer-events-auto w-full h-11 px-3.5 rounded-full border shadow-xl flex items-center gap-2.5 animate-in fade-in zoom-in-95 duration-200"
                 style={{
                   backgroundColor: currentTheme.bg,
-                  borderColor: currentTheme.accent,
-                  boxShadow: `0 8px 24px -4px ${currentTheme.shadow}, 0 0 12px ${currentTheme.accent}20`,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                 }}
               >
                 <Search
@@ -1148,14 +1150,14 @@ const HomePage: React.FC = () => {
                             onClick={() => toggleTheme("night_whisper")}
                             className={`flex-1 h-8 border flex items-center justify-center transition-all ${currentTheme.mode === "night_whisper" ? "ring-2 ring-offset-1" : ""}`}
                             style={{
-                              backgroundColor: "#0F1617",
-                              borderColor: "#A7AA63",
+                              backgroundColor: "#111718",
+                              borderColor: "#9FA365",
                               borderRadius: "12px",
                               ringColor: currentTheme.accent,
                             }}
                             title="همس الليل"
                           >
-                            <Moon className="w-3.5 h-3.5 text-[#A7AA63]" />
+                            <Moon className="w-3.5 h-3.5 text-[#9FA365]" />
                           </button>
                         </div>
 

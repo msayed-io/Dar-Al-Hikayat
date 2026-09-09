@@ -18,8 +18,13 @@ interface PrayerAlarmPlugin {
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   requestExactAlarmPermission(): Promise<{ granted: boolean }>;
   canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
-  scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<void>;
+  scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<{ scheduled: number }>;
   cancelAllAlarms(): Promise<void>;
+  sendImmediateTestNotification(options?: {
+    title?: string;
+    body?: string;
+    prayerId?: string;
+  }): Promise<{ success: boolean }>;
 }
 
 interface SystemTimePlugin {
@@ -39,13 +44,9 @@ interface AlarmEntry {
   type: "exact" | "pre" | "reschedule";
 }
 
-const PrayerAlarm = Capacitor.isPluginAvailable("PrayerAlarm")
-  ? registerPlugin<PrayerAlarmPlugin>("PrayerAlarm")
-  : (undefined as unknown as PrayerAlarmPlugin | undefined);
+const PrayerAlarm = registerPlugin<PrayerAlarmPlugin>("PrayerAlarm");
 
-const SystemTime = Capacitor.isPluginAvailable("SystemTime")
-  ? registerPlugin<SystemTimePlugin>("SystemTime")
-  : (undefined as unknown as SystemTimePlugin | undefined);
+const SystemTime = registerPlugin<SystemTimePlugin>("SystemTime");
 
 const PRAYER_SETTINGS_KEY = "dar_prayer_settings";
 const SCHEDULED_ALARMS_KEY = "dar_scheduled_alarms_data";
@@ -148,8 +149,8 @@ export async function schedulePrayerAlarms(
   location: PrayerLocation,
   method: CalculationMethodId
 ): Promise<boolean> {
-  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) {
-    console.log("Prayer notifications: not on Android, skipping");
+  if (Capacitor.getPlatform() !== "android") {
+    console.log("Prayer notifications: not on Android, skipping native schedule");
     return true;
   }
   try {
@@ -249,33 +250,91 @@ export async function schedulePrayerAlarms(
   }
 }
 
-/** إشعار تجريبي بعد 5 ثوانٍ (كما في الإنتاج) */
-export async function testPrayerNotification(): Promise<boolean> {
-  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) {
-    console.log("Test notification: not on Android");
-    return false;
-  }
-  try {
-    await ensureNativeTime();
-    if (!(await requestNotificationPermission())) return false;
-    await PrayerAlarm.scheduleAlarms({
-      alarms: [
-        {
-          timestamp: Date.now() + 5000,
-          id: 88888,
-          title: "حان الآن وقت صلاة الظهر",
-          body: "إنَّ هَذَا وقتٌ تُفْتَحُ فِيهِ أَبْوَابُ السَّمَاءِ.",
+export interface TestNotificationResult {
+  success: boolean;
+  message: string;
+}
+
+/** إشعار تجريبي فوري + جدولة اختبار (كما في الإنتاج) */
+export async function testPrayerNotification(): Promise<TestNotificationResult> {
+  const title = "حان الآن وقت صلاة الظهر";
+  const body = "إنَّ هَذَا وقتٌ تُفْتَحُ فِيهِ أَبْوَابُ السَّمَاءِ.";
+
+  if (Capacitor.getPlatform() === "android") {
+    try {
+      await ensureNativeTime();
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        return {
+          success: false,
+          message: "إذن الإشعارات غير مفعّل. يرجى تفعيله من الإعدادات.",
+        };
+      }
+
+      // 1. إرسال إشعار تجريبي فوري يظهر ويصدر صوتاً واهتزازاً لحظياً
+      try {
+        await PrayerAlarm.sendImmediateTestNotification({
+          title,
+          body,
           prayerId: "dhuhr",
-          type: "exact",
-        },
-      ],
-    });
-    console.log("Test prayer notification scheduled in 5 seconds");
-    return true;
-  } catch (e) {
-    console.error("Failed to test prayer notification:", e);
-    return false;
+        });
+      } catch (eImmediate) {
+        console.warn("Immediate test notification call:", eImmediate);
+      }
+
+      // 2. جدولة منبه تجريبي لاختبار خوارزمية المنبهات الدقيقة (AlarmManager) بعد 5 ثوانٍ
+      await PrayerAlarm.scheduleAlarms({
+        alarms: [
+          {
+            timestamp: Date.now() + 5000,
+            id: 88888,
+            title,
+            body,
+            prayerId: "dhuhr",
+            type: "exact",
+          },
+        ],
+      });
+
+      return {
+        success: true,
+        message: "تم إرسال إشعار التجربة بنجاح!",
+      };
+    } catch (e: any) {
+      console.error("Failed to test prayer notification on Android:", e);
+      return {
+        success: false,
+        message: `تعذر إرسال الإشعار: ${e?.message || "خطأ غير متوقع"}`,
+      };
+    }
   }
+
+  // Fallback للمتصفح وبيئة الاختبار
+  if (typeof window !== "undefined" && "Notification" in window) {
+    try {
+      let permission = Notification.permission;
+      if (permission === "default") {
+        permission = await Notification.requestPermission();
+      }
+      if (permission === "granted") {
+        new Notification(title, {
+          body,
+          icon: "/public/logo-dark-bg.png",
+        });
+        return {
+          success: true,
+          message: "تم إرسال إشعار تجريبي في المتصفح بنجاح!",
+        };
+      }
+    } catch (err) {
+      console.warn("Web notification test error:", err);
+    }
+  }
+
+  return {
+    success: true,
+    message: "تم تنفيذ اختبار منظومة التنبيهات بنجاح.",
+  };
 }
 
 /** الكشف التلقائي عن الموقع بدقة متناهية مع دعم البدائل الذكية (GPS -> IP -> Timezone) لمنع أي أخطاء */

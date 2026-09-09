@@ -1,16 +1,13 @@
 package com.daralhikayat.app;
 
 import android.app.AlarmManager;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
-import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
-import com.aparajita.capacitor.biometricauth.BiometricAuthNative;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -24,36 +21,16 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 @CapacitorPlugin(name = PrayerAlarmPlugin.TAG, permissions = {@Permission(alias = "notifications", strings = {"android.permission.POST_NOTIFICATIONS"})})
-
 public class PrayerAlarmPlugin extends Plugin {
-    private static final String CHANNEL_ID = "prayer_reminders";
-    private static final String CHANNEL_NAME = "تذكيرات الصلاة";
+    public static final String TAG = "PrayerAlarm";
     private static final String KEY_ALARMS = "scheduled_alarms";
     private static final String KEY_NEEDS_RESCHEDULE = "needs_reschedule";
     private static final String PREFS_NAME = "dar_prayer_alarms";
-    public static final String TAG = "PrayerAlarm";
 
     @Override
     public void load() {
         super.load();
-        createNotificationChannel();
-    }
-
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel notificationChannel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, 4);
-            notificationChannel.setVibrationPattern(new long[]{0, 400, 200, 600});
-            notificationChannel.enableVibration(true);
-            notificationChannel.setSound(null, null);
-            notificationChannel.setLockscreenVisibility(1);
-            notificationChannel.enableLights(true);
-            notificationChannel.setLightColor(-5789085);
-            notificationChannel.setDescription("تذكيرات مواقيت الصلاة مع اهتزاز هادئ");
-            NotificationManager notificationManager = (NotificationManager) getContext().getSystemService(NotificationManager.class);
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(notificationChannel);
-            }
-        }
+        PrayerAlarmReceiver.ensureNotificationChannel(getContext());
     }
 
     @PluginMethod
@@ -64,82 +41,130 @@ public class PrayerAlarmPlugin extends Plugin {
             return;
         }
         try {
-            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(NotificationCompat.CATEGORY_ALARM);
+            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
             if (alarmManager == null) {
                 pluginCall.reject("AlarmManager not available");
                 return;
             }
-            SharedPreferences.Editor edit = getContext().getSharedPreferences(PREFS_NAME, 0).edit();
+
+            cancelAllAlarmsInternal();
+
+            SharedPreferences.Editor edit = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
             edit.putString(KEY_ALARMS, array.toString());
             edit.putBoolean(KEY_NEEDS_RESCHEDULE, false);
             edit.apply();
-            cancelAllAlarmsInternal();
-            int i = 0;
-            for (int i2 = 0; i2 < array.length(); i2++) {
-                JSONObject jSONObject = array.getJSONObject(i2);
-                long j = jSONObject.getLong("timestamp");
-                int i3 = jSONObject.getInt("id");
-                String string = jSONObject.getString("title");
-                String string2 = jSONObject.getString("body");
-                String string3 = jSONObject.getString("prayerId");
-                String string4 = jSONObject.getString(BiometricAuthNative.RESULT_TYPE);
-                if (j > System.currentTimeMillis()) {
-                    scheduleSingleAlarm(alarmManager, j, i3, string, string2, string3, string4);
-                    i++;
+
+            long now = System.currentTimeMillis();
+            int scheduledCount = 0;
+
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject obj = array.getJSONObject(i);
+                long timestamp = obj.getLong("timestamp");
+                int id = obj.getInt("id");
+                String title = obj.getString("title");
+                String body = obj.getString("body");
+                String prayerId = obj.getString("prayerId");
+                String type = obj.optString("type", "exact");
+
+                if (timestamp > now) {
+                    scheduleSingleAlarm(alarmManager, timestamp, id, title, body, prayerId, type);
+                    scheduledCount++;
                 }
             }
-            JSObject jSObject = new JSObject();
-            jSObject.put("scheduled", i);
-            pluginCall.resolve(jSObject);
+
+            JSObject res = new JSObject();
+            res.put("scheduled", scheduledCount);
+            pluginCall.resolve(res);
         } catch (JSONException e) {
             pluginCall.reject("Failed to parse alarms: " + e.getMessage());
         }
     }
 
-    private void scheduleSingleAlarm(AlarmManager alarmManager, long j, int i, String str, String str2, String str3, String str4) {
-        Intent intent = new Intent(getContext(), (Class<?>) PrayerAlarmReceiver.class);
+    private void scheduleSingleAlarm(AlarmManager alarmManager, long timestamp, int id, String title, String body, String prayerId, String type) {
+        Intent intent = new Intent(getContext(), PrayerAlarmReceiver.class);
         intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
-        intent.putExtra("id", i);
-        intent.putExtra("title", str);
-        intent.putExtra("body", str2);
-        intent.putExtra("prayerId", str3);
-        intent.putExtra(BiometricAuthNative.RESULT_TYPE, str4);
-        intent.putExtra("timestamp", j);
-        PendingIntent broadcast = PendingIntent.getBroadcast(getContext(), i, intent, 201326592);
+        intent.putExtra("id", id);
+        intent.putExtra("title", title);
+        intent.putExtra("body", body);
+        intent.putExtra("prayerId", prayerId);
+        intent.putExtra("type", type);
+        intent.putExtra("timestamp", timestamp);
+
+        int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        PendingIntent broadcast = PendingIntent.getBroadcast(getContext(), id, intent, pendingFlags);
+
         try {
-            try {
-                alarmManager.setExactAndAllowWhileIdle(0, j, broadcast);
-            } catch (Exception unused) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
             }
-        } catch (SecurityException unused2) {
-            alarmManager.set(0, j, broadcast);
+        } catch (SecurityException se) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @PluginMethod
+    public void sendImmediateTestNotification(PluginCall pluginCall) {
+        try {
+            String title = pluginCall.getString("title", "حان الآن وقت صلاة الظهر");
+            String body = pluginCall.getString("body", "إنَّ هَذَا وقتٌ تُفْتَحُ فِيهِ أَبْوَابُ السَّمَاءِ.");
+            String prayerId = pluginCall.getString("prayerId", "dhuhr");
+
+            Intent intent = new Intent(getContext(), PrayerAlarmReceiver.class);
+            intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
+            intent.putExtra("id", 88888);
+            intent.putExtra("title", title);
+            intent.putExtra("body", body);
+            intent.putExtra("prayerId", prayerId);
+            intent.putExtra("type", "exact");
+
+            getContext().sendBroadcast(intent);
+
+            JSObject res = new JSObject();
+            res.put("success", true);
+            pluginCall.resolve(res);
+        } catch (Exception e) {
+            pluginCall.reject("Failed to send test notification: " + e.getMessage());
         }
     }
 
     @PluginMethod
     public void cancelAllAlarms(PluginCall pluginCall) {
         cancelAllAlarmsInternal();
-        getContext().getSharedPreferences(PREFS_NAME, 0).edit().remove(KEY_ALARMS).apply();
+        getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(KEY_ALARMS).apply();
         pluginCall.resolve();
     }
 
     private void cancelAllAlarmsInternal() {
         try {
-            JSArray jSArray = new JSArray(getContext().getSharedPreferences(PREFS_NAME, 0).getString(KEY_ALARMS, "[]"));
-            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(NotificationCompat.CATEGORY_ALARM);
+            SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            JSArray array = new JSArray(prefs.getString(KEY_ALARMS, "[]"));
+            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
             if (alarmManager == null) {
                 return;
             }
-            for (int i = 0; i < jSArray.length(); i++) {
-                int i2 = jSArray.getJSONObject(i).getInt("id");
-                Intent intent = new Intent(getContext(), (Class<?>) PrayerAlarmReceiver.class);
+            for (int i = 0; i < array.length(); i++) {
+                int id = array.getJSONObject(i).getInt("id");
+                Intent intent = new Intent(getContext(), PrayerAlarmReceiver.class);
                 intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
-                PendingIntent broadcast = PendingIntent.getBroadcast(getContext(), i2, intent, 603979776);
+
+                int pendingFlags = PendingIntent.FLAG_NO_CREATE;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+                }
+                PendingIntent broadcast = PendingIntent.getBroadcast(getContext(), id, intent, pendingFlags);
                 if (broadcast != null) {
                     alarmManager.cancel(broadcast);
+                    broadcast.cancel();
                 }
             }
-        } catch (Exception unused) {
+        } catch (Exception ignored) {
         }
     }
 
@@ -162,16 +187,16 @@ public class PrayerAlarmPlugin extends Plugin {
 
     @PermissionCallback
     private void notificationPermissionCallback(PluginCall pluginCall) {
-        boolean z = getPermissionState("notifications") == PermissionState.GRANTED;
+        boolean granted = getPermissionState("notifications") == PermissionState.GRANTED;
         JSObject jSObject = new JSObject();
-        jSObject.put("granted", z);
+        jSObject.put("granted", granted);
         pluginCall.resolve(jSObject);
     }
 
     @PluginMethod
     public void requestExactAlarmPermission(PluginCall pluginCall) {
         if (Build.VERSION.SDK_INT >= 31) {
-            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(NotificationCompat.CATEGORY_ALARM);
+            AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
             if (alarmManager != null && alarmManager.canScheduleExactAlarms()) {
                 JSObject jSObject = new JSObject();
                 jSObject.put("granted", true);
@@ -181,9 +206,9 @@ public class PrayerAlarmPlugin extends Plugin {
             try {
                 Intent intent = new Intent("android.settings.REQUEST_SCHEDULE_EXACT_ALARM");
                 intent.setData(Uri.parse("package:" + getContext().getPackageName()));
-                intent.addFlags(268435456);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getContext().startActivity(intent);
-            } catch (Exception unused) {
+            } catch (Exception ignored) {
             }
             JSObject jSObject2 = new JSObject();
             jSObject2.put("granted", false);
@@ -198,12 +223,12 @@ public class PrayerAlarmPlugin extends Plugin {
     @PluginMethod
     public void canScheduleExactAlarms(PluginCall pluginCall) {
         AlarmManager alarmManager;
-        boolean z = true;
-        if (Build.VERSION.SDK_INT >= 31 && ((alarmManager = (AlarmManager) getContext().getSystemService(NotificationCompat.CATEGORY_ALARM)) == null || !alarmManager.canScheduleExactAlarms())) {
-            z = false;
+        boolean canSchedule = true;
+        if (Build.VERSION.SDK_INT >= 31 && ((alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE)) == null || !alarmManager.canScheduleExactAlarms())) {
+            canSchedule = false;
         }
         JSObject jSObject = new JSObject();
-        jSObject.put("canSchedule", z);
+        jSObject.put("canSchedule", canSchedule);
         pluginCall.resolve(jSObject);
     }
 }

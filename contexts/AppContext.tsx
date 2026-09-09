@@ -8,6 +8,7 @@ import React, {
 import type {
   PrayerState,
 } from "../lib/prayer-config";
+import { schedulePrayerAlarms } from "../lib/prayer-alarms";
 
 // --- Shared Type Definitions ---
 export interface NoteStyles {
@@ -79,13 +80,13 @@ const themes: Record<ThemeMode, ThemeColors> = {
   },
   night_whisper: {
     mode: "night_whisper",
-    bg: "#0F1617", // Very Dark Oil
-    text: "#EAE6D2", // Cream text
-    accent: "#A7AA63",
-    secondary: "#8899A6",
-    glass: "rgba(15, 22, 23, 0.85)",
-    border: "rgba(255, 255, 255, 0.1)",
-    shadow: "rgba(0, 0, 0, 0.5)",
+    bg: "#111718", // Deep warm charcoal slate - matte, zero glare, soothing for long reading/writing
+    text: "#E2DFD2", // Warm ivory parchment text - soft on retinas
+    accent: "#9FA365", // Muted matte antique olive-gold - non-glowing
+    secondary: "#7F8C8E", // Muted slate secondary text
+    glass: "rgba(17, 23, 24, 0.88)",
+    border: "rgba(226, 223, 210, 0.08)",
+    shadow: "rgba(0, 0, 0, 0.45)",
     isDark: true,
   },
 };
@@ -222,6 +223,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       return next;
     });
   };
+
+  // جدولة منبهات الصلاة تلقائياً عند بدء تشغيل التطبيق أو تحديث الموقع أو طريقة الحساب
+  useEffect(() => {
+    if (prayerState.location) {
+      schedulePrayerAlarms(prayerState.location, prayerState.method).catch((err) => {
+        console.warn("Auto-scheduling prayer alarms on startup failed:", err);
+      });
+    }
+  }, [prayerState.location?.latitude, prayerState.location?.longitude, prayerState.method]);
 
   const openEditor = (note: Note | null) => {
     setIsSelectionMode(false);
