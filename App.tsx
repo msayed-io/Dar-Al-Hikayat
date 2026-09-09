@@ -215,6 +215,8 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isLockEnabled, setIsLockEnabled] = useState(false);
   const isAuthenticatingRef = React.useRef(false);
+  const lastAuthenticatedAtRef = React.useRef(0);
+  const wasInBackgroundRef = React.useRef(false);
 
   const authenticate = async () => {
     if (isAuthenticatingRef.current) return;
@@ -225,6 +227,7 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
         const availResult = await NativeBiometric.isAvailable().catch(() => ({ isAvailable: false }));
         if (!availResult.isAvailable) {
           console.warn("Biometrics hardware not available on this platform");
+          lastAuthenticatedAtRef.current = Date.now();
           setIsUnlocked(true);
           return;
         }
@@ -239,10 +242,12 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
           maxAttempts: 5,
         });
 
+        lastAuthenticatedAtRef.current = Date.now();
         setIsUnlocked(true);
       } else {
         // Web preview / Browser simulation
         setTimeout(() => {
+          lastAuthenticatedAtRef.current = Date.now();
           setIsUnlocked(true);
         }, 300);
       }
@@ -250,7 +255,10 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
       console.log("Biometric verification error or user cancelled:", error);
       setIsUnlocked(false);
     } finally {
-      isAuthenticatingRef.current = false;
+      // Keep isAuthenticating flag true for a 800ms cooldown to ignore trailing system resume events
+      setTimeout(() => {
+        isAuthenticatingRef.current = false;
+      }, 800);
     }
   };
 
@@ -264,7 +272,7 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
         // Automatically prompt for fingerprint/biometric immediately
         setTimeout(() => {
           authenticate();
-        }, 100);
+        }, 150);
       } else {
         setIsUnlocked(true);
       }
@@ -281,22 +289,32 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
         setIsUnlocked(false);
         setTimeout(() => {
           authenticate();
-        }, 50);
+        }, 100);
       } else {
         setIsUnlocked(true);
       }
     };
 
-    // Listen for visibility change to re-lock and re-prompt when returning from background
+    // Listen for visibility change to re-lock only when returning from actual background
     const handleVisibilityChange = () => {
-      if (
-        document.visibilityState === "visible" &&
-        localStorage.getItem("dar_app_lock_enabled") === "true"
-      ) {
-        setIsUnlocked(false);
-        setTimeout(() => {
-          authenticate();
-        }, 100);
+      const lockEnabled = localStorage.getItem("dar_app_lock_enabled") === "true";
+      if (!lockEnabled) return;
+
+      if (document.visibilityState === "hidden") {
+        wasInBackgroundRef.current = true;
+      } else if (document.visibilityState === "visible") {
+        // If we are currently in the middle of authenticating (e.g. system dialog just closed), do NOT re-lock!
+        if (isAuthenticatingRef.current) return;
+        // If unlocked within the last 2.5 seconds, do NOT re-lock!
+        if (Date.now() - lastAuthenticatedAtRef.current < 2500) return;
+
+        if (wasInBackgroundRef.current) {
+          wasInBackgroundRef.current = false;
+          setIsUnlocked(false);
+          setTimeout(() => {
+            authenticate();
+          }, 150);
+        }
       }
     };
 
@@ -307,11 +325,23 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
     let resumeHandle: any = null;
     if (Capacitor.isNativePlatform()) {
       CapApp.addListener("appStateChange", ({ isActive }) => {
-        if (isActive && localStorage.getItem("dar_app_lock_enabled") === "true") {
-          setIsUnlocked(false);
-          setTimeout(() => {
-            authenticate();
-          }, 100);
+        const lockEnabled = localStorage.getItem("dar_app_lock_enabled") === "true";
+        if (!lockEnabled) return;
+
+        if (!isActive) {
+          wasInBackgroundRef.current = true;
+        } else {
+          // Returning to foreground
+          if (isAuthenticatingRef.current) return;
+          if (Date.now() - lastAuthenticatedAtRef.current < 2500) return;
+
+          if (wasInBackgroundRef.current) {
+            wasInBackgroundRef.current = false;
+            setIsUnlocked(false);
+            setTimeout(() => {
+              authenticate();
+            }, 150);
+          }
         }
       }).then((handle) => {
         resumeHandle = handle;
