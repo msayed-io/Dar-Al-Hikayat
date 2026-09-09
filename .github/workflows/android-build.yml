@@ -40,12 +40,6 @@ jobs:
       - name: Capacitor Sync
         run: npx cap sync android
 
-      # 7. إصلاح ملف gradle-wrapper التالف تلقائياً
-      - name: Fix and Regenerate Gradle Wrapper
-        run: |
-          cd android
-          gradle wrapper --gradle-version 8.2
-
       # 8. إعطاء صلاحيات التنفيذ لملف البناء Gradle داخل مجلد android
       - name: Grant Execute Permission for Gradlew
         run: chmod +x android/gradlew
