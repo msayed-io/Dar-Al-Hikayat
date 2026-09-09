@@ -21,6 +21,8 @@ import {
   testPrayerNotification,
   cityToLocation,
 } from "../lib/prayer-alarms";
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+import { Capacitor } from "@capacitor/core";
 
 const SettingsPage: React.FC = () => {
   const { currentTheme, backToHome, prayerState, updatePrayerState, openLocationSheet } = useApp();
@@ -34,12 +36,54 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     const lockState = localStorage.getItem("dar_app_lock_enabled") === "true";
     setIsLocked(lockState);
+
+    const handleLockChanged = (e: Event) => {
+      const customEvt = e as CustomEvent<{ enabled: boolean }>;
+      if (customEvt.detail !== undefined) {
+        setIsLocked(customEvt.detail.enabled);
+      }
+    };
+
+    window.addEventListener("dar_app_lock_changed", handleLockChanged);
+    return () => {
+      window.removeEventListener("dar_app_lock_changed", handleLockChanged);
+    };
   }, []);
 
-  const toggleLock = () => {
-    const newState = !isLocked;
-    setIsLocked(newState);
-    localStorage.setItem("dar_app_lock_enabled", String(newState));
+  const toggleLock = async () => {
+    if (!isLocked) {
+      // Activating App Lock:
+      localStorage.setItem("dar_app_lock_enabled", "true");
+      setIsLocked(true);
+      window.dispatchEvent(
+        new CustomEvent("dar_app_lock_changed", { detail: { enabled: true } })
+      );
+    } else {
+      // Deactivating App Lock: Prompt device authentication to confirm
+      try {
+        if (Capacitor.isNativePlatform()) {
+          const avail = await NativeBiometric.isAvailable().catch(() => ({ isAvailable: false }));
+          if (avail.isAvailable) {
+            await NativeBiometric.verifyIdentity({
+              reason: "يرجى تأكيد هويتك لإلغاء قفل التطبيق",
+              title: "دَارُ الحِكَايَاتِ",
+              subtitle: "إلغاء قفل التطبيق",
+              description: "استخدم بصمة الإصبع أو رمز قفل الهاتف",
+              useFallback: true,
+            });
+          }
+        }
+      } catch (err) {
+        console.log("Biometric verification cancelled or failed on unlock toggle", err);
+        return; // Do not disable lock if verification fails!
+      }
+
+      localStorage.setItem("dar_app_lock_enabled", "false");
+      setIsLocked(false);
+      window.dispatchEvent(
+        new CustomEvent("dar_app_lock_changed", { detail: { enabled: false } })
+      );
+    }
   };
 
   // تحديد تلقائي للموقع
@@ -137,34 +181,29 @@ const SettingsPage: React.FC = () => {
             </h1>
           </div>
 
-          {/* Left Capsule: Exit Button (Pure circular icon button, no text, clean X icon) */}
-          <div className="pointer-events-auto">
+          {/* Left Capsule: Exit Button (Pure circular icon button, no text, clean exit icon) */}
+          <div className="pointer-events-auto flex-shrink-0">
             <button
               onClick={backToHome}
-              className="w-11 h-11 border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+              className="border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square"
               style={{
+                width: "44px",
+                height: "44px",
+                minWidth: "44px",
+                minHeight: "44px",
                 backgroundColor: currentTheme.bg,
                 borderColor: currentTheme.border,
                 boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
-                borderRadius: "9999px",
+                borderRadius: "50%",
               }}
               title="العودة"
               aria-label="العودة"
             >
-              <div
-                className="w-7 h-7 flex items-center justify-center border shadow-xs transition-transform duration-200 group-hover:translate-x-0.5"
-                style={{
-                  backgroundColor: `${currentTheme.accent}15`,
-                  borderColor: `${currentTheme.accent}30`,
-                  borderRadius: "50%",
-                }}
-              >
-                <ChevronRight
-                  className="w-4 h-4"
-                  style={{ color: currentTheme.accent }}
-                  strokeWidth={2.5}
-                />
-              </div>
+              <ChevronRight
+                className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                style={{ color: currentTheme.accent }}
+                strokeWidth={2.5}
+              />
             </button>
           </div>
         </div>

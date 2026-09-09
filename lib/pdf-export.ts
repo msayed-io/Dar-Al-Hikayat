@@ -214,9 +214,15 @@ export async function exportStoryToPdf(
   }
 }
 
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
+
+interface DownloadNotificationPluginType {
+  startDownload(options: { filename: string; base64: string }): Promise<{ success: boolean; filename: string }>;
+}
+
+const DownloadNotification = registerPlugin<DownloadNotificationPluginType>("DownloadNotification");
 
 /** تنزيل الـ Blob كملف مع دعم كامل لبيئة أندرويد عبر الحفظ والمشاركة */
 export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
@@ -235,20 +241,28 @@ export async function downloadBlob(blob: Blob, filename: string): Promise<void> 
       reader.readAsDataURL(blob);
       const base64 = await base64Promise;
 
-      // 2. كتابة وحفظ الملف في مجلد المستندات الخاص بالتطبيق
-      const result = await Filesystem.writeFile({
-        path: filename,
-        data: base64,
-        directory: Directory.Documents,
-      });
+      if (Capacitor.getPlatform() === "android") {
+        // تشغيل ميزة إشعارات تحميل الملفات المخصصة للأندرويد
+        await DownloadNotification.startDownload({
+          filename,
+          base64,
+        });
+      } else {
+        // 2. كتابة وحفظ الملف في مجلد المستندات الخاص بالتطبيق للمنصات الأخرى
+        const result = await Filesystem.writeFile({
+          path: filename,
+          data: base64,
+          directory: Directory.Documents,
+        });
 
-      // 3. فتح قائمة المشاركة الأصلية في أندرويد ليتمكن المستخدم من فتح الملف أو إرساله أو حفظه بأمان
-      await Share.share({
-        title: filename,
-        text: `تم تصدير ملف الحكاية: ${filename}`,
-        url: result.uri,
-        dialogTitle: "تصدير وفتح الملف",
-      });
+        // 3. فتح قائمة المشاركة الأصلية
+        await Share.share({
+          title: filename,
+          text: `تم تصدير ملف الحكاية: ${filename}`,
+          url: result.uri,
+          dialogTitle: "تصدير وفتح الملف",
+        });
+      }
     } catch (error) {
       console.error("Error saving/sharing file in native:", error);
       webDownload(blob, filename);

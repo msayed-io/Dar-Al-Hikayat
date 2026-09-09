@@ -10,6 +10,8 @@ import LocationPickerPage from "./components/LocationPickerPage";
 import LocationBottomSheet from "./components/LocationBottomSheet";
 import { AppProvider, useApp } from "./contexts/AppContext";
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 import { PermissionsGuard } from "./components/PermissionsGuard";
 
 // The main component that manages views and persistent navigation
@@ -212,85 +214,129 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
   const { currentTheme } = useApp();
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isLockEnabled, setIsLockEnabled] = useState(false);
+  const isAuthenticatingRef = React.useRef(false);
+
+  const authenticate = async () => {
+    if (isAuthenticatingRef.current) return;
+    isAuthenticatingRef.current = true;
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const availResult = await NativeBiometric.isAvailable().catch(() => ({ isAvailable: false }));
+        if (!availResult.isAvailable) {
+          console.warn("Biometrics hardware not available on this platform");
+          setIsUnlocked(true);
+          return;
+        }
+
+        // Perform native Android biometric authentication
+        await NativeBiometric.verifyIdentity({
+          reason: "يرجى تأكيد هويتك لفتح التطبيق",
+          title: "دَارُ الحِكَايَاتِ",
+          subtitle: "قفل التطبيق",
+          description: "استخدم بصمة الإصبع أو رمز قفل الشاشة",
+          useFallback: true,
+          maxAttempts: 5,
+        });
+
+        setIsUnlocked(true);
+      } else {
+        // Web preview / Browser simulation
+        setTimeout(() => {
+          setIsUnlocked(true);
+        }, 300);
+      }
+    } catch (error) {
+      console.log("Biometric verification error or user cancelled:", error);
+      setIsUnlocked(false);
+    } finally {
+      isAuthenticatingRef.current = false;
+    }
+  };
 
   useEffect(() => {
-    const lockState = localStorage.getItem("dar_app_lock_enabled") === "true";
-    setIsLockEnabled(lockState);
+    const checkAndTriggerAuth = () => {
+      const lockState = localStorage.getItem("dar_app_lock_enabled") === "true";
+      setIsLockEnabled(lockState);
 
-    if (lockState) {
-      // authenticate(); // [TEMPORARILY DISABLED] Auto-trigger disabled
-      setIsUnlocked(false);
-    } else {
-      setIsUnlocked(true);
-    }
+      if (lockState) {
+        setIsUnlocked(false);
+        // Automatically prompt for fingerprint/biometric immediately
+        setTimeout(() => {
+          authenticate();
+        }, 100);
+      } else {
+        setIsUnlocked(true);
+      }
+    };
 
-    // Listen for visibility change to re-lock when app comes from background
+    checkAndTriggerAuth();
+
+    // Listen for custom event when user toggles lock in Settings
+    const handleLockChanged = (e: Event) => {
+      const customEvt = e as CustomEvent<{ enabled: boolean }>;
+      const isEnabled = customEvt.detail?.enabled ?? (localStorage.getItem("dar_app_lock_enabled") === "true");
+      setIsLockEnabled(isEnabled);
+      if (isEnabled) {
+        setIsUnlocked(false);
+        setTimeout(() => {
+          authenticate();
+        }, 50);
+      } else {
+        setIsUnlocked(true);
+      }
+    };
+
+    // Listen for visibility change to re-lock and re-prompt when returning from background
     const handleVisibilityChange = () => {
       if (
         document.visibilityState === "visible" &&
         localStorage.getItem("dar_app_lock_enabled") === "true"
       ) {
         setIsUnlocked(false);
-        // authenticate(); // [TEMPORARILY DISABLED] Auto-trigger disabled
+        setTimeout(() => {
+          authenticate();
+        }, 100);
       }
     };
 
+    window.addEventListener("dar_app_lock_changed", handleLockChanged);
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Native app resume listener
+    let resumeHandle: any = null;
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive && localStorage.getItem("dar_app_lock_enabled") === "true") {
+          setIsUnlocked(false);
+          setTimeout(() => {
+            authenticate();
+          }, 100);
+        }
+      }).then((handle) => {
+        resumeHandle = handle;
+      }).catch(() => {});
+    }
+
     return () => {
+      window.removeEventListener("dar_app_lock_changed", handleLockChanged);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (resumeHandle) {
+        resumeHandle.remove();
+      }
     };
   }, []);
 
-  const authenticate = async () => {
-    // [TEMPORARY BYPASS] - Allow entering just by clicking
-    console.log("Temporary bypass: Unlocking app without native biometric");
-    setIsUnlocked(true);
-    return;
-    
-    try {
-      // First check if biometric is available
-      const result = await NativeBiometric.isAvailable();
-      if (!result.isAvailable) {
-        // If not available, we shouldn't block the user (maybe it's web or simulator)
-        console.warn("Biometrics not available on this platform");
-        setIsUnlocked(true);
-        return;
-      }
-
-      // Perform authentication
-      const authResult = await NativeBiometric.verifyIdentity({
-        reason: "يرجى التحقق من هويتك لفتح التطبيق",
-        title: "تسجيل الدخول",
-        subtitle: "دَارُ الحِكَايَاتِ",
-        description: "استخدم البصمة أو الرمز السري",
-      });
-
-      // verifyIdentity resolves on success and rejects on failure/cancel
-      setIsUnlocked(true);
-    } catch (error) {
-      console.error("Biometric error or user canceled", error);
-      // Don't unlock if it fails or user cancels.
-      // On the web, NativeBiometric throws an error because it's not implemented,
-      // we will simulate open for development if we catch an unimplemented error.
-      if (
-        String(error).includes("Unimplemented") ||
-        String(error).includes("not implemented")
-      ) {
-        console.log("Mocking biometric unlock for web development");
-        setIsUnlocked(true);
-      }
-    }
-  };
-
   if (isLockEnabled && !isUnlocked) {
-    // The Blank Mask Screen
+    // Pure Clean Lock Screen - NO manual unlock button, auto native prompt & tap-to-retry
     return (
       <div
-        className="fixed inset-0 z-[200] flex flex-col items-center justify-center transition-all duration-500"
+        onClick={() => authenticate()}
+        className="fixed inset-0 z-[200] flex flex-col items-center justify-center transition-all duration-500 cursor-pointer select-none"
         style={{ backgroundColor: currentTheme.bg }}
         dir="rtl"
       >
-        <div className="flex flex-col items-center justify-center max-w-sm w-full p-8 text-center space-y-6">
+        <div className="flex flex-col items-center justify-center max-w-sm w-full p-8 text-center space-y-6 pointer-events-none">
           <div
             className="w-24 h-24 rounded-3xl flex items-center justify-center bg-white/5 border shadow-xl animate-pulse"
             style={{ borderColor: currentTheme.border }}
@@ -307,24 +353,20 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
             />
           </div>
 
-          <h2
-            className="text-xl font-zain-bold tracking-wide"
-            style={{ color: currentTheme.text }}
-          >
-            التطبيق مقفل
-          </h2>
-
-          <button
-            onClick={authenticate}
-            className="px-6 py-3 rounded-xl border flex items-center justify-center gap-3 w-full transition-all hover:bg-black/5 active:scale-95 shadow-sm"
-            style={{
-              borderColor: currentTheme.border,
-              color: currentTheme.text,
-              backgroundColor: currentTheme.glass,
-            }}
-          >
-            <span className="font-zain-reg text-lg">اضغط لفتح التطبيق</span>
-          </button>
+          <div className="space-y-2">
+            <h2
+              className="text-2xl font-zain-bold tracking-wide"
+              style={{ color: currentTheme.text }}
+            >
+              التطبيق مقفل
+            </h2>
+            <p
+              className="text-sm font-zain-reg opacity-60"
+              style={{ color: currentTheme.text }}
+            >
+              المصادقة ببصمة الإصبع أو نظام حماية الهاتف
+            </p>
+          </div>
         </div>
       </div>
     );

@@ -20,6 +20,7 @@ import {
   Sun,
   Info,
   ArrowRight,
+  ChevronRight,
   Phone,
   Mail,
   Sparkles,
@@ -789,33 +790,28 @@ const HomePage: React.FC = () => {
               </div>
 
               {/* Left Capsule: Exit Button */}
-              <div className="pointer-events-auto">
+              <div className="pointer-events-auto flex-shrink-0">
                 <button
                   onClick={() => setShowAbout(false)}
-                  className="w-11 h-11 border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+                  className="border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square"
                   style={{
+                    width: "44px",
+                    height: "44px",
+                    minWidth: "44px",
+                    minHeight: "44px",
                     backgroundColor: currentTheme.bg,
                     borderColor: currentTheme.border,
                     boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
-                    borderRadius: "9999px",
+                    borderRadius: "50%",
                   }}
                   title="العودة"
                   aria-label="العودة"
                 >
-                  <div
-                    className="w-7 h-7 flex items-center justify-center border shadow-xs transition-transform duration-200 group-hover:translate-x-0.5"
-                    style={{
-                      backgroundColor: `${currentTheme.accent}15`,
-                      borderColor: `${currentTheme.accent}30`,
-                      borderRadius: "50%",
-                    }}
-                  >
-                    <ArrowRight
-                      className="w-3.5 h-3.5"
-                      style={{ color: currentTheme.accent }}
-                      strokeWidth={2.4}
-                    />
-                  </div>
+                  <ChevronRight
+                    className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                    style={{ color: currentTheme.accent }}
+                    strokeWidth={2.5}
+                  />
                 </button>
               </div>
             </div>

@@ -291,6 +291,42 @@ const ChapterItem = React.memo(
       }
     };
 
+    const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData("text/plain");
+      if (!text) return;
+
+      let success = false;
+      try {
+        success = document.execCommand("insertText", false, text);
+      } catch (err) {
+        success = false;
+      }
+
+      if (!success) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          const textNode = document.createTextNode(text);
+          range.insertNode(textNode);
+
+          range.setStartAfter(textNode);
+          range.setEndAfter(textNode);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          if (divRef.current) {
+            divRef.current.innerText += text;
+          }
+        }
+      }
+
+      if (divRef.current) {
+        onUpdate(chapter.id, "content", divRef.current.innerHTML);
+      }
+    };
+
     return (
       <>
         {index > 0 && (
@@ -336,6 +372,7 @@ const ChapterItem = React.memo(
             ref={divRef}
             contentEditable={!isSavedMode}
             onInput={handleInput}
+            onPaste={handlePaste}
             data-chapter-id={chapter.id}
             data-placeholder="اكتب محتوى الفصل هنا..."
             className={`w-full bg-transparent border-none outline-none resize-none leading-loose overflow-hidden min-h-[200px] editor-container ${
@@ -874,6 +911,42 @@ const DarAlHikayatMaster: React.FC = () => {
     }, 1000);
     setIsDirty(true);
     setShowUI(false);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    if (!text) return;
+
+    let success = false;
+    try {
+      success = document.execCommand("insertText", false, text);
+    } catch (err) {
+      success = false;
+    }
+
+    if (!success) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(text);
+        range.insertNode(textNode);
+
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        if (editorRef.current) {
+          editorRef.current.innerText += text;
+        }
+      }
+    }
+
+    if (editorRef.current) {
+      handleContentChange(editorRef.current.innerHTML);
+    }
   };
 
   const toggleFontWeight = () => {
@@ -2209,6 +2282,7 @@ const DarAlHikayatMaster: React.FC = () => {
             ref={editorRef}
             contentEditable={!isSavedMode}
             onInput={(e) => handleContentChange(e.currentTarget.innerHTML)}
+            onPaste={handlePaste}
             data-placeholder="اكتب حكايتك هنا..."
             className={`w-full bg-transparent border-none outline-none px-6 leading-loose pt-28 min-h-[60vh] editor-container ${
               !content || content === "<br>" ? "is-empty" : ""
