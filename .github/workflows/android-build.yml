@@ -40,17 +40,23 @@ jobs:
       - name: Capacitor Sync
         run: npx cap sync android
 
-      # 7. إعطاء صلاحيات التنفيذ لملف البناء Gradle داخل مجلد android
+      # 7. إصلاح ملف gradle-wrapper التالف تلقائياً
+      - name: Fix and Regenerate Gradle Wrapper
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.2
+
+      # 8. إعطاء صلاحيات التنفيذ لملف البناء Gradle داخل مجلد android
       - name: Grant Execute Permission for Gradlew
         run: chmod +x android/gradlew
 
-      # 8. تشغيل عملية بناء الـ APK من داخل مجلد الـ android
+      # 9. تشغيل عملية بناء الـ APK من داخل مجلد الـ android
       - name: Build Android APK
         run: |
           cd android
           ./gradlew assembleDebug
 
-      # 9. رفع ملف APK الناتج تلقائياً إلى صفحة الإصدارات (Releases)
+      # 10. رفع ملف APK الناتج تلقائياً إلى صفحة الإصدارات (Releases)
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
