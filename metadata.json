@@ -1,6 +1,6 @@
 {
   "name": "Dar-Al-Hikayat",
-  "description": "Imported from GitHub: msayed-io/Dar-Al-Hikayat-Restored",
+  "description": "تطبيق دَارُ الحِكَايَاتِ - محرابٌ مقدس لفنانة السرد ومفكرة إبداعية مع أذكار ومواقيت الصلاة",
     "requestFramePermissions": [
       "geolocation"
     ],

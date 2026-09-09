@@ -157,7 +157,7 @@ const HomePage: React.FC = () => {
     const dataUri =
       "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
 
-    const exportFileDefaultName = `DarAlHikayat_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    const exportFileDefaultName = `دَارُ_الحِكَايَاتِ_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
 
     const linkElement = document.createElement("a");
     linkElement.setAttribute("href", dataUri);

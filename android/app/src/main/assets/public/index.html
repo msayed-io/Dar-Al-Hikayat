@@ -2,28 +2,49 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>دَارُ الحِكَايَاتِ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Zain:wght@200;300;400;700;900&display=swap" rel="stylesheet">
-
-<link rel="stylesheet" href="/index.css">
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "docx": "https://esm.sh/docx@8.5.0"
-  }
-}
-</script>
-  <script type="module" crossorigin src="/assets/index-BPcWqHw3.js"></script>
-</head>
+    <meta name="description" content="محرابٌ مقدس لفنانة السرد، صُمم بعناية فائقة ليحمي الإبداع من ضجيج العالم. يوفر 'دَارُ الحِكَايَاتِ' تجربة كتابة غامرة لا مثيل لها، مع مظاهر طباعية فاخرة. وتتجلى أثمن ميزاته في نظام الأذكار الهادئ، الذي يهدف إلى غرس السكينة الروحية في قلب العملية الإبداعية، ليصبح كل حرفٍ يُكتب ذكرًا." />
+    <meta property="og:title" content="دَارُ الحِكَايَاتِ" />
+    <meta property="og:description" content="محرابٌ مقدس لفنانة السرد، صُمم بعناية فائقة ليحمي الإبداع من ضجيج العالم. يوفر 'دَارُ الحِكَايَاتِ' تجربة كتابة غامرة لا مثيل لها، مع مظاهر طباعية فاخرة. وتتجلى أثمن ميزاته في نظام الأذكار الهادئ، الذي يهدف إلى غرس السكينة الروحية في قلب العملية الإبداعية، ليصبح كل حرفٍ يُكتب ذكرًا." />
+    <!-- v1.2.4: منع سلوك التحديد والنسخ على مستوى HTML -->
+    <meta name="format-detection" content="telephone=no" />
+    <!-- خطوط ثمانية الرسمية لتطبيق دَارُ الحِكَايَاتِ (Thmanyah Official Fonts) -->
+    <link rel="preload" href="/fonts/thmanyahsans-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/thmanyahsans-Bold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/thmanyahserifdisplay-Black.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/thmanyahserifdisplay-Bold.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/thmanyahseriftext-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/thmanyahseriftext-Medium.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <!-- ورقة الأنماط الرئيسية — CSS الإنتاج المُجمَّع + رقعة v3.0.1 (vite يعالجها ويصدرها مُجزَّئة) -->
+    <style>
+      body {
+        font-family: 'Thmanyah Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: #0F1617;
+      }
+      /* منع التحديد والنسخ مع تفعيل الإدخال العادي */
+      * { -webkit-user-select: none; -webkit-touch-callout: none; }
+      textarea, input { -webkit-user-select: text !important; -webkit-touch-callout: default !important; }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta name="theme-color" content="#caa472" />
+    <script type="module" crossorigin src="/assets/index-BpIqvgLf.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-lD63lGne.css">
+  </head>
   <body>
     <div id="root"></div>
-</body>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('SW registered: ', registration);
+          }).catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+        });
+      }
+    </script>
+  </body>
 </html>
