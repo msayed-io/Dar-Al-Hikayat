@@ -15,11 +15,11 @@ jobs:
         uses: actions/checkout@v4
 
       # 2. إعداد بيئة جافا (مطلوبة لبناء أندرويد عبر جيردل)
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
           cache: 'gradle'
 
       # 3. تثبيت Bun (لأن المشروع يعتمد على ملف bun.lock)
@@ -40,17 +40,17 @@ jobs:
       - name: Capacitor Sync
         run: npx cap sync android
 
-      # 8. إعطاء صلاحيات التنفيذ لملف البناء Gradle داخل مجلد android
+      # 7. إعطاء صلاحيات التنفيذ لملف البناء Gradle داخل مجلد android
       - name: Grant Execute Permission for Gradlew
         run: chmod +x android/gradlew
 
-      # 9. تشغيل عملية بناء الـ APK من داخل مجلد الـ android
+      # 8. تشغيل عملية بناء الـ APK من داخل مجلد الـ android
       - name: Build Android APK
         run: |
           cd android
           ./gradlew assembleDebug
 
-      # 10. رفع ملف APK الناتج تلقائياً إلى صفحة الإصدارات (Releases)
+      # 9. رفع ملف APK الناتج تلقائياً إلى صفحة الإصدارات (Releases)
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
@@ -58,6 +58,6 @@ jobs:
           name: "دار الحكايات - نسخة تجريبية تلقائية v3.0.${{ github.run_number }}"
           draft: false
           prerelease: false
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android/app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
