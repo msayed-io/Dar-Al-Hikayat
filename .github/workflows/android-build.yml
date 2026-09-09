@@ -1,0 +1,63 @@
+name: Build and Release Dar Al-Hikayat APK
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. جلب كود المشروع من المستودع
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # 2. إعداد بيئة جافا (مطلوبة لبناء أندرويد عبر جيردل)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      # 3. تثبيت Bun (لأن المشروع يعتمد على ملف bun.lock)
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # 4. تثبيت حزم واعتماديات المشروع بالكامل عبر Bun
+      - name: Install Dependencies
+        run: bun install
+
+      # 5. بناء ملفات الويب والإنتاج للتطبيق (Vite Build)
+      - name: Build Web Production
+        run: bun run build
+
+      # 6. عمل مزامنة لنقل ملفات الويب إلى مجلد أندرويد عبر Capacitor
+      - name: Capacitor Sync
+        run: npx cap sync android
+
+      # 7. إعطاء صلاحيات التنفيذ لملف البناء Gradle داخل مجلد android
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x android/gradlew
+
+      # 8. تشغيل عملية بناء الـ APK من داخل مجلد الـ android
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      # 9. رفع ملف APK الناتج تلقائياً إلى صفحة الإصدارات (Releases)
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v3.0.${{ github.run_number }}"
+          name: "دار الحكايات - نسخة تجريبية تلقائية v3.0.${{ github.run_number }}"
+          draft: false
+          prerelease: false
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
