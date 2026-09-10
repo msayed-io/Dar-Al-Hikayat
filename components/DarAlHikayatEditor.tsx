@@ -2008,7 +2008,11 @@ const DarAlHikayatMaster: React.FC = () => {
       {/* Header (Editor and Reader Mode Top Bar) */}
       <header
         ref={headerRef}
-        className={`fixed top-4 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${showUI ? "translate-y-0 opacity-100" : "-translate-y-16 opacity-0"}`}
+        className={`fixed top-4 z-50 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
+          showAIAssistant && isWideScreen
+            ? "right-[46%] lg:right-[48%] xl:right-[46%] left-0"
+            : "left-0 right-0"
+        } ${showUI ? "translate-y-0 opacity-100" : "-translate-y-16 opacity-0"}`}
       >
         <div
           className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all"
@@ -2465,10 +2469,10 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
       <div className="w-full min-h-screen flex flex-row relative overflow-x-hidden">
-        {/* AI Assistant Studio Pane: Exactly 35% side-by-side in real time (Strictly Wide Screens Only >= 768dp) */}
+        {/* AI Assistant Studio Pane: Generous wide split screen (Strictly Wide Screens Only >= 768dp) */}
         {showAIAssistant && isWideScreen && (
           <div
-            className="w-[35%] h-screen sticky top-0 border-l z-30 shadow-2xl transition-all duration-300 ease-in-out bg-[#ece7de]"
+            className="w-[46%] lg:w-[48%] xl:w-[46%] min-w-[420px] max-w-[680px] h-screen max-h-screen sticky top-0 border-l z-40 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-in-out bg-[#ece7de]"
             style={{ backgroundColor: "#ece7de", borderColor: "#d8c9b8" }}
           >
             <DarAlHikayatAIAssistant
@@ -2479,8 +2483,8 @@ const DarAlHikayatMaster: React.FC = () => {
           </div>
         )}
 
-        {/* Editor Area: Exactly 65% on wide screen when assistant is active, 100% when closed */}
-        <div className={`transition-all duration-300 ease-in-out ${showAIAssistant && isWideScreen ? "w-[65%]" : "w-full"}`}>
+        {/* Editor Area: Responsive flex filling remaining space when assistant is active, 100% when closed */}
+        <div className={`transition-all duration-300 ease-in-out ${showAIAssistant && isWideScreen ? "flex-1 min-w-0" : "w-full"}`}>
           <main id="story-content" className="w-full relative z-0 pb-36">
             {!isNovelMode ? (
               <div
@@ -2558,7 +2562,11 @@ const DarAlHikayatMaster: React.FC = () => {
       {/* Editor Bottom Bar */}
       {!isSavedMode && (
         <footer
-          className={`fixed bottom-4 left-0 right-0 z-40 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}
+          className={`fixed bottom-4 z-40 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
+            showAIAssistant && isWideScreen
+              ? "right-[46%] lg:right-[48%] xl:right-[46%] left-0"
+              : "left-0 right-0"
+          } ${showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}
         >
           <div
             className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-2 transition-all"

@@ -1201,9 +1201,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       </AnimatePresence>
 
       {/* ── MAIN CHAT AREA / EMPTY STATE ── */}
-      <div className="flex-1 flex flex-col justify-between relative z-10 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col relative z-10 overflow-hidden">
         {messages.length === 0 ? (
-          <div className="flex-1 overflow-hidden pt-24 pb-28">
+          <div className="flex-1 min-h-0 overflow-y-auto pt-20 pb-28 flex flex-col items-center justify-center">
             <AnimatePresence mode="wait">
               <motion.div
                 key={welcomeLineIndex}
@@ -1211,15 +1211,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
-                className="flex h-full flex-col items-center justify-center px-4 text-center"
+                className="flex flex-col items-center justify-center px-6 text-center max-w-[460px]"
               >
                 <p className="text-[13px] font-bold text-[#8a6a3d]">
                   أهلًا بكِ، {userName}
                 </p>
-                <h1 className="mt-3 max-w-[330px] font-display text-[29px] font-black leading-[1.25] text-[#2b1a10]">
+                <h1 className="mt-2 text-xl md:text-2xl font-display font-black leading-snug text-[#2b1a10]">
                   {welcomeLines[welcomeLineIndex].title}
                 </h1>
-                <p className="mt-3 max-w-[285px] text-[13px] font-bold leading-7 text-[#7f6a55]">
+                <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#7f6a55]">
                   {welcomeLines[welcomeLineIndex].subtitle}
                 </p>
               </motion.div>
@@ -1229,7 +1229,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 overflow-y-auto px-1 pt-24 pb-36 space-y-4 scrollbar-thin hide-scrollbar"
+            className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pt-20 pb-36 space-y-4 scrollbar-thin hide-scrollbar"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
@@ -1535,8 +1535,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         />
 
         {/* ── FLOATING INPUT FIELD BAR ── */}
-        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-4 pb-4">
-          <div className="w-full max-w-[390px] pointer-events-auto">
+        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-3 md:px-6 pb-4">
+          <div className="w-full max-w-[640px] pointer-events-auto">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
