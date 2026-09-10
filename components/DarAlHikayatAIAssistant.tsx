@@ -929,13 +929,13 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       {/* ── FLOATING TOP HEADER CAPSULE: EXACT MATCH WITH DAR AL HIKAYAT FLOATING CAPSULE ── */}
       <header className="absolute top-4 inset-x-0 z-30 flex justify-center pointer-events-none px-4">
         <div
-          className="pointer-events-auto w-full max-w-sm h-11 px-2 rounded-full backdrop-blur-2xl border flex justify-between items-center transition-all duration-300"
+          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all duration-300"
           style={{
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
             boxShadow: currentTheme.isDark
-              ? "0 8px 24px -4px rgba(0,0,0,0.45)"
-              : "0 8px 24px -4px rgba(0,0,0,0.08)",
+              ? "0 12px 32px -4px rgba(0,0,0,0.45)"
+              : "0 12px 32px -4px rgba(0,0,0,0.08)",
           }}
         >
           {/* Right: Drawer Button & Title */}
@@ -943,7 +943,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             <button
               type="button"
               onClick={() => setIsDrawerOpen(true)}
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
               style={{ color: currentTheme.text }}
               aria-label="المحادثات المحفوظة"
               title="المحادثات المحفوظة"
@@ -951,9 +951,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               <PanelLeftOpen size={16} />
             </button>
             <div className="flex items-center gap-1.5 select-none">
-              <Sparkles size={13} style={{ color: currentTheme.accent }} />
+              <Sparkles size={14} style={{ color: currentTheme.accent }} />
               <span
-                className="font-zain-xbold text-xs tracking-wide leading-none"
+                className="font-zain-xbold text-xs tracking-wide leading-none pt-0.5"
                 style={{ color: currentTheme.text }}
               >
                 دار الحكايات AI
@@ -967,7 +967,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               <button
                 type="button"
                 onClick={startNewConversation}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
                 style={{ color: currentTheme.accent }}
                 aria-label="محادثة جديدة"
                 title="محادثة جديدة"
@@ -978,7 +978,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
               style={{ color: currentTheme.text }}
               aria-label="إغلاق"
               title="إغلاق"
@@ -1505,7 +1505,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto px-4 pt-18 pb-28 space-y-4 scrollbar-thin hide-scrollbar"
+            className="flex-1 min-h-0 overflow-y-auto px-4 pt-20 pb-32 space-y-4 scrollbar-thin hide-scrollbar"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
@@ -1850,20 +1850,20 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         )}
 
         {/* ── FLOATING INPUT FIELD BAR: EXACT MATCH WITH DAR AL HIKAYAT BOTTOM FLOATING CAPSULE ── */}
-        <footer className="absolute bottom-3 inset-x-0 z-30 flex flex-col items-center pointer-events-none px-4">
+        <footer className="absolute bottom-4 inset-x-0 z-30 flex flex-col items-center pointer-events-none px-4">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage(inputValue);
             }}
-            className="pointer-events-auto w-full max-w-sm min-h-[46px] p-1.5 rounded-full backdrop-blur-2xl border flex items-center gap-1.5 transition-all duration-300"
+            className="pointer-events-auto w-full max-w-sm min-h-[48px] p-1.5 rounded-full backdrop-blur-2xl border flex items-center gap-1.5 transition-all duration-300"
             style={{
-              borderRadius: isMultiline ? "20px" : "9999px",
+              borderRadius: isMultiline ? "24px" : "9999px",
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
               boxShadow: currentTheme.isDark
-                ? "0 8px 24px -4px rgba(0,0,0,0.45)"
-                : "0 8px 24px -4px rgba(0,0,0,0.08)",
+                ? "0 12px 32px -4px rgba(0,0,0,0.45)"
+                : "0 12px 32px -4px rgba(0,0,0,0.08)",
             }}
           >
             <textarea
@@ -1883,7 +1883,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               whileTap={{ scale: 0.92 }}
               type="submit"
               disabled={!inputValue.trim() || isLoading || editingMessageId !== null}
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer"
+              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer"
               style={{
                 backgroundColor:
                   inputValue.trim() && !isLoading && editingMessageId === null
@@ -1899,7 +1899,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               aria-label="إرسال"
               title="إرسال"
             >
-              <ArrowUp size={15} strokeWidth={2.4} />
+              <ArrowUp size={16} strokeWidth={2.4} />
             </motion.button>
           </form>
 

@@ -2540,7 +2540,7 @@ const DarAlHikayatMaster: React.FC = () => {
       {/* Mobile AI Assistant Full-Screen Sheet */}
       {showAIAssistant && !isWideScreen && (
         <div
-          className="fixed inset-0 z-50 flex flex-col"
+          className="fixed inset-0 z-50 flex flex-col h-full w-full overflow-hidden"
           style={{ backgroundColor: currentTheme.bg }}
         >
           <DarAlHikayatAIAssistant
