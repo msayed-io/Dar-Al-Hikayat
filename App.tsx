@@ -54,12 +54,12 @@ const AppContent = () => {
           >
             {/* Floating Navigation Capsule */}
             <div
-              className="pointer-events-auto h-12 p-1.5 rounded-full border shadow-2xl flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-300"
+              className="pointer-events-auto h-12 p-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-300"
               style={{
                 borderRadius: "9999px",
                 backgroundColor: currentTheme.glass,
                 borderColor: currentTheme.border,
-                boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
+                boxShadow: `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
               }}
             >
               {/* Tab 1: الحكايات */}
@@ -192,9 +192,7 @@ const AppContent = () => {
                     backgroundColor: currentTheme.isDark ? "#1C2526" : currentTheme.accent,
                     color: currentTheme.isDark ? currentTheme.accent : currentTheme.bg,
                     borderColor: currentTheme.isDark ? "rgba(226, 223, 210, 0.15)" : currentTheme.border,
-                    boxShadow: currentTheme.isDark
-                      ? "0 6px 18px -3px rgba(0, 0, 0, 0.45)"
-                      : `0 6px 18px -3px ${currentTheme.shadow}`,
+                    boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
                   }}
                   title="حكاية جديدة"
                 >
@@ -370,8 +368,12 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
       >
         <div className="flex flex-col items-center justify-center max-w-sm w-full p-8 text-center space-y-6 pointer-events-none">
           <div
-            className="w-24 h-24 rounded-3xl flex items-center justify-center bg-white/5 border shadow-xl animate-pulse"
-            style={{ borderColor: currentTheme.border }}
+            className="w-24 h-24 rounded-3xl flex items-center justify-center border backdrop-blur-2xl transition-all duration-300 animate-pulse"
+            style={{
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              boxShadow: `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+            }}
           >
             <img
               src={

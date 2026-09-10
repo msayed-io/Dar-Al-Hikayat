@@ -208,11 +208,11 @@ const PrayerPage: React.FC = () => {
         <div className="max-w-md mx-auto relative flex items-center justify-between pointer-events-none">
           {/* Right Capsule: Brand Title (Clean typography only) */}
           <div
-            className="pointer-events-auto h-11 px-5 rounded-full border shadow-lg flex items-center justify-center backdrop-blur-xl transition-transform hover:scale-[1.02]"
+            className="pointer-events-auto h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl transition-transform hover:scale-[1.02]"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
-              boxShadow: `0 8px 20px -4px ${currentTheme.shadow}`,
+              boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
             }}
           >
             <span

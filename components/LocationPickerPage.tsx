@@ -479,11 +479,11 @@ export const LocationPickerPage: React.FC = () => {
       >
         {/* زر الخروج بكبسولة علوية احترافية دائرية مطابقة لتصميم المحرر ووضع القراءة */}
         <div
-          className="pointer-events-auto h-10 w-10 p-1 rounded-full backdrop-blur-2xl border shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shrink-0"
+          className="pointer-events-auto h-10 w-10 p-1 rounded-full backdrop-blur-2xl border flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shrink-0"
           style={{
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
-            boxShadow: `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+            boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
           }}
         >
           <button
@@ -545,9 +545,9 @@ export const LocationPickerPage: React.FC = () => {
         <button
           type="button"
           onClick={handleRecenterToDeviceGPS}
-          className="w-10 h-10 border shadow-md flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer rounded-full"
+          className="w-10 h-10 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer rounded-full"
           style={{
-            backgroundColor: currentTheme.bg,
+            backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
             boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
             color: currentTheme.accent,
@@ -738,7 +738,7 @@ export const LocationPickerPage: React.FC = () => {
               type="button"
               onClick={handleConfirmLocation}
               disabled={isSaving || isReverseGeocoding}
-              className="w-full h-12 font-zain-xbold text-lg border shadow-md flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer active:scale-95 rounded-[22px] shrink-0 mt-auto"
+              className="w-full h-12 font-zain-xbold text-lg border shadow-md flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer active:scale-95 rounded-full shrink-0 mt-auto"
               style={{
                 backgroundColor: currentTheme.text,
                 color: currentTheme.bg,

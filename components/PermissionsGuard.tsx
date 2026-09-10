@@ -391,56 +391,50 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                   {currentStep === "notifications" && (
                     <motion.div
                       key="step-notifications"
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 16 }}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
                       transition={{ duration: 0.22 }}
-                      className="p-5 rounded-[26px] border flex flex-col items-center text-center transition-all"
-                      style={{
-                        backgroundColor: currentTheme.isDark
-                          ? "rgba(255,255,255,0.03)"
-                          : "rgba(0,0,0,0.02)",
-                        borderColor: currentTheme.border,
-                      }}
+                      className="flex flex-col items-center text-center py-4 px-2 w-full"
                     >
                       <div
-                        className="w-14 h-14 rounded-[20px] flex items-center justify-center border shadow-xs mb-3.5 transition-transform"
+                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4 transition-transform"
                         style={{
                           backgroundColor: stepSuccessPulse
                             ? "rgba(34, 197, 94, 0.18)"
-                            : `${currentTheme.accent}18`,
+                            : `${currentTheme.accent}15`,
                           borderColor: stepSuccessPulse
                             ? "rgba(34, 197, 94, 0.4)"
-                            : `${currentTheme.accent}35`,
+                            : `${currentTheme.accent}30`,
                           color: stepSuccessPulse ? "#16a34a" : currentTheme.accent,
                         }}
                       >
                         {stepSuccessPulse ? (
                           <Check className="w-7 h-7 text-green-600 animate-scale" />
                         ) : (
-                          <Bell className="w-7 h-7" />
+                          <Bell className="w-6 h-6" />
                         )}
                       </div>
 
                       <h3
-                        className="font-zain-xbold text-base mb-1"
+                        className="font-zain-xbold text-lg mb-1.5"
                         style={{ color: currentTheme.text }}
                       >
                         إشعارات الصلوات والأذكار
                       </h3>
 
                       <p
-                        className="font-zain-reg text-xs opacity-75 mb-5 max-w-xs leading-relaxed"
+                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
                         style={{ color: currentTheme.secondary }}
                       >
-                        السماح بإرسال إشعارات الأذان المكتوب وصوت التذكيرات المسبقة في مواعيدها الدقيقة لعدم تفويت أي صلاة.
+                        تفعيل إشعارات الأذان المكتوب والتذكيرات لتنبيهك بمواقيت الصلاة بدقة.
                       </p>
 
                       <button
                         type="button"
                         onClick={handleActivateNotifications}
                         disabled={isProcessing || stepSuccessPulse}
-                        className="w-full h-12 rounded-[18px] font-zain-bold text-sm shadow-md transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                         style={{
                           backgroundColor: currentTheme.accent,
                           color: currentTheme.isDark ? "#111" : "#fff",
@@ -479,56 +473,50 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                   {currentStep === "exactAlarms" && (
                     <motion.div
                       key="step-exactAlarms"
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 16 }}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
                       transition={{ duration: 0.22 }}
-                      className="p-5 rounded-[26px] border flex flex-col items-center text-center transition-all"
-                      style={{
-                        backgroundColor: currentTheme.isDark
-                          ? "rgba(255,255,255,0.03)"
-                          : "rgba(0,0,0,0.02)",
-                        borderColor: currentTheme.border,
-                      }}
+                      className="flex flex-col items-center text-center py-4 px-2 w-full"
                     >
                       <div
-                        className="w-14 h-14 rounded-[20px] flex items-center justify-center border shadow-xs mb-3.5 transition-transform"
+                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4 transition-transform"
                         style={{
                           backgroundColor: stepSuccessPulse
                             ? "rgba(34, 197, 94, 0.18)"
-                            : `${currentTheme.accent}18`,
+                            : `${currentTheme.accent}15`,
                           borderColor: stepSuccessPulse
                             ? "rgba(34, 197, 94, 0.4)"
-                            : `${currentTheme.accent}35`,
+                            : `${currentTheme.accent}30`,
                           color: stepSuccessPulse ? "#16a34a" : currentTheme.accent,
                         }}
                       >
                         {stepSuccessPulse ? (
                           <Check className="w-7 h-7 text-green-600 animate-scale" />
                         ) : (
-                          <AlarmClock className="w-7 h-7" />
+                          <AlarmClock className="w-6 h-6" />
                         )}
                       </div>
 
                       <h3
-                        className="font-zain-xbold text-base mb-1"
+                        className="font-zain-xbold text-lg mb-1.5"
                         style={{ color: currentTheme.text }}
                       >
-                        المنبهات الدقيقة (تخطي الخمول)
+                        المنبهات الدقيقة
                       </h3>
 
                       <p
-                        className="font-zain-reg text-xs opacity-75 mb-5 max-w-xs leading-relaxed"
+                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
                         style={{ color: currentTheme.secondary }}
                       >
-                        تفعيل إذن المنبه الدقيق لإيقاظ الهاتف في وقت الأذان تماماً وتخطي وضع السكون وحفظ الطاقة (Doze Mode).
+                        تفعيل إذن المنبه الدقيق لتنبيهك في وقت الأذان بدقة فائقة وتخطي وضع سكون الهاتف.
                       </p>
 
                       <button
                         type="button"
                         onClick={handleActivateExactAlarms}
                         disabled={isProcessing || stepSuccessPulse}
-                        className="w-full h-12 rounded-[18px] font-zain-bold text-sm shadow-md transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                         style={{
                           backgroundColor: currentTheme.accent,
                           color: currentTheme.isDark ? "#111" : "#fff",
@@ -550,10 +538,10 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                       </button>
 
                       <p
-                        className="mt-3 text-[11px] font-zain-reg opacity-60 max-w-xs"
+                        className="mt-3 text-[11px] font-zain-reg opacity-65 max-w-xs"
                         style={{ color: currentTheme.secondary }}
                       >
-                        سيتم توجيهك لشاشة الإعدادات لتفعيل خيار المنبه، ثم العودة تلقائياً.
+                        سيتم توجيهك لشاشة الإعدادات لتفعيل الخيار، ثم العودة تلقائياً.
                       </p>
                     </motion.div>
                   )}
@@ -562,56 +550,50 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                   {currentStep === "location" && (
                     <motion.div
                       key="step-location"
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 16 }}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
                       transition={{ duration: 0.22 }}
-                      className="p-5 rounded-[26px] border flex flex-col items-center text-center transition-all"
-                      style={{
-                        backgroundColor: currentTheme.isDark
-                          ? "rgba(255,255,255,0.03)"
-                          : "rgba(0,0,0,0.02)",
-                        borderColor: currentTheme.border,
-                      }}
+                      className="flex flex-col items-center text-center py-4 px-2 w-full"
                     >
                       <div
-                        className="w-14 h-14 rounded-[20px] flex items-center justify-center border shadow-xs mb-3.5 transition-transform"
+                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4 transition-transform"
                         style={{
                           backgroundColor: stepSuccessPulse
                             ? "rgba(34, 197, 94, 0.18)"
-                            : `${currentTheme.accent}18`,
+                            : `${currentTheme.accent}15`,
                           borderColor: stepSuccessPulse
                             ? "rgba(34, 197, 94, 0.4)"
-                            : `${currentTheme.accent}35`,
+                            : `${currentTheme.accent}30`,
                           color: stepSuccessPulse ? "#16a34a" : currentTheme.accent,
                         }}
                       >
                         {stepSuccessPulse ? (
                           <Check className="w-7 h-7 text-green-600 animate-scale" />
                         ) : (
-                          <MapPin className="w-7 h-7" />
+                          <MapPin className="w-6 h-6" />
                         )}
                       </div>
 
                       <h3
-                        className="font-zain-xbold text-base mb-1"
+                        className="font-zain-xbold text-lg mb-1.5"
                         style={{ color: currentTheme.text }}
                       >
-                        تحديد الموقع وحساب المواقيت
+                        تحديد الموقع الجغرافي
                       </h3>
 
                       <p
-                        className="font-zain-reg text-xs opacity-75 mb-5 max-w-xs leading-relaxed"
+                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
                         style={{ color: currentTheme.secondary }}
                       >
-                        استشعار إحداثيات موقعك عبر GPS لضبط وتوليد مواعيد الصلاة بدقة فلكية تامة لمدينتك الحالية.
+                        تحديد موقعك الجغرافي تلقائياً لضبط وحساب مواقيت الصلاة بدقة متناهية.
                       </p>
 
                       <button
                         type="button"
                         onClick={handleActivateLocation}
                         disabled={isProcessing || stepSuccessPulse}
-                        className="w-full h-12 rounded-[18px] font-zain-bold text-sm shadow-md transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                         style={{
                           backgroundColor: currentTheme.accent,
                           color: currentTheme.isDark ? "#111" : "#fff",
@@ -647,47 +629,41 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                   {currentStep === "completed" && (
                     <motion.div
                       key="step-completed"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
                       transition={{ duration: 0.22 }}
-                      className="p-5 rounded-[26px] border flex flex-col items-center text-center"
-                      style={{
-                        backgroundColor: currentTheme.isDark
-                          ? "rgba(255,255,255,0.03)"
-                          : "rgba(0,0,0,0.02)",
-                        borderColor: currentTheme.border,
-                      }}
+                      className="flex flex-col items-center text-center py-4 px-2 w-full"
                     >
                       <div
-                        className="w-14 h-14 rounded-[20px] flex items-center justify-center border shadow-xs mb-3.5"
+                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4"
                         style={{
                           backgroundColor: "rgba(34, 197, 94, 0.18)",
                           borderColor: "rgba(34, 197, 94, 0.4)",
                           color: "#16a34a",
                         }}
                       >
-                        <Sparkles className="w-7 h-7 text-green-600 animate-bounce" />
+                        <Sparkles className="w-6 h-6 text-green-600 animate-bounce" />
                       </div>
 
                       <h3
-                        className="font-zain-xbold text-base mb-1"
+                        className="font-zain-xbold text-lg mb-1.5"
                         style={{ color: currentTheme.text }}
                       >
                         اكتملت التهيئة بنجاح
                       </h3>
 
                       <p
-                        className="font-zain-reg text-xs opacity-75 mb-5 max-w-xs leading-relaxed"
+                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
                         style={{ color: currentTheme.secondary }}
                       >
-                        تم ضبط جميع منبهات الأذان وجدولة المواقيت بدقة متناهية لمدة 7 أيام متتالية.
+                        تم ضبط منبهات الأذان وجدولة مواقيت الصلاة بدقة متناهية.
                       </p>
 
                       <button
                         type="button"
                         onClick={handleFinishOnboarding}
-                        className="w-full h-12 rounded-[18px] font-zain-bold text-sm shadow-md transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                         style={{
                           backgroundColor: currentTheme.accent,
                           color: currentTheme.isDark ? "#111" : "#fff",

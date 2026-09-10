@@ -33,6 +33,11 @@ import {
   Settings,
   Home,
   Compass,
+  Clock,
+  Flame,
+  Award,
+  BookHeart,
+  Type,
 } from "lucide-react";
 import { useApp, Note } from "../contexts/AppContext";
 
@@ -64,6 +69,14 @@ const HomePage: React.FC = () => {
     words: 0,
     stories: 0,
     avg: 0,
+    chars: 0,
+    readingTime: 0,
+    thisMonthWords: 0,
+    thisMonthStories: 0,
+    longestStoryWords: 0,
+    writerLevelTitle: "بَذْرَةُ إِلهَام",
+    nextMilestone: 500,
+    progressPercentage: 0,
   });
   const [showAbout, setShowAbout] = useState(false); // State for About Page
   const [showBackupUI, setShowBackupUI] = useState(false); // State for Backup/Restore UI
@@ -122,9 +135,32 @@ const HomePage: React.FC = () => {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
+    let totalWords = 0;
+    let totalChars = 0;
+    let longestStoryWords = 0;
+
+    notes.forEach((note) => {
+      const text = (note.content || note.preview || "")
+        .replace(/<[^>]*>/g, "")
+        .trim();
+      const wordCount = text === "" ? 0 : text.split(/\s+/).length;
+      const charCount = text.length;
+
+      totalWords += wordCount;
+      totalChars += charCount;
+      if (wordCount > longestStoryWords) {
+        longestStoryWords = wordCount;
+      }
+    });
+
+    const totalStories = notes.length;
+    const avgWords =
+      totalStories > 0 ? Math.round(totalWords / totalStories) : 0;
+    const readingTimeMinutes = Math.ceil(totalWords / 200);
+
     const notesThisMonth = notes.filter((note) => {
       try {
-        const parts = note.date.split(" "); // e.g., ["٢٥", "يونيو", "٢٠٢٤"]
+        const parts = note.date.split(" ");
         if (parts.length !== 3) return false;
         const month = arabicMonths[parts[1]];
         const year = parseInt(
@@ -136,18 +172,52 @@ const HomePage: React.FC = () => {
       }
     });
 
-    const totalWords = notesThisMonth.reduce((sum, note) => {
-      return sum + (note.content?.trim().split(/\s+/).length || 0);
+    const wordsThisMonth = notesThisMonth.reduce((sum, note) => {
+      const text = (note.content || note.preview || "")
+        .replace(/<[^>]*>/g, "")
+        .trim();
+      return sum + (text === "" ? 0 : text.split(/\s+/).length);
     }, 0);
 
-    const storiesCount = notesThisMonth.length;
-    const avgWords =
-      storiesCount > 0 ? Math.round(totalWords / storiesCount) : 0;
+    const storiesThisMonth = notesThisMonth.length;
+
+    let levelTitle = "بَذْرَةُ إِلهَام";
+    let nextMilestone = 500;
+
+    if (totalWords >= 50000) {
+      levelTitle = "رَاوِي الدَّار الأَعْظَم";
+      nextMilestone = 100000;
+    } else if (totalWords >= 20000) {
+      levelTitle = "سَارِدُ المَلاحِم";
+      nextMilestone = 50000;
+    } else if (totalWords >= 5000) {
+      levelTitle = "سَاهِرُ القَلَم";
+      nextMilestone = 20000;
+    } else if (totalWords >= 1000) {
+      levelTitle = "حَكَوَاتِيٌّ شَغُوف";
+      nextMilestone = 5000;
+    } else if (totalWords >= 300) {
+      levelTitle = "مُصَمِّمُ الحِكَايَات";
+      nextMilestone = 1000;
+    }
+
+    const progressPercentage = Math.min(
+      100,
+      Math.round((totalWords / nextMilestone) * 100),
+    );
 
     setDashboardStats({
       words: totalWords,
-      stories: storiesCount,
+      stories: totalStories,
       avg: avgWords,
+      chars: totalChars,
+      readingTime: readingTimeMinutes,
+      thisMonthWords: wordsThisMonth,
+      thisMonthStories: storiesThisMonth,
+      longestStoryWords,
+      writerLevelTitle: levelTitle,
+      nextMilestone,
+      progressPercentage,
     });
   };
 
@@ -620,135 +690,153 @@ const HomePage: React.FC = () => {
         </div>
       )}
 
-      {/* --- CREATIVITY STATS MODAL (OPENED FROM THREE-DOTS MENU) --- */}
+      {/* --- CREATIVITY STATS MODAL (MATCHED EXACTLY TO LOCK STORY DIALOG) --- */}
       {showDashboard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDashboard(false);
+            }
+          }}
+        >
           <div
-            className="w-full max-w-xs border shadow-2xl overflow-hidden scale-100 animate-in zoom-in-95 duration-200"
+            className="border shadow-2xl text-center animate-in zoom-in-95 duration-200 relative flex flex-col items-center"
             style={{
+              width: "260px",
+              maxWidth: "calc(100vw - 32px)",
+              borderRadius: "28px",
+              padding: "24px 20px",
               backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
-              borderRadius: "24px",
-              boxShadow: `0 20px 40px -10px ${currentTheme.shadow}`,
+              boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
             }}
           >
-            <div
-              className="p-4 border-b flex items-center justify-between"
-              style={{ borderColor: currentTheme.border }}
-            >
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-8 h-8 flex items-center justify-center border shadow-xs"
-                  style={{
-                    backgroundColor: `${currentTheme.accent}15`,
-                    borderColor: `${currentTheme.accent}30`,
-                    borderRadius: "50%",
-                  }}
-                >
-                  <BarChart
-                    className="w-4 h-4"
-                    style={{ color: currentTheme.accent }}
-                  />
-                </div>
-                <h3
-                  className="font-zain-bold text-base"
-                  style={{ color: currentTheme.text }}
-                >
-                  إحصائيات الإبداع
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowDashboard(false)}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-xs opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+            {/* Header Row: Title and Close Button on the exact same level */}
+            <div className="w-full relative flex items-center justify-center mb-1 min-h-[28px]">
+              <h2
+                className="text-base font-zain-xbold leading-none text-center"
                 style={{ color: currentTheme.text }}
               >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-4 flex flex-col gap-2.5">
-              <div
-                className="flex justify-between items-center border"
-                style={{
-                  backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: `${currentTheme.accent}20`,
-                  borderRadius: "16px",
-                  padding: "10px 14px",
-                }}
-              >
-                <span
-                  className="font-zain-reg text-sm"
-                  style={{ color: currentTheme.secondary }}
-                >
-                  إجمالي الكلمات
-                </span>
-                <span
-                  className="font-zain-xbold text-base"
-                  style={{ color: currentTheme.accent }}
-                >
-                  {dashboardStats.words}
-                </span>
-              </div>
-              <div
-                className="flex justify-between items-center border"
-                style={{
-                  backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: `${currentTheme.accent}20`,
-                  borderRadius: "16px",
-                  padding: "10px 14px",
-                }}
-              >
-                <span
-                  className="font-zain-reg text-sm"
-                  style={{ color: currentTheme.secondary }}
-                >
-                  حكايات جديدة
-                </span>
-                <span
-                  className="font-zain-xbold text-base"
-                  style={{ color: currentTheme.accent }}
-                >
-                  {dashboardStats.stories}
-                </span>
-              </div>
-              <div
-                className="flex justify-between items-center border"
-                style={{
-                  backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: `${currentTheme.accent}20`,
-                  borderRadius: "16px",
-                  padding: "10px 14px",
-                }}
-              >
-                <span
-                  className="font-zain-reg text-sm"
-                  style={{ color: currentTheme.secondary }}
-                >
-                  متوسط الكلمات
-                </span>
-                <span
-                  className="font-zain-xbold text-base"
-                  style={{ color: currentTheme.accent }}
-                >
-                  {dashboardStats.avg}
-                </span>
-              </div>
-            </div>
-
-            <div
-              className="p-3 border-t bg-black/5 flex justify-center"
-              style={{ borderColor: currentTheme.border }}
-            >
+                إحصائيات الإبداع
+              </h2>
               <button
                 onClick={() => setShowDashboard(false)}
-                className="px-6 py-1.5 text-sm font-zain-bold opacity-70 hover:opacity-100 hover:bg-black/5 transition-all"
+                className="absolute left-0 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full border flex items-center justify-center opacity-60 hover:opacity-100 transition-all cursor-pointer"
                 style={{
-                  color: currentTheme.secondary,
+                  borderColor: `${currentTheme.accent}30`,
+                  backgroundColor: `${currentTheme.accent}08`,
+                  color: currentTheme.text,
+                }}
+                title="إغلاق"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Description */}
+            <p
+              className="text-xs font-zain-reg mb-4 opacity-70 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              ملخص أرقام ونبض قلمك في الدار
+            </p>
+
+            {/* Capsule Pills Stack - Matched to password field pills */}
+            <div className="w-full flex flex-col gap-2.5 mb-1">
+              {/* Row 1: إجمالي الكلمات */}
+              <div
+                className="w-full flex items-center justify-between px-3.5 border transition-all"
+                style={{
+                  height: "42px",
                   borderRadius: "9999px",
+                  backgroundColor: `${currentTheme.accent}0a`,
+                  borderColor: `${currentTheme.accent}30`,
                 }}
               >
-                إغلاق
-              </button>
+                <div className="flex items-center gap-2 min-w-0">
+                  <PenTool
+                    className="w-4 h-4 flex-shrink-0 opacity-80"
+                    style={{ color: currentTheme.accent }}
+                    strokeWidth={2}
+                  />
+                  <span
+                    className="font-zain-bold text-xs truncate"
+                    style={{ color: currentTheme.text }}
+                  >
+                    إجمالي الكلمات
+                  </span>
+                </div>
+                <span
+                  className="font-zain-xbold text-sm flex-shrink-0"
+                  style={{ color: currentTheme.accent }}
+                >
+                  {dashboardStats.words.toLocaleString("ar-EG")}
+                </span>
+              </div>
+
+              {/* Row 2: عدد الحكايات */}
+              <div
+                className="w-full flex items-center justify-between px-3.5 border transition-all"
+                style={{
+                  height: "42px",
+                  borderRadius: "9999px",
+                  backgroundColor: `${currentTheme.accent}0a`,
+                  borderColor: `${currentTheme.accent}30`,
+                }}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <BookOpen
+                    className="w-4 h-4 flex-shrink-0 opacity-80"
+                    style={{ color: currentTheme.accent }}
+                    strokeWidth={2}
+                  />
+                  <span
+                    className="font-zain-bold text-xs truncate"
+                    style={{ color: currentTheme.text }}
+                  >
+                    عدد الحكايات
+                  </span>
+                </div>
+                <span
+                  className="font-zain-xbold text-sm flex-shrink-0"
+                  style={{ color: currentTheme.text }}
+                >
+                  {dashboardStats.stories.toLocaleString("ar-EG")}
+                </span>
+              </div>
+
+              {/* Row 3: متوسط الكلمات */}
+              <div
+                className="w-full flex items-center justify-between px-3.5 border transition-all"
+                style={{
+                  height: "42px",
+                  borderRadius: "9999px",
+                  backgroundColor: `${currentTheme.accent}0a`,
+                  borderColor: `${currentTheme.accent}30`,
+                }}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <BarChart
+                    className="w-4 h-4 flex-shrink-0 opacity-80"
+                    style={{ color: currentTheme.accent }}
+                    strokeWidth={2}
+                  />
+                  <span
+                    className="font-zain-bold text-xs truncate"
+                    style={{ color: currentTheme.text }}
+                  >
+                    متوسط الكلمات
+                  </span>
+                </div>
+                <span
+                  className="font-zain-xbold text-sm flex-shrink-0"
+                  style={{ color: currentTheme.text }}
+                >
+                  {dashboardStats.avg.toLocaleString("ar-EG")}{" "}
+                  <span className="font-zain-reg text-[11px] opacity-70">كلمة</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -776,16 +864,16 @@ const HomePage: React.FC = () => {
             <div className="max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto flex items-center justify-between pointer-events-none w-full">
               {/* Right Capsule: Title */}
               <div
-                className="pointer-events-auto h-11 px-5 rounded-full border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all"
+                className="pointer-events-auto h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl transition-all"
                 style={{
-                  backgroundColor: currentTheme.bg,
+                  backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
                   boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                 }}
               >
                 <h1
                   className="font-zain-xbold text-base md:text-lg leading-none pt-0.5"
-                  style={{ color: currentTheme.text }}
+                  style={{ color: currentTheme.accent }}
                 >
                   عن دَارِ الحِكَايَاتِ
                 </h1>
@@ -795,13 +883,13 @@ const HomePage: React.FC = () => {
               <div className="pointer-events-auto flex-shrink-0">
                 <button
                   onClick={() => setShowAbout(false)}
-                  className="border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square"
+                  className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
                   style={{
                     width: "44px",
                     height: "44px",
                     minWidth: "44px",
                     minHeight: "44px",
-                    backgroundColor: currentTheme.bg,
+                    backgroundColor: currentTheme.glass,
                     borderColor: currentTheme.border,
                     boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                     borderRadius: "50%",
@@ -824,17 +912,26 @@ const HomePage: React.FC = () => {
             className="w-full h-full overflow-y-auto about-scroll relative z-10 px-4 flex flex-col items-center"
             style={{ paddingTop: "88px", paddingBottom: "48px" }}
           >
-            <div className="w-full max-w-2xl mx-auto flex flex-col items-center text-center space-y-16 pb-20 pt-8">
-              {/* Intro Text */}
-              <p
-                className="font-zain-reg text-2xl leading-[2.5] max-w-lg mx-auto opacity-90 animate-in slide-in-from-bottom-8 duration-700 delay-200 fill-mode-backwards"
-                style={{ color: currentTheme.text }}
+            <div className="w-full max-w-2xl mx-auto flex flex-col items-center text-center space-y-12 pb-20 pt-6">
+              {/* Intro Card */}
+              <div
+                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-200 fill-mode-backwards"
+                style={{
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
+                }}
               >
-                هذا الدار ليس إهداءً عابراً، بل هو وعدٌ محفور بالحب. بنيته
-                لأجلكِ، ليكون حصناً يليق بجمال ما تكتبين.
-              </p>
+                <p
+                  className="font-zain-reg text-2xl leading-[2.3] max-w-lg mx-auto opacity-95"
+                  style={{ color: currentTheme.text }}
+                >
+                  هذا الدار ليس إهداءً عابراً، بل هو وعدٌ محفور بالحب. بنيته
+                  لأجلكِ، ليكون حصناً يليق بجمال ما تكتبين.
+                </p>
+              </div>
 
-              {/* Separator - Increased Opacity to 80% */}
+              {/* Separator */}
               <div className="flex items-center justify-center opacity-80 w-full max-w-xs">
                 <div
                   className="h-px flex-1"
@@ -853,9 +950,16 @@ const HomePage: React.FC = () => {
               </div>
 
               {/* 2. VISION SECTION */}
-              <div className="w-full animate-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-backwards px-2">
+              <div
+                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-backwards"
+                style={{
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
+                }}
+              >
                 <h2
-                  className="font-zain-bold text-xl mb-6 tracking-widest uppercase opacity-60"
+                  className="font-zain-bold text-xl mb-4 tracking-widest uppercase opacity-80"
                   style={{ color: currentTheme.accent }}
                 >
                   فلسفة المكان
@@ -869,7 +973,7 @@ const HomePage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Separator - Increased Opacity to 80% */}
+              {/* Separator */}
               <div className="flex items-center justify-center opacity-80 w-full max-w-xs">
                 <div
                   className="h-px flex-1"
@@ -888,9 +992,16 @@ const HomePage: React.FC = () => {
               </div>
 
               {/* 3. THE ZIKR FEATURE */}
-              <div className="w-full animate-in slide-in-from-bottom-8 duration-700 delay-500 fill-mode-backwards px-2">
+              <div
+                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-500 fill-mode-backwards"
+                style={{
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
+                }}
+              >
                 <h2
-                  className="font-zain-bold text-xl mb-6 tracking-widest uppercase opacity-60"
+                  className="font-zain-bold text-xl mb-4 tracking-widest uppercase opacity-80"
                   style={{ color: currentTheme.accent }}
                 >
                   السر المقدس
@@ -904,7 +1015,7 @@ const HomePage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Separator - Increased Opacity to 80% */}
+              {/* Separator */}
               <div className="flex items-center justify-center opacity-80 w-full max-w-xs">
                 <div
                   className="h-px flex-1"
@@ -922,10 +1033,17 @@ const HomePage: React.FC = () => {
                 ></div>
               </div>
 
-              {/* 4. DEVELOPER SECTION (Refined) */}
-              <div className="w-full animate-in slide-in-from-bottom-8 duration-700 delay-700 fill-mode-backwards pb-8 px-2">
+              {/* 4. DEVELOPER SECTION */}
+              <div
+                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-700 fill-mode-backwards"
+                style={{
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
+                }}
+              >
                 <h2
-                  className="font-zain-bold text-xl mb-6 tracking-widest uppercase opacity-60"
+                  className="font-zain-bold text-xl mb-4 tracking-widest uppercase opacity-80"
                   style={{ color: currentTheme.accent }}
                 >
                   حارس الحلم
@@ -933,7 +1051,7 @@ const HomePage: React.FC = () => {
 
                 <div className="flex flex-col items-center justify-center">
                   <p
-                    className="font-zain-reg text-2xl leading-[2.2] text-center mb-8 opacity-90"
+                    className="font-zain-reg text-2xl leading-[2.2] text-center mb-8 opacity-95"
                     style={{ color: currentTheme.text }}
                   >
                     هذا الصرح لم يُبنَ بالأكواد، بل شُيِّد بنبض القلب. هو رسالتي
@@ -951,8 +1069,13 @@ const HomePage: React.FC = () => {
                   <div className="flex justify-center gap-4">
                     <a
                       href="tel:01140251843"
-                      className="group flex items-center justify-center w-12 h-12 rounded-full border hover:scale-110 hover:bg-black/5 transition-all duration-300"
-                      style={{ borderColor: `${currentTheme.accent}40` }}
+                      className="group flex items-center justify-center w-12 h-12 rounded-full border backdrop-blur-xl hover:scale-110 active:scale-95 transition-all duration-300 shadow-md cursor-pointer"
+                      style={{
+                        backgroundColor: currentTheme.glass,
+                        borderColor: currentTheme.border,
+                        boxShadow: `0 4px 14px -2px ${currentTheme.shadow}`,
+                      }}
+                      title="اتصال تلفوني"
                     >
                       <Phone
                         className="w-5 h-5 transition-colors"
@@ -961,8 +1084,13 @@ const HomePage: React.FC = () => {
                     </a>
                     <a
                       href="mailto:mohamed01140251843sayed@gmail.com"
-                      className="group flex items-center justify-center w-12 h-12 rounded-full border hover:scale-110 hover:bg-black/5 transition-all duration-300"
-                      style={{ borderColor: `${currentTheme.accent}40` }}
+                      className="group flex items-center justify-center w-12 h-12 rounded-full border backdrop-blur-xl hover:scale-110 active:scale-95 transition-all duration-300 shadow-md cursor-pointer"
+                      style={{
+                        backgroundColor: currentTheme.glass,
+                        borderColor: currentTheme.border,
+                        boxShadow: `0 4px 14px -2px ${currentTheme.shadow}`,
+                      }}
+                      title="إرسال بريد إلكتروني"
                     >
                       <Mail
                         className="w-5 h-5 transition-colors"
@@ -992,9 +1120,9 @@ const HomePage: React.FC = () => {
             {isSearchOpen ? (
               /* Full-Width Search Floating Capsule */
               <div
-                className="pointer-events-auto w-full h-11 px-3.5 rounded-full border shadow-xl flex items-center gap-2.5 animate-in fade-in zoom-in-95 duration-200"
+                className="pointer-events-auto w-full h-11 px-3.5 rounded-full border flex items-center gap-2.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200"
                 style={{
-                  backgroundColor: currentTheme.bg,
+                  backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
                   boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                 }}
@@ -1038,11 +1166,11 @@ const HomePage: React.FC = () => {
               <>
                 {/* Right Capsule: Brand Title (Clean typography only) */}
                 <div
-                  className="pointer-events-auto h-11 px-5 rounded-full border shadow-lg flex items-center justify-center backdrop-blur-xl transition-transform hover:scale-[1.02]"
+                  className="pointer-events-auto h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl transition-transform hover:scale-[1.02]"
                   style={{
                     backgroundColor: currentTheme.glass,
                     borderColor: currentTheme.border,
-                    boxShadow: `0 8px 20px -4px ${currentTheme.shadow}`,
+                    boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                   }}
                 >
                   <span
@@ -1056,11 +1184,11 @@ const HomePage: React.FC = () => {
                 {/* Left Capsule: Search Trigger + Three-lines Menu ("الثلاث شرط") */}
                 <div className="relative header-menu-container pointer-events-auto">
                   <div
-                    className="h-11 px-2 rounded-full border shadow-lg flex items-center gap-1 backdrop-blur-xl transition-transform hover:scale-[1.02]"
+                    className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl transition-transform hover:scale-[1.02]"
                     style={{
                       backgroundColor: currentTheme.glass,
                       borderColor: currentTheme.border,
-                      boxShadow: `0 8px 20px -4px ${currentTheme.shadow}`,
+                      boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                     }}
                   >
                     {/* Search Icon Button */}
@@ -1265,8 +1393,8 @@ const HomePage: React.FC = () => {
                     onTouchEnd={handleTouchEnd}
                     onClick={() => handleCardClick(note)}
                     className={`
-                        group relative rounded-2xl backdrop-blur-md shadow-sm transition-all duration-300 cursor-pointer overflow-hidden w-full
-                        ${viewMode === "grid" ? "p-4 min-h-[200px] sm:min-h-[220px] h-auto flex flex-col justify-between hover:-translate-y-0.5 hover:shadow-md" : "p-4 hover:-translate-y-0.5 hover:shadow-md"}
+                        group relative rounded-2xl backdrop-blur-2xl transition-all duration-300 cursor-pointer overflow-hidden w-full
+                        ${viewMode === "grid" ? "p-4 min-h-[200px] sm:min-h-[220px] h-auto flex flex-col justify-between hover:-translate-y-1" : "p-4 hover:-translate-y-1"}
                       `}
                     style={{
                       backgroundColor: isSelected
@@ -1276,7 +1404,10 @@ const HomePage: React.FC = () => {
                         ? currentTheme.accent
                         : currentTheme.border,
                       borderWidth: "1px",
-                      borderRadius: viewMode === "grid" ? "20px" : "22px",
+                      borderRadius: viewMode === "grid" ? "22px" : "24px",
+                      boxShadow: isSelected
+                        ? `0 0 0 2px ${currentTheme.accent}, 0 8px 24px -4px ${currentTheme.shadow}`
+                        : `0 8px 24px -4px ${currentTheme.shadow}`,
                     }}
                   >
                     {isSelectionMode && (
@@ -1309,11 +1440,11 @@ const HomePage: React.FC = () => {
                             {note.title}
                           </h2>
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full border font-zain-reg pt-0.5 ${viewMode === "grid" ? "self-start" : ""}`}
+                            className={`text-[10px] px-2.5 py-0.5 rounded-full border font-zain-bold pt-0.5 backdrop-blur-md transition-all ${viewMode === "grid" ? "self-start" : ""}`}
                             style={{
-                              borderColor: `${currentTheme.accent}30`,
-                              color: currentTheme.secondary,
-                              backgroundColor: `${currentTheme.bg}50`,
+                              borderColor: `${currentTheme.accent}35`,
+                              color: currentTheme.accent,
+                              backgroundColor: `${currentTheme.accent}12`,
                             }}
                           >
                             {note.category}
@@ -1408,7 +1539,7 @@ const HomePage: React.FC = () => {
               className="fixed bottom-4 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center items-center"
             >
               <div
-                className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border shadow-2xl flex justify-between items-center gap-2 transition-all"
+                className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-2 transition-all"
                 style={{
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,

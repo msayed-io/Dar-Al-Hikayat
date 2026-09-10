@@ -110,7 +110,7 @@ const SettingsPage: React.FC = () => {
       const location = await autoDetectLocation();
       if (location) {
         updatePrayerState({ location });
-        await schedulePrayerAlarms(location, prayerState.method || "egypt");
+        await schedulePrayerAlarms(location, prayerState.method || "egyptian");
       }
     } catch (e) {
       console.error("Auto detect failed:", e);
@@ -126,7 +126,7 @@ const SettingsPage: React.FC = () => {
       updatePrayerState({ location });
       setShowCityPicker(false);
       setCitySearch("");
-      await schedulePrayerAlarms(location, prayerState.method || "egypt");
+      await schedulePrayerAlarms(location, prayerState.method || "egyptian");
     },
     [prayerState.method, updatePrayerState]
   );
@@ -257,9 +257,9 @@ const SettingsPage: React.FC = () => {
         <div className="max-w-md mx-auto flex items-center justify-between pointer-events-none w-full">
           {/* Right Capsule: Settings Title */}
           <div
-            className="pointer-events-auto h-11 px-5 border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all"
+            className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all"
             style={{
-              backgroundColor: currentTheme.bg,
+              backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
               boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
               borderRadius: "9999px",
@@ -277,13 +277,13 @@ const SettingsPage: React.FC = () => {
           <div className="pointer-events-auto flex-shrink-0">
             <button
               onClick={backToHome}
-              className="border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
+              className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
               style={{
                 width: "44px",
                 height: "44px",
                 minWidth: "44px",
                 minHeight: "44px",
-                backgroundColor: currentTheme.bg,
+                backgroundColor: currentTheme.glass,
                 borderColor: currentTheme.border,
                 boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                 borderRadius: "50%",

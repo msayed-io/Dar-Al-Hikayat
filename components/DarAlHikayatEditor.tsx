@@ -58,6 +58,8 @@ import {
 import { useApp, NoteStyles } from "../contexts/AppContext";
 import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
 import { exportStoryToDocx } from "../lib/docx-export";
+import DarAlHikayatAIAssistant from "./DarAlHikayatAIAssistant";
+import type { StoryContext } from "../lib/ai-assistant-service";
 
 // --- 20 Premium Ink Colors ---
 const inkColors = [
@@ -488,6 +490,52 @@ const DarAlHikayatMaster: React.FC = () => {
   const [exportFileName, setExportFileName] = useState("");
   const [exportFormat, setExportFormat] = useState<"pdf" | "docx">("pdf");
   const [isExporting, setIsExporting] = useState(false);
+
+  // --- Screen Breakpoint & AI Assistant State ---
+  // STRICT RULE 1: Any screen width < 768dp is logically classified as mobile
+  const [isWideScreen, setIsWideScreen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const wide = window.innerWidth >= 768;
+      setIsWideScreen(wide);
+      if (!wide) {
+        setShowAIAssistant(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
+
+  const handleToggleAIAssistant = () => {
+    // STRICT RULE 1: Complete and absolute prohibition on mobile screens (< 768dp)
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setShowAIAssistant(false);
+      return;
+    }
+    // STRICT RULE 2: Minimum 500 words threshold required
+    if (wordCount < 500) {
+      setShowAIAssistant(false);
+      return;
+    }
+    setShowAIAssistant((prev) => !prev);
+  };
+
+  const currentStoryContext: StoryContext = React.useMemo(() => {
+    return {
+      title: title || "حكاية بدون عنوان",
+      fullText: content,
+      chapters: chapters.map((c) => ({ title: c.title, content: c.content })),
+      isNovelMode,
+    };
+  }, [title, content, chapters, isNovelMode]);
 
   // --- Lock System State ---
   const [showLockDialog, setShowLockDialog] = useState(false);
@@ -1582,6 +1630,13 @@ const DarAlHikayatMaster: React.FC = () => {
   const speakingTime = Math.ceil(wordCount / 130); // Average speaking speed
   const estimatedPages = Math.max(1, Math.ceil(wordCount / 500)); // Approx 500 words per single-spaced A4 page
 
+  // STRICT RULE 2: Live reactive threshold: if word count drops below 500 words, immediately close assistant
+  useEffect(() => {
+    if (wordCount < 500 && showAIAssistant) {
+      setShowAIAssistant(false);
+    }
+  }, [wordCount, showAIAssistant]);
+
   return (
     <div
       className="min-h-screen w-full relative font-sans transition-all duration-500 ease-in-out"
@@ -1956,7 +2011,7 @@ const DarAlHikayatMaster: React.FC = () => {
         className={`fixed top-4 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${showUI ? "translate-y-0 opacity-100" : "-translate-y-16 opacity-0"}`}
       >
         <div
-          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border shadow-2xl flex justify-between items-center gap-1.5 transition-all"
+          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all"
           style={{
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
@@ -2408,56 +2463,72 @@ const DarAlHikayatMaster: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <main id="story-content" className="w-full relative z-0 pb-36">
-        {!isNovelMode ? (
-          <div
-            ref={editorRef}
-            contentEditable={!isSavedMode}
-            onInput={(e) => handleContentChange(e.currentTarget.innerHTML)}
-            onPaste={handlePaste}
-            data-placeholder="اكتب حكايتك هنا..."
-            className={`w-full bg-transparent border-none outline-none px-6 leading-loose pt-28 min-h-[60vh] editor-container ${
-              !content || content === "<br>" ? "is-empty" : ""
-            }`}
-            style={{
-              fontSize: `${fontSize}px`,
-              fontFamily: "'Zain', sans-serif",
-              fontWeight: activeFontWeight,
-              textAlign: textAlign,
-              color: textColor,
-              lineHeight: 2.2,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
-            spellCheck={false}
-          />
-        ) : (
-          // CRITICAL FIX: Removed dynamic padding. Uses fixed padding now to prevent layout thrashing.
-          <div className="w-full px-4 md:px-6 pt-28">
-            {chapters.map((chapter, index) => (
-              <ChapterItem
-                key={chapter.id}
-                chapter={chapter}
-                index={index}
-                onUpdate={updateChapter}
-                onRemove={removeChapter}
-                isSavedMode={isSavedMode}
-                styles={{
-                  fontSize,
+      {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
+      <div className="w-full min-h-screen flex flex-row relative overflow-x-hidden">
+        {/* Editor Area: Exactly 65% on wide screen when assistant is active, 100% when closed */}
+        <div className={`transition-all duration-300 ease-in-out ${showAIAssistant && isWideScreen ? "w-[65%]" : "w-full"}`}>
+          <main id="story-content" className="w-full relative z-0 pb-36">
+            {!isNovelMode ? (
+              <div
+                ref={editorRef}
+                contentEditable={!isSavedMode}
+                onInput={(e) => handleContentChange(e.currentTarget.innerHTML)}
+                onPaste={handlePaste}
+                data-placeholder="اكتب حكايتك هنا..."
+                className={`w-full bg-transparent border-none outline-none px-6 leading-loose pt-28 min-h-[60vh] editor-container ${
+                  !content || content === "<br>" ? "is-empty" : ""
+                }`}
+                style={{
+                  fontSize: `${fontSize}px`,
+                  fontFamily: "'Zain', sans-serif",
                   fontWeight: activeFontWeight,
-                  textAlign,
-                  textColor,
-                  accentColor: currentTheme.accent,
+                  textAlign: textAlign,
+                  color: textColor,
+                  lineHeight: 2.2,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
                 }}
-                showFlowIndicator={activeResizeId === chapter.id}
-                canBeDeleted={chapters.length > 1}
-                containerRef={(el) => (chapterRefs.current[chapter.id] = el)}
+                spellCheck={false}
               />
-            ))}
+            ) : (
+              // CRITICAL FIX: Removed dynamic padding. Uses fixed padding now to prevent layout thrashing.
+              <div className="w-full px-4 md:px-6 pt-28">
+                {chapters.map((chapter, index) => (
+                  <ChapterItem
+                    key={chapter.id}
+                    chapter={chapter}
+                    index={index}
+                    onUpdate={updateChapter}
+                    onRemove={removeChapter}
+                    isSavedMode={isSavedMode}
+                    styles={{
+                      fontSize,
+                      fontWeight: activeFontWeight,
+                      textAlign,
+                      textColor,
+                      accentColor: currentTheme.accent,
+                    }}
+                    showFlowIndicator={activeResizeId === chapter.id}
+                    canBeDeleted={chapters.length > 1}
+                    containerRef={(el) => (chapterRefs.current[chapter.id] = el)}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* AI Assistant Studio Pane: Exactly 35% side-by-side in real time (Strictly Wide Screens Only >= 768dp) */}
+        {showAIAssistant && isWideScreen && (
+          <div className="w-[35%] h-screen sticky top-0 border-r z-30 shadow-2xl transition-all duration-300 ease-in-out">
+            <DarAlHikayatAIAssistant
+              onClose={() => setShowAIAssistant(false)}
+              storyContext={currentStoryContext}
+              theme={currentTheme}
+            />
           </div>
         )}
-      </main>
+      </div>
 
       {isSavedMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
@@ -2476,7 +2547,7 @@ const DarAlHikayatMaster: React.FC = () => {
           className={`fixed bottom-4 left-0 right-0 z-40 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}
         >
           <div
-            className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border shadow-2xl flex justify-between items-center gap-2 transition-all"
+            className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-2 transition-all"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
@@ -2484,18 +2555,35 @@ const DarAlHikayatMaster: React.FC = () => {
             }}
           >
             {/* Right Group */}
-            <div className="flex-1 flex justify-start items-center">
-              {isNovelMode ? (
+            <div className="flex-1 flex justify-start items-center gap-1.5">
+              {isNovelMode && (
                 <button
                   onClick={addChapter}
-                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+                  className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shrink-0"
                   style={{ color: currentTheme.accent }}
                   title="فصل جديد"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
-              ) : (
-                <div className="w-9 h-9"></div> /* Sized placeholder to balance the layout */
+              )}
+              {/* STRICT RULE 1 & 2: Button is ONLY rendered if isWideScreen (>= 768px) AND wordCount >= 500 words */}
+              {isWideScreen && wordCount >= 500 && (
+                <button
+                  id="dar-alhikayat-ai-toggle-btn"
+                  onClick={handleToggleAIAssistant}
+                  className={`h-9 px-3 rounded-full flex items-center gap-1.5 transition-all duration-300 active:scale-95 cursor-pointer border ${
+                    showAIAssistant ? "shadow-inner" : "hover:scale-105"
+                  }`}
+                  style={{
+                    backgroundColor: showAIAssistant ? `${currentTheme.accent}25` : `${currentTheme.accent}12`,
+                    borderColor: `${currentTheme.accent}45`,
+                    color: currentTheme.accent,
+                  }}
+                  title="المساعد الأدبي"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="font-zain-bold text-xs pt-0.5 whitespace-nowrap">المساعد الأدبي</span>
+                </button>
               )}
             </div>
 
@@ -2671,11 +2759,11 @@ const DarAlHikayatMaster: React.FC = () => {
       {/* Settings Panel */}
       {!isSavedMode && (
         <div
-          className={`fixed bottom-28 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-96 z-50 backdrop-blur-2xl rounded-3xl shadow-2xl p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
+          className={`fixed bottom-28 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-96 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
           style={{
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
-            borderWidth: "1px",
+            boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
           }}
         >
           {showColorGrid ? (
@@ -2900,29 +2988,26 @@ const DarAlHikayatMaster: React.FC = () => {
                 <div className="flex gap-1">
                   <button
                     onClick={() => toggleTheme("modern_studio")}
-                    className={`w-6 h-6 rounded-full border ${currentTheme.mode === "modern_studio" ? "ring-1 ring-offset-1" : ""}`}
+                    className={`w-6 h-6 rounded-full border ${currentTheme.mode === "modern_studio" ? "ring-1 ring-offset-1 ring-[#b88a4f]" : ""}`}
                     style={{
                       backgroundColor: "#F4F1EA",
                       borderColor: "#2C3E30",
-                      ringColor: currentTheme.accent,
                     }}
                   />
                   <button
                     onClick={() => toggleTheme("royal_classic")}
-                    className={`w-6 h-6 rounded-full border ${currentTheme.mode === "royal_classic" ? "ring-1 ring-offset-1" : ""}`}
+                    className={`w-6 h-6 rounded-full border ${currentTheme.mode === "royal_classic" ? "ring-1 ring-offset-1 ring-[#b88a4f]" : ""}`}
                     style={{
                       backgroundColor: "#EAE6D2",
                       borderColor: "#121A1B",
-                      ringColor: currentTheme.accent,
                     }}
                   />
                   <button
                     onClick={() => toggleTheme("night_whisper")}
-                    className={`w-6 h-6 rounded-full border flex items-center justify-center ${currentTheme.mode === "night_whisper" ? "ring-1 ring-offset-1" : ""}`}
+                    className={`w-6 h-6 rounded-full border flex items-center justify-center ${currentTheme.mode === "night_whisper" ? "ring-1 ring-offset-1 ring-[#b88a4f]" : ""}`}
                     style={{
                       backgroundColor: "#111718",
                       borderColor: "#9FA365",
-                      ringColor: currentTheme.accent,
                     }}
                   >
                     <Moon className="w-3 h-3 text-[#9FA365]" />
