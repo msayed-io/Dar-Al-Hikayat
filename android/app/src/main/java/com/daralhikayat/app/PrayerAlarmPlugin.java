@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import androidx.core.content.ContextCompat;
@@ -103,7 +104,12 @@ public class PrayerAlarmPlugin extends Plugin {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
             }
         } catch (SecurityException se) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+            // Fallback for Doze mode when exact alarm permission is restricted
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -169,9 +175,20 @@ public class PrayerAlarmPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void checkNotificationPermission(PluginCall pluginCall) {
+        boolean granted = true;
+        if (Build.VERSION.SDK_INT >= 33) {
+            granted = ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
+        }
+        JSObject jSObject = new JSObject();
+        jSObject.put("granted", granted);
+        pluginCall.resolve(jSObject);
+    }
+
+    @PluginMethod
     public void requestNotificationPermission(PluginCall pluginCall) {
         if (Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") == 0) {
+            if (ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) {
                 JSObject jSObject = new JSObject();
                 jSObject.put("granted", true);
                 pluginCall.resolve(jSObject);
@@ -230,5 +247,38 @@ public class PrayerAlarmPlugin extends Plugin {
         JSObject jSObject = new JSObject();
         jSObject.put("canSchedule", canSchedule);
         pluginCall.resolve(jSObject);
+    }
+
+    @PluginMethod
+    public void openNotificationSettings(PluginCall pluginCall) {
+        try {
+            Intent intent = new Intent();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+            } else {
+                intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
+                intent.putExtra("app_package", getContext().getPackageName());
+                intent.putExtra("app_uid", getContext().getApplicationInfo().uid);
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            pluginCall.resolve();
+        } catch (Exception e) {
+            pluginCall.reject("Failed to open notification settings: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void openAppSettings(PluginCall pluginCall) {
+        try {
+            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            pluginCall.resolve();
+        } catch (Exception e) {
+            pluginCall.reject("Failed to open app settings: " + e.getMessage());
+        }
     }
 }

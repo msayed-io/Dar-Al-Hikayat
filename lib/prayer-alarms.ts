@@ -11,13 +11,16 @@ import {
   PRE_ALARM_MINUTES,
   type PrayerState,
 } from "./prayer-config";
-import { getTodayAndTomorrow } from "./prayer-times";
+import { getDayPrayers, getTodayAndTomorrow } from "./prayer-times";
 import { CITIES, type CityData } from "./prayer-cities";
 
 interface PrayerAlarmPlugin {
+  checkNotificationPermission(): Promise<{ granted: boolean }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   requestExactAlarmPermission(): Promise<{ granted: boolean }>;
   canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
+  openNotificationSettings?(): Promise<void>;
+  openAppSettings?(): Promise<void>;
   scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<{ scheduled: number }>;
   cancelAllAlarms(): Promise<void>;
   sendImmediateTestNotification(options?: {
@@ -73,8 +76,8 @@ function currentTimezoneId(): string {
   return nativeTimezoneId || "Africa/Cairo";
 }
 
-/** توليد معرف فريد لكل منبه (كما في الإنتاج) */
-function alarmId(prayerId: string, type: "exact" | "pre", isTomorrow: boolean): number {
+/** توليد معرف فريد لكل منبه عبر الأيام المتعددة */
+function alarmId(prayerId: string, type: "exact" | "pre", dayOffset: number): number {
   const base: Record<string, number> = {
     fajr: 1000,
     sunrise: 2000,
@@ -85,8 +88,7 @@ function alarmId(prayerId: string, type: "exact" | "pre", isTomorrow: boolean): 
     isha: 7000,
   };
   const pre = type === "pre" ? 100 : 0;
-  const tomorrow = isTomorrow ? 500 : 0;
-  return (base[prayerId] || 0) + pre + tomorrow;
+  return dayOffset * 10000 + (base[prayerId] || 0) + pre;
 }
 
 function alarmTitle(prayerId: string, type: "exact" | "pre"): string {
@@ -101,6 +103,18 @@ function alarmBody(prayerId: string, type: "exact" | "pre"): string {
   const def = PRAYER_DEFINITIONS[prayerId as PrayerId];
   if (!def) return "";
   return type === "pre" && def.preText ? def.preText : def.exactText;
+}
+
+/** التحقق من حالة إذن الإشعارات */
+export async function checkNotificationPermission(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) return true;
+  try {
+    const { granted } = await PrayerAlarm.checkNotificationPermission();
+    return granted;
+  } catch (e) {
+    console.error("Check notification permission error:", e);
+    return true;
+  }
 }
 
 /** طلب صلاحية الإشعارات */
@@ -139,11 +153,31 @@ export async function checkExactAlarmPermission(): Promise<boolean> {
   }
 }
 
+/** فتح شاشة إعدادات إشعارات التطبيق */
+export async function openNativeNotificationSettings(): Promise<void> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.openNotificationSettings) return;
+  try {
+    await PrayerAlarm.openNotificationSettings();
+  } catch (e) {
+    console.error("Open notification settings error:", e);
+  }
+}
+
+/** فتح صفحة إعدادات التطبيق في النظام */
+export async function openNativeAppSettings(): Promise<void> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.openAppSettings) return;
+  try {
+    await PrayerAlarm.openAppSettings();
+  } catch (e) {
+    console.error("Open app settings error:", e);
+  }
+}
+
 /**
- * جدولة كل منبهات اليوم والغد (نفس خوارزمية الإنتاج):
- * - منبه دقيق لكل صلاة قادمة اليوم + غدًا
- * - منبه مسبق (10 دقائق) للصلوات الخمس
- * - منبه إعادة جدولة بعد الفجر بـ 30 دقيقة (id: 99999)
+ * جدولة مواقيت الصلاة لمدة 7 أيام متتالية بدقة تامة باستخدام AlarmManager.setExactAndAllowWhileIdle():
+ * - منبه دقيق لكل صلاة في موعدها تماماً (لا يختفي إلا بمسحه يدوياً)
+ * - منبه مسبق قبل الصلاة بـ 10 دقائق (يُحذف تلقائياً عند انتهاء مدته ومجيء وقت الصلاة)
+ * - جدولة متجددة لـ 7 أيام مقبلة لضمان استمرار المنبهات حتى وإن ظل التطبيق مغلقاً
  */
 export async function schedulePrayerAlarms(
   location: PrayerLocation,
@@ -155,42 +189,46 @@ export async function schedulePrayerAlarms(
   }
   try {
     await ensureNativeTime();
-    if (!(await requestNotificationPermission())) {
-      console.warn("Notification permission not granted");
-    }
     await PrayerAlarm.cancelAllAlarms();
 
     const tz = currentTimezoneId() || location.timezoneId;
-    const { today, tomorrow } = getTodayAndTomorrow(
-      location.latitude,
-      location.longitude,
-      method,
-      tz
-    );
-
     const alarms: AlarmEntry[] = [];
     const now = Date.now();
+    const DAYS_TO_SCHEDULE = 7;
 
-    for (const day of [today, tomorrow]) {
-      const isTomorrow = day === tomorrow;
-      for (const prayer of day.prayers) {
+    for (let dayOffset = 0; dayOffset < DAYS_TO_SCHEDULE; dayOffset++) {
+      const targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + dayOffset);
+      const dayPrayers = getDayPrayers(
+        location.latitude,
+        location.longitude,
+        targetDate,
+        method,
+        tz
+      );
+
+      for (const prayer of dayPrayers.prayers) {
         const ts = prayer.time.getTime();
+
+        // 1. منبه الأذان الفعلي الدقيق (exact)
         if (ts > now) {
           alarms.push({
             timestamp: ts,
-            id: alarmId(prayer.prayerId, "exact", isTomorrow),
+            id: alarmId(prayer.prayerId, "exact", dayOffset),
             title: alarmTitle(prayer.prayerId, "exact"),
             body: alarmBody(prayer.prayerId, "exact"),
             prayerId: prayer.prayerId,
             type: "exact",
           });
         }
+
+        // 2. منبه التذكير قبل الصلاة بـ 10 دقائق (pre)
         if (PRE_ALARM_PRAYERS.includes(prayer.prayerId)) {
           const preTs = ts - PRE_ALARM_MINUTES * 60 * 1000;
           if (preTs > now) {
             alarms.push({
               timestamp: preTs,
-              id: alarmId(prayer.prayerId, "pre", isTomorrow),
+              id: alarmId(prayer.prayerId, "pre", dayOffset),
               title: alarmTitle(prayer.prayerId, "pre"),
               body: alarmBody(prayer.prayerId, "pre"),
               prayerId: prayer.prayerId,
@@ -201,25 +239,16 @@ export async function schedulePrayerAlarms(
       }
     }
 
-    // منبه إعادة الجدولة: 30 دقيقة بعد فجر الغد
-    const tomorrowFajr = tomorrow.prayers.find((p) => p.prayerId === "fajr");
-    if (tomorrowFajr) {
-      const rescheduleTs = tomorrowFajr.time.getTime() + 30 * 60 * 1000;
-      if (rescheduleTs > now) {
-        alarms.push({
-          timestamp: rescheduleTs,
-          id: 99999,
-          title: "reschedule",
-          body: "reschedule",
-          prayerId: "reschedule",
-          type: "reschedule",
-        });
-      }
-    }
-
     if (alarms.length > 0) {
       await PrayerAlarm.scheduleAlarms({ alarms });
     }
+
+    const { today, tomorrow } = getTodayAndTomorrow(
+      location.latitude,
+      location.longitude,
+      method,
+      tz
+    );
 
     saveScheduledAlarmsData({
       location,
@@ -242,7 +271,7 @@ export async function schedulePrayerAlarms(
     settings.lastScheduleDate = new Date().toISOString();
     savePrayerSettings(settings);
 
-    console.log(`Prayer notifications scheduled: ${alarms.length} alarms (DST-aware)`);
+    console.log(`Prayer notifications scheduled: ${alarms.length} alarms (7-day exact rolling window)`);
     return true;
   } catch (e) {
     console.error("Failed to schedule prayer notifications:", e);
@@ -317,9 +346,16 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
         permission = await Notification.requestPermission();
       }
       if (permission === "granted") {
+        const isDarkMode =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches;
+        // تباين عكسي لضمان الوضوح التام فوق بطاقة الإشعار
+        const iconUrl = isDarkMode ? "/logo-light-bg.png" : "/logo-dark-bg.png";
+
         new Notification(title, {
           body,
-          icon: "/public/logo-dark-bg.png",
+          icon: iconUrl,
+          badge: "/icon-192.png",
         });
         return {
           success: true,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { BookOpen, Compass, Plus } from "lucide-react";
+import { BookOpen, Compass, Plus, Feather } from "lucide-react";
 import DarAlHikayatMaster from "./components/DarAlHikayatEditor";
 import HomePage from "./components/HomePage";
 import SplashScreen from "./components/SplashScreen";
@@ -198,7 +198,7 @@ const AppContent = () => {
                   }}
                   title="حكاية جديدة"
                 >
-                  <Plus className="w-5 h-5" strokeWidth={2.6} />
+                  <Feather className="w-5 h-5" strokeWidth={2.2} />
                 </motion.button>
               )}
             </AnimatePresence>

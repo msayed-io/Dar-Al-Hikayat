@@ -1083,219 +1083,157 @@ const HomePage: React.FC = () => {
                       style={{ backgroundColor: currentTheme.border }}
                     />
 
-                    {/* Three-lines Menu Button */}
+                    {/* More Menu Button (Three Vertical Dots) */}
                     <button
                       onClick={() => setShowMenu(!showMenu)}
-                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95"
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
                       style={{ color: currentTheme.text }}
-                      title="القائمة"
+                      title="خيارات إضافية"
                     >
-                      <Menu
+                      <MoreVertical
                         className="w-4 h-4"
                         style={{ color: currentTheme.text }}
-                        strokeWidth={2}
+                        strokeWidth={2.2}
                       />
                     </button>
                   </div>
 
                   {/* Redesigned Menu Dropdown Card (Editor Smooth 500ms Animation Pattern) */}
                   <div
-                    className={`absolute top-full left-0 mt-2.5 w-56 border shadow-2xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
+                    className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
                       showMenu
                         ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-                        : "opacity-0 -translate-y-4 scale-95 pointer-events-none"
+                        : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
                     }`}
                     style={{
                       backgroundColor: currentTheme.bg,
                       borderColor: currentTheme.border,
-                      borderRadius: "24px",
-                      boxShadow: `0 16px 36px -6px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
+                      borderRadius: "20px",
+                      boxShadow: `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
                     }}
                   >
-                      <div className="flex flex-col p-2 gap-1">
-                        <span
-                          className="text-[11px] px-3 pt-1 text-start font-zain-bold opacity-60"
-                          style={{ color: currentTheme.secondary }}
-                        >
-                          المظهر والسمات
-                        </span>
-                        <div className="flex items-center gap-1.5 mb-1.5 px-1 pt-1">
-                          <button
-                            onClick={() => toggleTheme("modern_studio")}
-                            className={`flex-1 h-8 border flex items-center justify-center transition-all ${currentTheme.mode === "modern_studio" ? "ring-2 ring-offset-1" : ""}`}
-                            style={{
-                              backgroundColor: "#F4F1EA",
-                              borderColor: "#2C3E30",
-                              borderRadius: "12px",
-                              ringColor: currentTheme.accent,
-                            }}
-                            title="مودرن ستوديو"
-                          >
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#2C3E30]"></div>
-                          </button>
-                          <button
-                            onClick={() => toggleTheme("royal_classic")}
-                            className={`flex-1 h-8 border flex items-center justify-center transition-all ${currentTheme.mode === "royal_classic" ? "ring-2 ring-offset-1" : ""}`}
-                            style={{
-                              backgroundColor: "#EAE6D2",
-                              borderColor: "#121A1B",
-                              borderRadius: "12px",
-                              ringColor: currentTheme.accent,
-                            }}
-                            title="كلاسيك ملكي"
-                          >
-                            <div className="w-2.5 h-2.5 rounded-full bg-[#121A1B]"></div>
-                          </button>
-                          <button
-                            onClick={() => toggleTheme("night_whisper")}
-                            className={`flex-1 h-8 border flex items-center justify-center transition-all ${currentTheme.mode === "night_whisper" ? "ring-2 ring-offset-1" : ""}`}
-                            style={{
-                              backgroundColor: "#111718",
-                              borderColor: "#9FA365",
-                              borderRadius: "12px",
-                              ringColor: currentTheme.accent,
-                            }}
-                            title="همس الليل"
-                          >
-                            <Moon className="w-3.5 h-3.5 text-[#9FA365]" />
-                          </button>
-                        </div>
-
-                        <div
-                          className="h-px mx-2 my-1 opacity-70"
-                          style={{ backgroundColor: currentTheme.border }}
-                        />
-
+                      <div className="flex flex-col p-1 gap-0.5">
+                        {/* 1. تفعيل وضع التحديد */}
                         <button
                           onClick={toggleSelectionMode}
-                          className="flex items-center gap-3 px-3 py-2 text-right group transition-all hover:bg-black/5 active:scale-[0.98]"
+                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
                           style={{
                             color: currentTheme.text,
-                            borderRadius: "14px",
+                            borderRadius: "16px",
                           }}
                         >
                           <CheckSquare
-                            className="w-4 h-4 group-hover:scale-110 transition-transform"
+                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                             style={{ color: currentTheme.accent }}
+                            strokeWidth={2}
                           />
-                          <span className="font-zain-reg text-sm pt-0.5">
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
                             تحديد الحكايات
                           </span>
                         </button>
 
+                        {/* 2. نمط العرض (شبكي / قائمة) */}
                         <button
                           onClick={toggleViewMode}
-                          className="flex items-center gap-3 px-3 py-2 text-right group transition-all hover:bg-black/5 active:scale-[0.98]"
+                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
                           style={{
                             color: currentTheme.text,
-                            borderRadius: "14px",
+                            borderRadius: "16px",
                           }}
                         >
                           {viewMode === "list" ? (
                             <>
                               <Grid
-                                className="w-4 h-4 group-hover:scale-110 transition-transform"
+                                className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                                 style={{ color: currentTheme.accent }}
+                                strokeWidth={2}
                               />
-                              <span className="font-zain-reg text-sm pt-0.5">
+                              <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
                                 عرض شبكي
                               </span>
                             </>
                           ) : (
                             <>
                               <List
-                                className="w-4 h-4 group-hover:scale-110 transition-transform"
+                                className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                                 style={{ color: currentTheme.accent }}
+                                strokeWidth={2}
                               />
-                              <span className="font-zain-reg text-sm pt-0.5">
+                              <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
                                 عرض قائمة
                               </span>
                             </>
                           )}
                         </button>
 
+                        {/* 3. إحصائيات الإبداع */}
                         <button
                           onClick={() => {
                             setShowDashboard(true);
                             setShowMenu(false);
                           }}
-                          className="flex items-center gap-3 px-3 py-2 text-right group transition-all hover:bg-black/5 active:scale-[0.98]"
+                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
                           style={{
                             color: currentTheme.text,
-                            borderRadius: "14px",
+                            borderRadius: "16px",
                           }}
                         >
                           <BarChart
-                            className="w-4 h-4 group-hover:scale-110 transition-transform"
+                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                             style={{ color: currentTheme.accent }}
+                            strokeWidth={2}
                           />
-                          <span className="font-zain-reg text-sm pt-0.5">
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
                             إحصائيات الإبداع
                           </span>
                         </button>
 
                         <div
-                          className="h-px mx-2 my-1 opacity-70"
+                          className="h-px mx-1.5 my-0.5 opacity-30"
                           style={{ backgroundColor: currentTheme.border }}
                         />
 
-                        <button
-                          onClick={() => {
-                            setShowBackupUI(true);
-                            setShowMenu(false);
-                          }}
-                          className="flex items-center gap-3 px-3 py-2 text-right group transition-all hover:bg-black/5 active:scale-[0.98]"
-                          style={{
-                            color: currentTheme.text,
-                            borderRadius: "14px",
-                          }}
-                        >
-                          <Save
-                            className="w-4 h-4 group-hover:scale-110 transition-transform"
-                            style={{ color: currentTheme.accent }}
-                          />
-                          <span className="font-zain-reg text-sm pt-0.5">
-                            الخزنة (نسخ احتياطي)
-                          </span>
-                        </button>
-
+                        {/* 4. الإعدادات */}
                         <button
                           onClick={() => {
                             openSettings();
                             setShowMenu(false);
                           }}
-                          className="flex items-center gap-3 px-3 py-2 text-right group transition-all hover:bg-black/5 active:scale-[0.98]"
+                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
                           style={{
                             color: currentTheme.text,
-                            borderRadius: "14px",
+                            borderRadius: "16px",
                           }}
                         >
                           <Settings
-                            className="w-4 h-4 group-hover:scale-110 transition-transform"
+                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                             style={{ color: currentTheme.accent }}
+                            strokeWidth={2}
                           />
-                          <span className="font-zain-reg text-sm pt-0.5">
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
                             الإعدادات
                           </span>
                         </button>
 
+                        {/* 5. عن دار الحكايات */}
                         <button
                           onClick={() => {
                             setShowAbout(true);
                             setShowMenu(false);
                           }}
-                          className="flex items-center gap-3 px-3 py-2 text-right group transition-all hover:bg-black/5 active:scale-[0.98]"
+                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
                           style={{
                             color: currentTheme.text,
-                            borderRadius: "14px",
+                            borderRadius: "16px",
                           }}
                         >
                           <Info
-                            className="w-4 h-4 group-hover:scale-110 transition-transform"
+                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                             style={{ color: currentTheme.accent }}
+                            strokeWidth={2}
                           />
-                          <span className="font-zain-reg text-sm pt-0.5">
-                            عن دَارُ الحِكَايَاتِ
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                            عن دَارِ الحِكَايَاتِ
                           </span>
                         </button>
                       </div>

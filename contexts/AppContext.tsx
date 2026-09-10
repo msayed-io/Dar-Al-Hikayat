@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import type {
   PrayerState,
+  PrayerLocation,
 } from "../lib/prayer-config";
 import { schedulePrayerAlarms } from "../lib/prayer-alarms";
 
@@ -160,13 +161,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     return "modern_studio";
   });
 
-  // Initialize Prayer State from LocalStorage (كما في الإنتاج)
+  // Initialize Prayer State from LocalStorage (with safe default location)
   const [prayerState, setPrayerState] = useState<PrayerState>(() => {
+    const DEFAULT_INIT_LOCATION: PrayerLocation = {
+      latitude: 30.0444,
+      longitude: 31.2357,
+      cityName: "القاهرة",
+      cityNameAr: "القاهرة",
+      countryNameAr: "مصر",
+      timezoneId: "Africa/Cairo",
+      isAutoDetected: false,
+    };
+
     if (typeof window !== "undefined") {
       try {
         const savedLocation = localStorage.getItem("dar_prayer_location");
         const savedSettings = localStorage.getItem("dar_prayer_settings");
-        const location = savedLocation ? JSON.parse(savedLocation) : null;
+        const location = savedLocation ? JSON.parse(savedLocation) : DEFAULT_INIT_LOCATION;
         const settings = savedSettings ? JSON.parse(savedSettings) : {};
         return {
           location,
@@ -174,10 +185,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
           isInitialized: settings.isInitialized || false,
         };
       } catch {
-        return { location: null, method: "egyptian", isInitialized: false };
+        return { location: DEFAULT_INIT_LOCATION, method: "egyptian", isInitialized: false };
       }
     }
-    return { location: null, method: "egyptian", isInitialized: false };
+    return { location: DEFAULT_INIT_LOCATION, method: "egyptian", isInitialized: false };
   });
 
   const currentTheme = themes[themeMode];

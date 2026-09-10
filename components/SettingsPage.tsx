@@ -1,19 +1,19 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useApp } from "../contexts/AppContext";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useApp, type ThemeMode } from "../contexts/AppContext";
 import {
-  X,
   ChevronRight,
   ChevronLeft,
   Shield,
-  ShieldAlert,
-  Fingerprint,
   MapPin,
   Loader2,
   Bell,
-  Info,
-  ChevronDown,
+  Compass,
+  Download,
+  Upload,
+  Check,
+  Lock,
+  Unlock,
 } from "lucide-react";
-import { type CalculationMethodId, CALCULATION_METHODS } from "../lib/prayer-config";
 import { CITIES, type CityData } from "../lib/prayer-cities";
 import {
   autoDetectLocation,
@@ -25,14 +25,32 @@ import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
 
 const SettingsPage: React.FC = () => {
-  const { currentTheme, backToHome, prayerState, updatePrayerState, openLocationSheet } = useApp();
+  const {
+    currentTheme,
+    backToHome,
+    prayerState,
+    updatePrayerState,
+    openLocationSheet,
+    toggleTheme,
+    notes,
+    saveNote,
+  } = useApp();
+
   const [isLocked, setIsLocked] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  const [showMethodList, setShowMethodList] = useState(false);
   const [citySearch, setCitySearch] = useState("");
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testFeedback, setTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // إحصائيات الدار
+  const totalNotesCount = notes.length;
+  const totalWordsCount = notes.reduce((sum, n) => {
+    const words = n.content?.replace(/<[^>]*>/g, " ").trim().split(/\s+/).filter(Boolean).length || 0;
+    return sum + words;
+  }, 0);
 
   useEffect(() => {
     const lockState = localStorage.getItem("dar_app_lock_enabled") === "true";
@@ -53,14 +71,12 @@ const SettingsPage: React.FC = () => {
 
   const toggleLock = async () => {
     if (!isLocked) {
-      // Activating App Lock:
       localStorage.setItem("dar_app_lock_enabled", "true");
       setIsLocked(true);
       window.dispatchEvent(
         new CustomEvent("dar_app_lock_changed", { detail: { enabled: true } })
       );
     } else {
-      // Deactivating App Lock: Prompt device authentication to confirm
       try {
         if (Capacitor.isNativePlatform()) {
           const avail = await NativeBiometric.isAvailable().catch(() => ({ isAvailable: false }));
@@ -76,7 +92,7 @@ const SettingsPage: React.FC = () => {
         }
       } catch (err) {
         console.log("Biometric verification cancelled or failed on unlock toggle", err);
-        return; // Do not disable lock if verification fails!
+        return;
       }
 
       localStorage.setItem("dar_app_lock_enabled", "false");
@@ -94,7 +110,7 @@ const SettingsPage: React.FC = () => {
       const location = await autoDetectLocation();
       if (location) {
         updatePrayerState({ location });
-        await schedulePrayerAlarms(location, prayerState.method);
+        await schedulePrayerAlarms(location, prayerState.method || "egypt");
       }
     } catch (e) {
       console.error("Auto detect failed:", e);
@@ -110,20 +126,9 @@ const SettingsPage: React.FC = () => {
       updatePrayerState({ location });
       setShowCityPicker(false);
       setCitySearch("");
-      await schedulePrayerAlarms(location, prayerState.method);
+      await schedulePrayerAlarms(location, prayerState.method || "egypt");
     },
     [prayerState.method, updatePrayerState]
-  );
-
-  // تغيير طريقة الحساب
-  const handleSelectMethod = useCallback(
-    async (methodId: CalculationMethodId) => {
-      updatePrayerState({ method: methodId });
-      if (prayerState.location) {
-        await schedulePrayerAlarms(prayerState.location, methodId);
-      }
-    },
-    [prayerState.location, updatePrayerState]
   );
 
   // إشعار تجريبي
@@ -147,7 +152,61 @@ const SettingsPage: React.FC = () => {
     }
   }, []);
 
-  // المدن المفلترة + التجميع حسب الدولة (كما في الإنتاج)
+  // تصدير نسخة احتياطية من الحكايات
+  const handleExportBackup = () => {
+    const dataStr = JSON.stringify(notes, null, 2);
+    const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+    const exportFileDefaultName = `دار_الحكايات_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
+
+    const linkElement = document.createElement("a");
+    linkElement.setAttribute("href", dataUri);
+    linkElement.setAttribute("download", exportFileDefaultName);
+    linkElement.click();
+  };
+
+  // استيراد نسخة احتياطية
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          let count = 0;
+          parsed.forEach((item: any) => {
+            if (item.title && item.content) {
+              saveNote({
+                title: item.title,
+                content: item.content,
+                styles: item.styles || {
+                  fontSize: 18,
+                  fontWeight: 400,
+                  textAlign: "right",
+                  textColor: currentTheme.text,
+                  paperStyleIndex: 0,
+                },
+                isLocked: !!item.isLocked,
+                password: item.password || "",
+              });
+              count++;
+            }
+          });
+          setImportStatus(`تم استرجاع ${count} حكاية بنجاح`);
+        } else {
+          setImportStatus("صيغة الملف غير صالحة");
+        }
+      } catch (err) {
+        setImportStatus("تعذر قراءة ملف النسخة الاحتياطية");
+      }
+      setTimeout(() => setImportStatus(null), 4000);
+    };
+    reader.readAsText(file);
+  };
+
+  // المدن المفلترة
   const filteredCities = CITIES.filter(
     (c) => c.nameAr.includes(citySearch) || c.countryAr.includes(citySearch)
   );
@@ -157,9 +216,32 @@ const SettingsPage: React.FC = () => {
     groupedCities[city.countryAr].push(city);
   }
 
-  const currentMethod =
-    CALCULATION_METHODS.find((m) => m.id === prayerState.method) ||
-    CALCULATION_METHODS[0];
+  // ثيمات دار الحكايات الثلاثة للكبسولة الاحترافية
+  const themesCapsuleList: {
+    id: ThemeMode;
+    label: string;
+    dotColor: string;
+    borderColor: string;
+  }[] = [
+    {
+      id: "modern_studio",
+      label: "استوديو حديث",
+      dotColor: "#2C3E30",
+      borderColor: "#A7AA63",
+    },
+    {
+      id: "royal_classic",
+      label: "كلاسيكي ملكي",
+      dotColor: "#EAE6D2",
+      borderColor: "#A7AA63",
+    },
+    {
+      id: "night_whisper",
+      label: "همس الليالي",
+      dotColor: "#111718",
+      borderColor: "#9FA365",
+    },
+  ];
 
   return (
     <div
@@ -167,13 +249,13 @@ const SettingsPage: React.FC = () => {
       dir="rtl"
       style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
     >
-      {/* --- Floating Capsule Header System (Strictly Component-Scoped) --- */}
+      {/* ─── Floating Capsule Header System ─── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 pointer-events-none"
         style={{ top: 0, paddingTop: "16px", paddingBottom: "8px", paddingLeft: "16px", paddingRight: "16px" }}
       >
-        <div className="max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto flex items-center justify-between pointer-events-none w-full">
-          {/* Right Capsule: Settings Title (Clean typography only, no emojis or icons) */}
+        <div className="max-w-md mx-auto flex items-center justify-between pointer-events-none w-full">
+          {/* Right Capsule: Settings Title */}
           <div
             className="pointer-events-auto h-11 px-5 border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all"
             style={{
@@ -187,15 +269,15 @@ const SettingsPage: React.FC = () => {
               className="font-zain-xbold text-base md:text-lg leading-none pt-0.5"
               style={{ color: currentTheme.text }}
             >
-              إعدادات المحراب
+              إعدادات دار الحكايات
             </h1>
           </div>
 
-          {/* Left Capsule: Exit Button (Pure circular icon button, no text, clean exit icon) */}
+          {/* Left Capsule: Exit Button */}
           <div className="pointer-events-auto flex-shrink-0">
             <button
               onClick={backToHome}
-              className="border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square"
+              className="border shadow-lg flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
               style={{
                 width: "44px",
                 height: "44px",
@@ -206,7 +288,7 @@ const SettingsPage: React.FC = () => {
                 boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                 borderRadius: "50%",
               }}
-              title="العودة"
+              title="العودة للرئيسية"
               aria-label="العودة"
             >
               <ChevronRight
@@ -219,404 +301,358 @@ const SettingsPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Content (Strictly offset with inline padding-top so it never collides with header) */}
+      {/* Content */}
       <div
-        className="px-4 sm:px-5 md:px-8 lg:px-12 flex-1 z-10 relative max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto w-full"
-        style={{ paddingTop: "88px", paddingBottom: "48px" }}
+        className="px-4 flex-1 z-10 relative max-w-md mx-auto w-full flex flex-col gap-3.5"
+        style={{ paddingTop: "74px", paddingBottom: "48px" }}
       >
-        {/* ─── قسم مواقيت الصلاة ─── */}
-        <section>
-          <h2
-            className="text-sm font-zain-bold opacity-60 px-2 uppercase tracking-wider"
-            style={{ color: currentTheme.accent, marginBottom: "12px" }}
+        {/* ─── قسم أجواء وثيمات الدار (الكبسولة المدمجة الأنيقة) ─── */}
+        <div
+          className="border shadow-sm transition-all"
+          style={{
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            borderRadius: "20px",
+            padding: "12px 14px",
+            boxShadow: `0 4px 16px -2px ${currentTheme.shadow}`,
+          }}
+        >
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span
+              className="font-zain-bold text-xs"
+              style={{ color: currentTheme.accent }}
+            >
+              أجواء وثيمات الدار
+            </span>
+            <span
+              className="text-[11px] font-zain-reg opacity-60"
+              style={{ color: currentTheme.text }}
+            >
+              {currentTheme.mode === "modern_studio"
+                ? "استوديو حديث"
+                : currentTheme.mode === "royal_classic"
+                ? "كلاسيكي ملكي"
+                : "همس الليالي"}
+            </span>
+          </div>
+
+          {/* Segmented Capsule Controller */}
+          <div
+            className="flex p-1 border shadow-inner items-center gap-1"
+            style={{
+              backgroundColor: `${currentTheme.bg}90`,
+              borderColor: currentTheme.border,
+              borderRadius: "9999px",
+            }}
           >
-            مواقيت الصلاة
-          </h2>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {/* بطاقة موقع حساب المواقيت — إعادة تصميم كاملة متكاملة من الصفر */}
-            <div
-              onClick={openLocationSheet}
-              className="border shadow-sm transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] group"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                borderRadius: "24px",
-                padding: "18px 20px",
-                boxShadow: `0 4px 20px -2px ${currentTheme.shadow}`,
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center" style={{ gap: "14px" }}>
-                  <div
-                    className="flex items-center justify-center border flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
+            {themesCapsuleList.map((t) => {
+              const isActive = currentTheme.mode === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => toggleTheme(t.id)}
+                  className="flex-1 py-1.5 px-2 rounded-full font-zain-bold text-xs transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95"
+                  style={{
+                    backgroundColor: isActive ? currentTheme.accent : "transparent",
+                    color: isActive ? "#FFFFFF" : currentTheme.text,
+                    opacity: isActive ? 1 : 0.75,
+                    boxShadow: isActive ? `0 2px 8px -1px ${currentTheme.shadow}` : "none",
+                  }}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full border flex-shrink-0 transition-transform"
                     style={{
-                      width: "44px",
-                      height: "44px",
-                      backgroundColor: `${currentTheme.accent}18`,
-                      borderColor: `${currentTheme.accent}35`,
-                      borderRadius: "16px",
+                      backgroundColor: t.dotColor,
+                      borderColor: isActive ? "rgba(255,255,255,0.7)" : currentTheme.border,
+                      transform: isActive ? "scale(1.15)" : "scale(1)",
                     }}
-                  >
-                    <MapPin
-                      className="w-5 h-5"
-                      style={{ color: currentTheme.accent }}
-                      strokeWidth={2.2}
-                    />
-                  </div>
-                  <div className="flex flex-col text-right">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="font-zain-bold text-sm leading-tight"
-                        style={{ color: currentTheme.text }}
-                      >
-                        موقع حساب المواقيت
-                      </span>
-                      {prayerState.location && (
-                        <span
-                          className="px-2 py-0.5 rounded-full text-[10px] font-zain-bold border"
-                          style={{
-                            backgroundColor: `${currentTheme.accent}12`,
-                            borderColor: `${currentTheme.accent}25`,
-                            color: currentTheme.accent,
-                          }}
-                        >
-                          {prayerState.location.isAutoDetected
-                            ? "تلقائي GPS"
-                            : "يدوي"}
-                        </span>
-                      )}
-                    </div>
-                    <span
-                      className="font-zain-xbold text-base mt-0.5 leading-snug"
-                      style={{ color: currentTheme.text }}
-                    >
-                      {prayerState.location
-                        ? `${prayerState.location.cityNameAr || prayerState.location.cityName}${
-                            prayerState.location.countryNameAr
-                              ? `، ${prayerState.location.countryNameAr}`
-                              : ""
-                          }`
-                        : "انقر لتحديد موقعك"}
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center border shadow-xs transition-transform duration-200 group-hover:-translate-x-1 shrink-0"
-                  style={{
-                    backgroundColor: `${currentTheme.accent}10`,
-                    borderColor: `${currentTheme.accent}25`,
-                    color: currentTheme.accent,
-                  }}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </div>
-              </div>
-            </div>
-
-            {/* بطاقة طريقة الحساب (Apple Concentric Rounded Corners) */}
-            <div
-              className="border shadow-sm transition-all"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                borderRadius: "24px",
-                padding: "18px",
-                boxShadow: `0 4px 20px -2px ${currentTheme.shadow}`,
-              }}
-            >
-              <button
-                onClick={() => setShowMethodList(!showMethodList)}
-                className="w-full flex items-center justify-between"
-              >
-                <div className="flex items-center" style={{ gap: "12px" }}>
-                  <div
-                    className="flex items-center justify-center border flex-shrink-0"
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      backgroundColor: `${currentTheme.accent}15`,
-                      borderColor: `${currentTheme.accent}30`,
-                      borderRadius: "14px",
-                    }}
-                  >
-                    <span className="text-base">🕌</span>
-                  </div>
-                  <div className="flex flex-col text-right">
-                    <span className="font-zain-bold text-sm" style={{ color: currentTheme.text, lineHeight: "1.4" }}>
-                      طريقة الحساب
-                    </span>
-                    <span className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text, lineHeight: "1.4" }}>
-                      {currentMethod.nameAr}
-                    </span>
-                  </div>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${showMethodList ? "rotate-180" : ""}`}
-                  style={{ color: currentTheme.accent }}
-                />
-              </button>
-
-              {showMethodList && (
-                <div
-                  className="border-t"
-                  style={{
-                    borderColor: currentTheme.border,
-                    marginTop: "14px",
-                    paddingTop: "12px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  {CALCULATION_METHODS.map((method) => (
-                    <button
-                      key={method.id}
-                      onClick={() => handleSelectMethod(method.id)}
-                      className="w-full text-right transition-all active:scale-[0.98] flex items-center justify-between"
-                      style={{
-                        backgroundColor:
-                          prayerState.method === method.id
-                            ? `${currentTheme.accent}15`
-                            : "transparent",
-                        borderColor:
-                          prayerState.method === method.id
-                            ? `${currentTheme.accent}30`
-                            : "transparent",
-                        borderWidth: "1px",
-                        borderRadius: "14px",
-                        padding: "10px 14px",
-                      }}
-                    >
-                      <div className="flex flex-col">
-                        <span
-                          className="font-zain-bold text-sm"
-                          style={{ color: currentTheme.text }}
-                        >
-                          {method.nameAr}
-                        </span>
-                        <span
-                          className="font-zain-reg text-[11px] opacity-50"
-                          style={{ color: currentTheme.text }}
-                        >
-                          {method.description}
-                        </span>
-                      </div>
-                      {prayerState.method === method.id && (
-                        <div
-                          className="w-5 h-5 flex items-center justify-center flex-shrink-0"
-                          style={{
-                            backgroundColor: currentTheme.accent,
-                            borderRadius: "50%",
-                          }}
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                          >
-                            <path
-                              d="M2 6L5 9L10 3"
-                              stroke="white"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* بطاقة اختبار الإشعار (Apple Concentric Rounded Corners) */}
-            <div
-              className="border shadow-sm transition-all"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                borderRadius: "24px",
-                padding: "18px",
-                boxShadow: `0 4px 20px -2px ${currentTheme.shadow}`,
-              }}
-            >
-              <div className="flex items-center" style={{ gap: "12px", marginBottom: "14px" }}>
-                <div
-                  className="flex items-center justify-center border flex-shrink-0"
-                  style={{
-                    width: "42px",
-                    height: "42px",
-                    backgroundColor: `${currentTheme.accent}15`,
-                    borderColor: `${currentTheme.accent}30`,
-                    borderRadius: "14px",
-                  }}
-                >
-                  <Bell
-                    className="w-5 h-5"
-                    style={{ color: currentTheme.accent }}
                   />
-                </div>
-                <div className="flex flex-col text-right">
-                  <span className="font-zain-bold text-sm" style={{ color: currentTheme.text, lineHeight: "1.4" }}>
-                    اختبار الإشعار
-                  </span>
-                  <span className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text, lineHeight: "1.4" }}>
-                    اضغط لإرسال إشعار تجريبي فوري واختبار المنبه
-                  </span>
-                </div>
+                  <span className="leading-none pt-0.5 text-[11px] sm:text-xs">{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ─── قسم محراب المواقيت (الموقع والتنبيهات الذكية) ─── */}
+        <div
+          className="border shadow-sm transition-all flex flex-col gap-3"
+          style={{
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            borderRadius: "20px",
+            padding: "14px 16px",
+            boxShadow: `0 4px 16px -2px ${currentTheme.shadow}`,
+          }}
+        >
+          {/* Header Row: Location */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-9 h-9 flex items-center justify-center border flex-shrink-0"
+                style={{
+                  backgroundColor: `${currentTheme.accent}15`,
+                  borderColor: `${currentTheme.accent}30`,
+                  borderRadius: "50%",
+                }}
+              >
+                <MapPin className="w-4 h-4" style={{ color: currentTheme.accent }} />
               </div>
+              <div className="flex flex-col text-right min-w-0">
+                <span
+                  className="font-zain-bold text-[11px] opacity-60 leading-tight"
+                  style={{ color: currentTheme.text }}
+                >
+                  موقع المحراب
+                </span>
+                <span
+                  className="font-zain-xbold text-sm leading-snug truncate"
+                  style={{ color: currentTheme.text }}
+                >
+                  {prayerState.location
+                    ? `${prayerState.location.cityNameAr || prayerState.location.cityName}${
+                        prayerState.location.countryNameAr
+                          ? `، ${prayerState.location.countryNameAr}`
+                          : ""
+                      }`
+                    : "تحديد الموقع..."}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
-                onClick={handleTestNotification}
-                disabled={isSendingTest}
-                className="w-full font-zain-bold text-sm border transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+                onClick={openLocationSheet}
+                className="h-8 px-3 rounded-full border text-xs font-zain-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
                 style={{
                   backgroundColor: `${currentTheme.accent}15`,
                   borderColor: `${currentTheme.accent}30`,
                   color: currentTheme.accent,
-                  borderRadius: "14px",
-                  paddingTop: "11px",
-                  paddingBottom: "11px",
-                  gap: "8px",
-                  opacity: isSendingTest ? 0.6 : 1,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {isSendingTest ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Bell className="w-4 h-4" />
-                )}
-                {isSendingTest ? "جاري الإرسال..." : "اختبار إشعار الصلاة"}
+                <span>تغيير</span>
+                <ChevronLeft className="w-3 h-3" />
               </button>
-
-              {testFeedback && (
-                <div
-                  className="mt-2 p-2 rounded-xl text-xs font-zain-bold text-center border transition-all animate-fadeIn"
-                  style={{
-                    backgroundColor: testFeedback.success
-                      ? "rgba(34, 197, 94, 0.1)"
-                      : "rgba(239, 68, 68, 0.1)",
-                    borderColor: testFeedback.success
-                      ? "rgba(34, 197, 94, 0.3)"
-                      : "rgba(239, 68, 68, 0.3)",
-                    color: testFeedback.success ? "#16a34a" : "#dc2626",
-                  }}
-                >
-                  {testFeedback.message}
-                </div>
-              )}
+              <button
+                onClick={handleAutoDetect}
+                disabled={isDetecting}
+                className="w-8 h-8 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+                style={{
+                  backgroundColor: `${currentTheme.bg}80`,
+                  borderColor: currentTheme.border,
+                  color: currentTheme.accent,
+                }}
+                title="تحديد تلقائي عبر GPS"
+              >
+                {isDetecting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Compass className="w-3.5 h-3.5" />
+                )}
+              </button>
             </div>
           </div>
-        </section>
 
-        {/* ─── قسم الأمان والخصوصية (Apple Concentric Rounded Corners) ─── */}
-        <section style={{ marginTop: "24px" }}>
-          <h2
-            className="text-sm font-zain-bold opacity-60 px-2 uppercase tracking-wider"
-            style={{ color: currentTheme.accent, marginBottom: "12px" }}
-          >
-            الأمان والخصوصية
-          </h2>
+          {/* Test Notification Mini Pill Button */}
+          <div className="pt-2 border-t" style={{ borderColor: currentTheme.border }}>
+            <button
+              onClick={handleTestNotification}
+              disabled={isSendingTest}
+              className="w-full h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer shadow-2xs gap-1.5"
+              style={{
+                backgroundColor: `${currentTheme.accent}14`,
+                borderColor: `${currentTheme.accent}30`,
+                color: currentTheme.accent,
+                opacity: isSendingTest ? 0.6 : 1,
+              }}
+            >
+              {isSendingTest ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Bell className="w-3.5 h-3.5" />
+              )}
+              <span>{isSendingTest ? "جاري الإرسال..." : "إرسال إشعار تجريبي لاختبار التباين"}</span>
+            </button>
 
-          <div
-            className="border shadow-sm transition-all"
-            style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              borderRadius: "24px",
-              padding: "18px",
-              boxShadow: `0 4px 20px -2px ${currentTheme.shadow}`,
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center" style={{ gap: "14px" }}>
-                <div
-                  className="flex items-center justify-center border flex-shrink-0"
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    backgroundColor: isLocked
-                      ? `${currentTheme.accent}20`
-                      : "rgba(0,0,0,0.03)",
-                    borderColor: isLocked
-                      ? `${currentTheme.accent}40`
-                      : currentTheme.border,
-                    borderRadius: "14px",
-                  }}
-                >
-                  {isLocked ? (
-                    <Shield
-                      className="w-6 h-6"
-                      style={{ color: currentTheme.accent }}
-                    />
-                  ) : (
-                    <ShieldAlert
-                      className="w-6 h-6 opacity-50"
-                      style={{ color: currentTheme.text }}
-                    />
-                  )}
-                </div>
-                <div className="flex flex-col text-right">
-                  <span className="font-zain-bold text-base md:text-lg" style={{ color: currentTheme.text, lineHeight: "1.3" }}>
-                    قفل التطبيق
-                  </span>
-                  <span className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text, lineHeight: "1.4" }}>
-                    طلب بصمة الإصبع أو الرمز السري عند الفتح
-                  </span>
-                </div>
-              </div>
-
-              {/* Toggle Switch */}
-              <button
-                onClick={toggleLock}
-                className={`w-12 h-6 relative transition-colors duration-300 ${isLocked ? "bg-green-500/80" : "bg-gray-400/30"}`}
-                style={{
-                  backgroundColor: isLocked ? currentTheme.accent : undefined,
-                  borderRadius: "9999px",
-                }}
-              >
-                <div
-                  className={`absolute top-1 w-4 h-4 bg-white transition-transform duration-300 shadow-sm ${isLocked ? "left-1" : "right-1"}`}
-                  style={{ borderRadius: "50%" }}
-                />
-              </button>
-            </div>
-
-            {isLocked && (
+            {testFeedback && (
               <div
-                className="border-t flex items-start"
+                className="mt-2 py-1.5 px-3 rounded-xl text-[11px] font-zain-bold text-center border animate-in fade-in"
                 style={{
-                  borderColor: currentTheme.border,
-                  backgroundColor: `${currentTheme.accent}08`,
-                  borderRadius: "14px",
-                  marginTop: "16px",
-                  padding: "12px 14px",
-                  gap: "10px",
+                  backgroundColor: testFeedback.success
+                    ? "rgba(34, 197, 94, 0.1)"
+                    : "rgba(239, 68, 68, 0.1)",
+                  borderColor: testFeedback.success
+                    ? "rgba(34, 197, 94, 0.3)"
+                    : "rgba(239, 68, 68, 0.3)",
+                  color: testFeedback.success ? "#16a34a" : "#dc2626",
                 }}
               >
-                <Info
-                  className="w-4 h-4 mt-0.5 flex-shrink-0"
-                  style={{ color: currentTheme.accent }}
-                />
-                <p className="text-xs font-zain-reg opacity-80 leading-relaxed">
-                  التطبيق الآن محمي. سيتم طلب التحقق من الهوية الآمنة للجهاز
-                  (البصمة أو نمط الشاشة) عند كل مرة تفتحين فيها التطبيق أو
-                  تعودين إليه.
-                </p>
+                {testFeedback.message}
               </div>
             )}
           </div>
-        </section>
+        </div>
+
+        {/* ─── قسم قفل الدار (تصميم كبسولي مدمج ومفتاح سلس راقٍ) ─── */}
+        <div
+          className="border shadow-sm transition-all"
+          style={{
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            borderRadius: "20px",
+            padding: "14px 16px",
+            boxShadow: `0 4px 16px -2px ${currentTheme.shadow}`,
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-9 h-9 flex items-center justify-center border flex-shrink-0 transition-colors"
+                style={{
+                  backgroundColor: isLocked ? `${currentTheme.accent}20` : `${currentTheme.accent}10`,
+                  borderColor: isLocked ? `${currentTheme.accent}40` : currentTheme.border,
+                  borderRadius: "50%",
+                }}
+              >
+                {isLocked ? (
+                  <Lock className="w-4 h-4" style={{ color: currentTheme.accent }} />
+                ) : (
+                  <Unlock className="w-4 h-4 opacity-50" style={{ color: currentTheme.text }} />
+                )}
+              </div>
+              <div className="flex flex-col text-right min-w-0">
+                <span
+                  className="font-zain-bold text-sm leading-tight"
+                  style={{ color: currentTheme.text }}
+                >
+                  قفل الدار بالبصمة
+                </span>
+                <span
+                  className="font-zain-reg text-xs opacity-65 mt-0.5 leading-tight"
+                  style={{ color: currentTheme.text }}
+                >
+                  طلب بصمة الإصبع أو الرمز عند فتح التطبيق
+                </span>
+              </div>
+            </div>
+
+            {/* Slim iOS-style Capsule Toggle Switch */}
+            <button
+              onClick={toggleLock}
+              className="w-12 h-6.5 relative transition-colors duration-300 cursor-pointer flex-shrink-0 border p-0.5"
+              style={{
+                backgroundColor: isLocked ? currentTheme.accent : `${currentTheme.border}`,
+                borderColor: isLocked ? currentTheme.accent : currentTheme.border,
+                borderRadius: "9999px",
+              }}
+              aria-label="تبديل قفل التطبيق"
+            >
+              <div
+                className={`w-5 h-5 bg-white transition-all duration-300 shadow-md flex items-center justify-center ${
+                  isLocked ? "mr-auto ml-0" : "ml-auto mr-0"
+                }`}
+                style={{ borderRadius: "50%" }}
+              >
+                {isLocked ? (
+                  <Check className="w-2.5 h-2.5 text-[#2C3E30] stroke-[3]" />
+                ) : null}
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* ─── قسم أرشيف الحكايات والنسخ الاحتياطي (تصميم متناسق ومدمج) ─── */}
+        <div
+          className="border shadow-sm transition-all flex flex-col gap-3"
+          style={{
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            borderRadius: "20px",
+            padding: "14px 16px",
+            boxShadow: `0 4px 16px -2px ${currentTheme.shadow}`,
+          }}
+        >
+          {/* Stats Bar */}
+          <div className="flex items-center justify-between px-1">
+            <span
+              className="font-zain-bold text-xs"
+              style={{ color: currentTheme.accent }}
+            >
+              أرشيف المخطوطات والنسخ
+            </span>
+            <div className="flex items-center gap-2 text-xs font-zain-reg opacity-70">
+              <span>{totalNotesCount} حكاية</span>
+              <span>•</span>
+              <span>{totalWordsCount.toLocaleString("ar-EG")} كلمة</span>
+            </div>
+          </div>
+
+          {/* Capsule Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportBackup}
+              className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer shadow-2xs gap-1.5"
+              style={{
+                backgroundColor: `${currentTheme.accent}15`,
+                borderColor: `${currentTheme.accent}30`,
+                color: currentTheme.accent,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>تصدير نسخة</span>
+            </button>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer shadow-2xs gap-1.5"
+              style={{
+                backgroundColor: `${currentTheme.bg}80`,
+                borderColor: currentTheme.border,
+                color: currentTheme.text,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Upload className="w-3.5 h-3.5" style={{ color: currentTheme.accent }} />
+              <span>استيراد حكايات</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImportFile}
+              className="hidden"
+            />
+          </div>
+
+          {importStatus && (
+            <div
+              className="py-1.5 px-3 rounded-xl text-[11px] font-zain-bold text-center border animate-in fade-in"
+              style={{
+                backgroundColor: `${currentTheme.accent}15`,
+                borderColor: `${currentTheme.accent}30`,
+                color: currentTheme.accent,
+              }}
+            >
+              {importStatus}
+            </div>
+          )}
+        </div>
+
+        {/* ─── الفوتر الرقيق ─── */}
+        <div className="text-center pt-2 opacity-50">
+          <p className="font-zain-reg text-[11px]" style={{ color: currentTheme.text }}>
+            دَارُ الحِكَايَاتِ والمِحْرَابُ • حيث يجتمع الأدب والسكينة
+          </p>
+        </div>
       </div>
 
-      {/* ─── نافذة اختيار المدينة (Bottom Sheet with Apple Curves) ─── */}
+      {/* ─── نافذة اختيار المدينة السلسة (Bottom Sheet) ─── */}
       {showCityPicker && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div
-            className="w-full max-w-lg border-t shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300"
+            className="w-full max-w-md border-t shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300"
             style={{
               backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
@@ -631,7 +667,7 @@ const SettingsPage: React.FC = () => {
               style={{ borderColor: currentTheme.border }}
             >
               <h3
-                className="font-zain-xbold text-lg"
+                className="font-zain-xbold text-base"
                 style={{ color: currentTheme.text }}
               >
                 اختيار المدينة
@@ -641,20 +677,10 @@ const SettingsPage: React.FC = () => {
                   setShowCityPicker(false);
                   setCitySearch("");
                 }}
-                className="min-w-[2rem] min-h-[2rem] flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
-                style={{
-                  color: currentTheme.text,
-                  borderRadius: "50%",
-                }}
+                className="w-8 h-8 rounded-full flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+                style={{ color: currentTheme.text }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M2 2L14 14M14 2L2 14"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                ✕
               </button>
             </div>
 
@@ -665,13 +691,13 @@ const SettingsPage: React.FC = () => {
                 value={citySearch}
                 onChange={(e) => setCitySearch(e.target.value)}
                 placeholder="ابحث عن مدينة أو محافظة..."
-                className="w-full border text-sm font-zain-reg outline-none focus:ring-2 transition-all"
+                className="w-full border text-xs font-zain-reg outline-none focus:ring-2 transition-all"
                 style={{
                   backgroundColor: `${currentTheme.bg}80`,
                   borderColor: currentTheme.border,
                   color: currentTheme.text,
-                  borderRadius: "14px",
-                  padding: "10px 14px",
+                  borderRadius: "9999px",
+                  padding: "8px 14px",
                 }}
                 autoFocus
               />
@@ -679,30 +705,26 @@ const SettingsPage: React.FC = () => {
 
             {/* قائمة المدن */}
             <div
-              className="overflow-y-auto p-4"
-              style={{ maxHeight: "calc(80vh - 140px)", display: "flex", flexDirection: "column", gap: "16px" }}
+              className="overflow-y-auto p-4 flex flex-col gap-3"
+              style={{ maxHeight: "calc(80vh - 130px)" }}
             >
               {Object.entries(groupedCities).map(([country, cities]) => (
                 <div key={country}>
                   <h4
-                    className="font-zain-bold text-xs opacity-50 mb-2 tracking-wider"
+                    className="font-zain-bold text-[10px] opacity-50 mb-1.5 tracking-wider"
                     style={{ color: currentTheme.accent }}
                   >
                     {country}
                   </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div className="flex flex-col gap-1">
                     {cities.map((city) => (
                       <button
                         key={`${city.nameAr}-${city.countryAr}`}
                         onClick={() => handleSelectCity(city)}
-                        className="w-full text-right transition-all active:scale-[0.98] hover:bg-black/5"
-                        style={{
-                          color: currentTheme.text,
-                          borderRadius: "12px",
-                          padding: "10px 14px",
-                        }}
+                        className="w-full text-right transition-all active:scale-[0.98] hover:bg-black/5 p-2 rounded-xl cursor-pointer"
+                        style={{ color: currentTheme.text }}
                       >
-                        <span className="font-zain-reg text-sm">
+                        <span className="font-zain-reg text-xs">
                           {city.nameAr}
                         </span>
                       </button>
@@ -711,7 +733,7 @@ const SettingsPage: React.FC = () => {
                 </div>
               ))}
               {filteredCities.length === 0 && (
-                <p className="text-center font-zain-reg text-sm opacity-50 py-8">
+                <p className="text-center font-zain-reg text-xs opacity-50 py-6">
                   لم يتم العثور على مدينة
                 </p>
               )}
