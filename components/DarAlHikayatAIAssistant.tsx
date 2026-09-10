@@ -926,17 +926,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         style={{ backgroundColor: currentTheme.accent }}
       />
 
-      {/* ── FLOATING TOP HEADER CAPSULES: EXACT MATCH WITH DAR AL HIKAYAT DESIGN SYSTEM ── */}
-      <header className="absolute top-4 inset-x-0 z-40 flex items-center justify-between pointer-events-none px-4">
+      {/* ── TOP HEADER BAR: FIXED/STATIC FLEX SIBLING ABOVE SCROLL VIEW ── */}
+      <header className="shrink-0 z-30 pt-4 px-4 pb-2 flex items-center justify-between select-none">
         {/* Right Capsule: Dar Al Hikayat AI Title Only */}
         <div
-          className="pointer-events-auto h-12 px-4 rounded-full backdrop-blur-2xl border flex items-center gap-2 transition-all duration-300 shadow-md select-none"
+          className="h-11 px-4 rounded-full backdrop-blur-2xl border flex items-center gap-2 transition-all duration-300 shadow-md"
           style={{
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
             boxShadow: currentTheme.isDark
-              ? "0 12px 32px -4px rgba(0,0,0,0.45)"
-              : "0 12px 32px -4px rgba(0,0,0,0.08)",
+              ? "0 8px 24px -4px rgba(0,0,0,0.45)"
+              : "0 8px 24px -4px rgba(0,0,0,0.08)",
           }}
         >
           <Sparkles size={15} style={{ color: currentTheme.accent }} />
@@ -949,19 +949,19 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         </div>
 
         {/* Left Side: Actions (New Chat if active messages, and Circular Close Button) */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-2">
           {messages.length > 0 && (
             <button
               type="button"
               onClick={startNewConversation}
-              className="w-12 h-12 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
+              className="w-11 h-11 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
               style={{
                 backgroundColor: currentTheme.glass,
                 borderColor: currentTheme.border,
                 color: currentTheme.accent,
                 boxShadow: currentTheme.isDark
-                  ? "0 12px 32px -4px rgba(0,0,0,0.45)"
-                  : "0 12px 32px -4px rgba(0,0,0,0.08)",
+                  ? "0 8px 24px -4px rgba(0,0,0,0.45)"
+                  : "0 8px 24px -4px rgba(0,0,0,0.08)",
               }}
               aria-label="محادثة جديدة"
               title="محادثة جديدة"
@@ -972,14 +972,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           <button
             type="button"
             onClick={onClose}
-            className="w-12 h-12 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
+            className="w-11 h-11 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
               color: currentTheme.text,
               boxShadow: currentTheme.isDark
-                ? "0 12px 32px -4px rgba(0,0,0,0.45)"
-                : "0 12px 32px -4px rgba(0,0,0,0.08)",
+                ? "0 8px 24px -4px rgba(0,0,0,0.45)"
+                : "0 8px 24px -4px rgba(0,0,0,0.08)",
             }}
             aria-label="إغلاق"
             title="إغلاق"
@@ -1438,7 +1438,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       {/* ── MAIN CHAT AREA / EMPTY STATE ── */}
       <div className="flex-1 min-h-0 flex flex-col relative z-10 overflow-hidden">
         {messages.length === 0 ? (
-          <div className="flex-1 min-h-0 px-4 pt-16 pb-24 flex flex-col items-center justify-center">
+          <div className="flex-1 min-h-0 px-4 pt-4 pb-24 flex flex-col items-center justify-center">
             <AnimatePresence mode="wait">
               <motion.div
                 key={welcomeLineIndex}
@@ -1505,7 +1505,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto px-4 pt-24 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
+            className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
