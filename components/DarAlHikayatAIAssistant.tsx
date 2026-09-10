@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useApp } from "../contexts/AppContext";
 import {
   streamLiteraryAssistantResponse,
   type StoryContext,
@@ -93,7 +94,10 @@ const getInitialWelcomeLineIndex = () => {
   }
 };
 
+const MarkdownThemeContext = React.createContext<any>(null);
+
 const CodeBlock = ({ children }: { children: string }) => {
+  const theme = React.useContext(MarkdownThemeContext);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -104,20 +108,32 @@ const CodeBlock = ({ children }: { children: string }) => {
 
   return (
     <div
-      className="my-3 overflow-hidden border border-[#e6dccf] bg-[#fdfcfb] rounded-[22px] shadow-sm text-left"
-      style={{ direction: "ltr" }}
+      className="my-3 overflow-hidden rounded-[18px] border shadow-sm text-left"
+      style={{
+        direction: "ltr",
+        borderColor: theme?.border || "rgba(0,0,0,0.1)",
+        backgroundColor: theme?.glass || "rgba(255,255,255,0.7)",
+      }}
     >
-      <div className="flex items-center justify-between px-4 py-2 bg-[#f5ebd9] border-b border-[#e6dccf] text-[#7f6a55] select-none">
+      <div
+        className="flex items-center justify-between px-3.5 py-1.5 border-b select-none"
+        style={{
+          borderColor: theme?.border || "rgba(0,0,0,0.1)",
+          backgroundColor: theme?.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+          color: theme?.secondary || "#666",
+        }}
+      >
         <span className="text-[10px] font-mono font-bold tracking-wider">
           CODE / TEXT
         </span>
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1 text-[#7f6a55] hover:text-[#b88a4f] transition-colors p-1 rounded-md cursor-pointer"
+          className="flex items-center gap-1 transition-colors p-1 rounded-md cursor-pointer hover:opacity-80"
+          style={{ color: theme?.accent || "currentColor" }}
         >
           {copied ? (
-            <Check size={12} className="text-[#b88a4f]" />
+            <Check size={12} />
           ) : (
             <Copy size={12} />
           )}
@@ -126,7 +142,10 @@ const CodeBlock = ({ children }: { children: string }) => {
           </span>
         </button>
       </div>
-      <pre className="p-4 overflow-x-auto font-mono text-[12.5px] text-[#2b1a10] leading-relaxed">
+      <pre
+        className="p-3.5 overflow-x-auto font-mono text-[12px] leading-relaxed"
+        style={{ color: theme?.text || "inherit" }}
+      >
         <code>{children}</code>
       </pre>
     </div>
@@ -154,61 +173,107 @@ const normalizeMarkdownSpacing = (raw: string): string => {
 };
 
 const markdownComponents = {
-  h1: ({ children }: any) => (
-    <h1 className="text-[17px] font-display font-black text-[#2b1a10] mt-4 mb-2 text-right">
-      {children}
-    </h1>
-  ),
-  h2: ({ children }: any) => (
-    <h2 className="text-[16px] font-display font-black text-[#2b1a10] mt-4 mb-2 text-right">
-      {children}
-    </h2>
-  ),
-  h3: ({ children }: any) => (
-    <h3 className="text-[16px] font-display font-black text-[#2b1a10] mt-4 mb-2 text-right">
-      {children}
-    </h3>
-  ),
-  h4: ({ children }: any) => (
-    <h4 className="text-[15px] font-display font-black text-[#2b1a10] mt-3 mb-1 text-right">
-      {children}
-    </h4>
-  ),
-  h5: ({ children }: any) => (
-    <h5 className="text-[14px] font-display font-black text-[#2b1a10] mt-3 mb-1.5 text-right">
-      {children}
-    </h5>
-  ),
-  h6: ({ children }: any) => (
-    <h6 className="text-[14px] font-display font-black text-[#2b1a10]/90 mt-3 mb-1.5 text-right">
-      {children}
-    </h6>
-  ),
-  p: ({ children }: any) => (
-    <p
-      className="text-[14px] font-sans leading-relaxed text-[#2b1a10] mb-2 text-right break-words whitespace-pre-wrap"
-      dir="auto"
-      style={{ unicodeBidi: "plaintext" }}
-    >
-      {children}
-    </p>
-  ),
-  strong: ({ children }: any) => (
-    <strong className="font-display font-black text-[#2b1a10]">
-      {children}
-    </strong>
-  ),
-  a: ({ href, children }: any) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      referrerPolicy="no-referrer"
-      className="text-[#b88a4f] underline font-bold hover:text-[#deab65] transition-colors inline"
-    >
-      {children}
-    </a>
-  ),
+  h1: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <h1
+        className="text-[16px] font-zain-xbold mt-4 mb-2 text-right"
+        style={{ color: theme?.text }}
+      >
+        {children}
+      </h1>
+    );
+  },
+  h2: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <h2
+        className="text-[15px] font-zain-xbold mt-3.5 mb-1.5 text-right"
+        style={{ color: theme?.text }}
+      >
+        {children}
+      </h2>
+    );
+  },
+  h3: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <h3
+        className="text-[14px] font-zain-xbold mt-3 mb-1 text-right"
+        style={{ color: theme?.text }}
+      >
+        {children}
+      </h3>
+    );
+  },
+  h4: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <h4
+        className="text-[13.5px] font-zain-xbold mt-2.5 mb-1 text-right"
+        style={{ color: theme?.text }}
+      >
+        {children}
+      </h4>
+    );
+  },
+  h5: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <h5
+        className="text-[13px] font-zain-xbold mt-2.5 mb-1 text-right"
+        style={{ color: theme?.text }}
+      >
+        {children}
+      </h5>
+    );
+  },
+  h6: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <h6
+        className="text-[13px] font-zain-xbold mt-2 mb-1 text-right"
+        style={{ color: theme?.secondary }}
+      >
+        {children}
+      </h6>
+    );
+  },
+  p: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <p
+        className="text-[13.5px] font-zain-bold leading-relaxed mb-2 text-right break-words whitespace-pre-wrap"
+        dir="auto"
+        style={{ unicodeBidi: "plaintext", color: theme?.text }}
+      >
+        {children}
+      </p>
+    );
+  },
+  strong: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <strong className="font-zain-xbold" style={{ color: theme?.text }}>
+        {children}
+      </strong>
+    );
+  },
+  a: ({ href, children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        referrerPolicy="no-referrer"
+        className="underline font-zain-bold hover:opacity-80 transition-colors inline"
+        style={{ color: theme?.accent }}
+      >
+        {children}
+      </a>
+    );
+  },
   ul: ({ children }: any) => (
     <ListContext.Provider value={false}>
       <ul className="space-y-1.5 mb-3 list-none pr-1">{children}</ul>
@@ -222,6 +287,7 @@ const markdownComponents = {
     </ListContext.Provider>
   ),
   li: ({ children, ordered: orderedProp }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
     const orderedFromContext = React.useContext(ListContext);
     const ordered = orderedProp ?? orderedFromContext;
     const compact = Array.isArray(children)
@@ -232,9 +298,9 @@ const markdownComponents = {
     if (ordered) {
       return (
         <li
-          className="block w-full text-[14px] font-sans leading-relaxed text-[#2b1a10] text-right"
+          className="block w-full text-[13.5px] font-zain-bold leading-relaxed text-right"
           dir="auto"
-          style={{ unicodeBidi: "plaintext" }}
+          style={{ unicodeBidi: "plaintext", color: theme?.text }}
         >
           <span className="block whitespace-pre-wrap">{compact}</span>
         </li>
@@ -242,60 +308,128 @@ const markdownComponents = {
     }
     return (
       <li
-        className="flex items-start gap-2 text-[14px] font-sans leading-relaxed text-[#2b1a10]"
+        className="flex items-start gap-2 text-[13.5px] font-zain-bold leading-relaxed"
         dir="auto"
-        style={{ unicodeBidi: "plaintext" }}
+        style={{ unicodeBidi: "plaintext", color: theme?.text }}
       >
-        <span className="text-[#b88a4f] mt-1.5 shrink-0 select-none text-[8px]">
+        <span
+          className="mt-1.5 shrink-0 select-none text-[8px]"
+          style={{ color: theme?.accent }}
+        >
           ●
         </span>
         <span className="flex-1 text-right whitespace-pre-wrap">{compact}</span>
       </li>
     );
   },
-  code: ({ className, children }: any) => {
+  code: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
     const isBlock = typeof children === "string" && children.includes("\n");
     if (isBlock) {
       return <CodeBlock>{children}</CodeBlock>;
     }
     return (
-      <code className="bg-[#f5ebd9] border border-[#e6dccf] rounded-lg px-1.5 py-0.5 mx-0.5 font-mono text-[12.5px] text-[#2b1a10]">
+      <code
+        className="border rounded-md px-1.5 py-0.5 mx-0.5 font-mono text-[11.5px]"
+        style={{
+          backgroundColor: theme?.isDark
+            ? "rgba(255,255,255,0.06)"
+            : "rgba(0,0,0,0.04)",
+          borderColor: theme?.border,
+          color: theme?.text,
+        }}
+      >
         {children}
       </code>
     );
   },
-  blockquote: ({ children }: any) => (
-    <blockquote className="border-r-4 border-[#b88a4f] pr-3 my-3 italic text-[#7f6a55] text-right bg-[#f7f2ea]/40 py-1 rounded-l-md">
-      {children}
-    </blockquote>
-  ),
-  hr: () => <hr className="my-3 h-px border-0 bg-[#e6dccf]" />,
-  table: ({ children }: any) => (
-    <div className="overflow-x-auto my-3 border border-[#e6dccf] rounded-xl">
-      <table className="w-full text-right border-collapse text-[13px]">
+  blockquote: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <blockquote
+        className="border-r-4 pr-3 my-2.5 italic text-right py-1 rounded-l-md font-zain-bold text-xs"
+        style={{
+          borderColor: theme?.accent,
+          backgroundColor: theme?.isDark
+            ? "rgba(255,255,255,0.04)"
+            : `${theme?.accent}10`,
+          color: theme?.secondary,
+        }}
+      >
         {children}
-      </table>
-    </div>
-  ),
-  thead: ({ children }: any) => (
-    <thead className="bg-[#f7f2ea] text-[#2b1a10] font-display font-black">
-      {children}
-    </thead>
-  ),
-  tbody: ({ children }: any) => (
-    <tbody className="divide-y divide-[#e6dccf]/60">{children}</tbody>
-  ),
+      </blockquote>
+    );
+  },
+  hr: () => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <hr
+        className="my-3 h-px border-0"
+        style={{ backgroundColor: theme?.border }}
+      />
+    );
+  },
+  table: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <div
+        className="overflow-x-auto my-3 border rounded-xl"
+        style={{ borderColor: theme?.border }}
+      >
+        <table className="w-full text-right border-collapse text-xs">
+          {children}
+        </table>
+      </div>
+    );
+  },
+  thead: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <thead
+        className="font-zain-xbold"
+        style={{
+          backgroundColor: theme?.isDark
+            ? "rgba(255,255,255,0.04)"
+            : "rgba(0,0,0,0.03)",
+          color: theme?.text,
+        }}
+      >
+        {children}
+      </thead>
+    );
+  },
+  tbody: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <tbody className="divide-y" style={{ borderColor: theme?.border }}>
+        {children}
+      </tbody>
+    );
+  },
   tr: ({ children }: any) => (
-    <tr className="hover:bg-white/40 transition-colors">{children}</tr>
-  ),
-  th: ({ children }: any) => (
-    <th className="p-2.5 font-display font-black border-b border-[#e6dccf]">
+    <tr className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
       {children}
-    </th>
+    </tr>
   ),
-  td: ({ children }: any) => (
-    <td className="p-2.5 font-sans text-[#2b1a10]/90">{children}</td>
-  ),
+  th: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <th
+        className="p-2 font-zain-xbold border-b"
+        style={{ borderColor: theme?.border }}
+      >
+        {children}
+      </th>
+    );
+  },
+  td: ({ children }: any) => {
+    const theme = React.useContext(MarkdownThemeContext);
+    return (
+      <td className="p-2 font-zain-reg" style={{ color: theme?.text }}>
+        {children}
+      </td>
+    );
+  },
 };
 
 const remarkPlugins = [remarkGfm];
@@ -304,10 +438,12 @@ const MarkdownRenderer = ({
   content,
   animate = false,
   onComplete,
+  theme,
 }: {
   content: string;
   animate?: boolean;
   onComplete?: () => void;
+  theme?: any;
 }) => {
   const normalizedContent = useMemo(
     () => normalizeMarkdownSpacing(content),
@@ -347,14 +483,16 @@ const MarkdownRenderer = ({
   }, [normalizedContent, animate]);
 
   return (
-    <div className="sakeenah-md-flow [&_li_p]:mb-0 [&_blockquote_p]:mb-1 [&_td_p]:mb-0 [&>*:last-child]:mb-0">
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins}
-        components={markdownComponents as any}
-      >
-        {displayedText}
-      </ReactMarkdown>
-    </div>
+    <MarkdownThemeContext.Provider value={theme}>
+      <div className="sakeenah-md-flow [&_li_p]:mb-0 [&_blockquote_p]:mb-1 [&_td_p]:mb-0 [&>*:last-child]:mb-0">
+        <ReactMarkdown
+          remarkPlugins={remarkPlugins}
+          components={markdownComponents as any}
+        >
+          {displayedText}
+        </ReactMarkdown>
+      </div>
+    </MarkdownThemeContext.Provider>
   );
 };
 
@@ -363,8 +501,10 @@ const CONVERSATIONS_STORAGE_KEY = "dar_alhikayat_ai_saved_conversations";
 export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssistant({
   onClose,
   storyContext,
-  theme,
+  theme: propTheme,
 }: DarAlHikayatAIAssistantProps) {
+  const { currentTheme: appContextTheme } = useApp();
+  const currentTheme = propTheme || appContextTheme;
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -773,77 +913,81 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   return (
     <div
       dir="rtl"
-      className="w-full h-full relative flex flex-col overflow-hidden bg-[#ece7de] text-[#2b1a10] font-sans"
-      style={{ backgroundColor: "#ece7de", color: "#2b1a10" }}
+      className="w-full h-full relative flex flex-col overflow-hidden select-text"
+      style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
     >
-      {/* Background soft ambient shapes */}
+      {/* Background soft ambient shapes matching theme */}
       <div
-        className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] rounded-full pointer-events-none bg-[#b88a4f]/5 blur-[120px]"
-        style={{
-          backgroundColor: "rgba(184, 138, 79, 0.05)",
-          filter: "blur(120px)",
-        }}
+        className="absolute top-[-15%] right-[-10%] w-[260px] h-[260px] rounded-full pointer-events-none blur-[90px] opacity-25"
+        style={{ backgroundColor: currentTheme.accent }}
       />
       <div
-        className="absolute bottom-[-10%] left-[-10%] w-[250px] h-[250px] rounded-full pointer-events-none bg-[#deab65]/5 blur-[100px]"
-        style={{
-          backgroundColor: "rgba(222, 171, 101, 0.05)",
-          filter: "blur(100px)",
-        }}
+        className="absolute bottom-[-10%] left-[-10%] w-[220px] h-[220px] rounded-full pointer-events-none blur-[80px] opacity-20"
+        style={{ backgroundColor: currentTheme.accent }}
       />
-      {messages.length === 0 && (
+
+      {/* ── FLOATING TOP HEADER CAPSULE: EXACT MATCH WITH DAR AL HIKAYAT FLOATING CAPSULE ── */}
+      <header className="absolute top-4 inset-x-0 z-30 flex justify-center pointer-events-none px-4">
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[38vh] bg-gradient-to-t from-[#d8b27b]/55 via-[#d8b27b]/20 to-transparent"
+          className="pointer-events-auto w-full max-w-sm h-11 px-2 rounded-full backdrop-blur-2xl border flex justify-between items-center transition-all duration-300"
           style={{
-            background:
-              "linear-gradient(to top, rgba(216, 178, 123, 0.55) 0%, rgba(216, 178, 123, 0.20) 40%, transparent 100%)",
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            boxShadow: currentTheme.isDark
+              ? "0 8px 24px -4px rgba(0,0,0,0.45)"
+              : "0 8px 24px -4px rgba(0,0,0,0.08)",
           }}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* ── FLOATING TOP HEADER ── */}
-      <div className="absolute top-6 left-5 right-5 flex items-center justify-between z-[45] pointer-events-none">
-        <div className="flex items-center gap-2 pointer-events-auto">
-          <button
-            type="button"
-            onClick={() => setIsDrawerOpen(true)}
-            className="w-10 h-10 cut-crystal-capsule rounded-full shadow-md text-[#2b1a10] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white flex items-center justify-center active:scale-[0.95] transition-all duration-300 cursor-pointer"
-            aria-label="فتح المحادثات المحفوظة"
-            title="المحادثات المحفوظة"
-          >
-            <PanelLeftOpen size={17} strokeWidth={2.2} />
-          </button>
-          <div className="cut-crystal-capsule px-5 h-10 rounded-full shadow-md flex items-center justify-center gap-1.5 transition-all duration-300">
-            <span className="text-[14.5px] font-display font-black whitespace-nowrap pt-0.5 text-[#2b1a10]">
-              دار الحكايات AI
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 pointer-events-auto">
-          {messages.length > 0 && (
+        >
+          {/* Right: Drawer Button & Title */}
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={startNewConversation}
-              className="w-10 h-10 cut-crystal-capsule rounded-full shadow-md text-[#7f6a55] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white flex items-center justify-center active:scale-[0.95] transition-all duration-300 cursor-pointer"
-              aria-label="بدء محادثة جديدة"
-              title="محادثة جديدة"
+              onClick={() => setIsDrawerOpen(true)}
+              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+              style={{ color: currentTheme.text }}
+              aria-label="المحادثات المحفوظة"
+              title="المحادثات المحفوظة"
             >
-              <MessageCirclePlus size={17} strokeWidth={2.1} />
+              <PanelLeftOpen size={16} />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-10 h-10 cut-crystal-capsule rounded-full shadow-md text-[#2b1a10] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white flex items-center justify-center active:scale-[0.95] transition-all duration-300 cursor-pointer"
-            aria-label="رجوع"
-            title="رجوع"
-          >
-            <ChevronRight size={18} className="mr-0.5" />
-          </button>
+            <div className="flex items-center gap-1.5 select-none">
+              <Sparkles size={13} style={{ color: currentTheme.accent }} />
+              <span
+                className="font-zain-xbold text-xs tracking-wide leading-none"
+                style={{ color: currentTheme.text }}
+              >
+                دار الحكايات AI
+              </span>
+            </div>
+          </div>
+
+          {/* Left: New Chat & Close */}
+          <div className="flex items-center gap-1">
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={startNewConversation}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+                style={{ color: currentTheme.accent }}
+                aria-label="محادثة جديدة"
+                title="محادثة جديدة"
+              >
+                <MessageCirclePlus size={16} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+              style={{ color: currentTheme.text }}
+              aria-label="إغلاق"
+              title="إغلاق"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* ── CONVERSATIONS DRAWER ── */}
       <AnimatePresence>
@@ -852,7 +996,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             <motion.button
               type="button"
               aria-label="إغلاق قائمة المحادثات"
-              className="fixed inset-0 z-[55] bg-[#2b1a10]/18 backdrop-blur-[2px] cursor-default"
+              className="fixed inset-0 z-[55] bg-black/30 backdrop-blur-xs cursor-default"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -860,74 +1004,104 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             />
             <motion.aside
               dir="rtl"
-              className="fixed inset-y-0 right-0 left-auto z-[60] flex w-[min(286px,calc(100vw-16px))] flex-col overflow-hidden rounded-l-[30px] rounded-r-none border border-r-0 border-white/45 shadow-[0_24px_70px_-20px_rgba(43,26,16,0.42)]"
+              className="fixed inset-y-0 right-0 left-auto z-[60] flex w-[min(300px,calc(100vw-16px))] flex-col overflow-hidden rounded-l-[28px] border-l shadow-2xl backdrop-blur-2xl"
               style={{
-                background:
-                  "linear-gradient(145deg, rgba(255,255,255,0.78), rgba(184,138,79,0.22))",
-                backdropFilter: "blur(28px) saturate(165%)",
-                WebkitBackdropFilter: "blur(28px) saturate(165%)",
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                color: currentTheme.text,
               }}
-              initial={{ opacity: 0, x: 18, scale: 0.995 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 18, scale: 0.995 }}
-              transition={{ duration: 0.14, ease: [0.23, 1, 0.32, 1] }}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
             >
-              <div className="flex h-12 shrink-0 items-center justify-between border-b border-[#b88a4f]/15 px-4">
-                <p className="text-[14px] font-display font-black text-[#2b1a10]">
-                  دار الحكايات AI
-                </p>
+              <div
+                className="flex h-12 shrink-0 items-center justify-between border-b px-4"
+                style={{ borderColor: currentTheme.border }}
+              >
+                <div className="flex items-center gap-1.5 select-none">
+                  <Sparkles size={14} style={{ color: currentTheme.accent }} />
+                  <span
+                    className="font-zain-xbold text-xs tracking-wide"
+                    style={{ color: currentTheme.text }}
+                  >
+                    المحادثات المحفوظة
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsDrawerOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#7f6a55] transition-colors hover:bg-white hover:text-[#2b1a10] active:scale-95 cursor-pointer"
-                  aria-label="إغلاق قائمة المحادثات"
+                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  style={{ color: currentTheme.secondary }}
+                  aria-label="إغلاق"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
 
               <button
                 type="button"
                 onClick={startNewConversation}
-                className="mx-3 mt-3 flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#b88a4f] px-4 text-[12px] font-display font-black text-[#fff9f1] shadow-sm transition-all hover:bg-[#a0753e] active:scale-[0.98] cursor-pointer"
+                className="mx-3 mt-3 flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-zain-bold shadow-sm transition-all hover:opacity-90 active:scale-95 text-white cursor-pointer"
+                style={{ backgroundColor: currentTheme.accent }}
               >
-                <MessageCirclePlus size={16} />
+                <MessageCirclePlus size={15} />
                 <span>محادثة جديدة</span>
               </button>
 
-              <div className="flex-1 overflow-y-auto px-3 pb-4 pt-4 hide-scrollbar">
+              <div className="flex-1 overflow-y-auto px-3 pb-4 pt-3 hide-scrollbar">
                 {isConversationsLoading ? (
-                  <div className="flex items-center justify-center gap-2 py-10 text-[12px] font-bold text-[#7f6a55]">
-                    <span className="w-4 h-4 border-2 border-[#b88a4f] border-t-transparent rounded-full animate-spin" />
-                    <span>جارٍ تحميل المحادثات</span>
+                  <div className="flex items-center justify-center gap-2 py-10 text-xs font-zain-bold">
+                    <span
+                      className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                      style={{ borderColor: currentTheme.accent, borderTopColor: "transparent" }}
+                    />
+                    <span style={{ color: currentTheme.secondary }}>
+                      جارٍ تحميل المحادثات...
+                    </span>
                   </div>
                 ) : conversations.length === 0 ? (
-                  <div className="px-5 py-10 text-center text-[12px] font-bold leading-6 text-[#7f6a55]">
+                  <div
+                    className="px-4 py-10 text-center text-xs font-zain-bold leading-6"
+                    style={{ color: currentTheme.secondary }}
+                  >
                     لا توجد محادثات محفوظة بعد.
                     <br />
                     ابدأي سؤالًا جديدًا وستظهر هنا.
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {conversations.map((conversation) => (
                       <div
                         key={conversation.id}
-                        className={`group relative flex items-center gap-1 rounded-[22px] border px-3 py-2 transition-all ${
-                          conversation.id === activeConversationId
-                            ? "border-[#b88a4f]/40 bg-[#f7f2ea] shadow-sm"
-                            : "border-transparent hover:border-[#b88a4f]/20 hover:bg-[#f7f2ea]/70"
-                        }`}
+                        className="group relative flex items-center gap-1 rounded-[18px] border px-2.5 py-2 transition-all"
+                        style={{
+                          backgroundColor:
+                            conversation.id === activeConversationId
+                              ? currentTheme.isDark
+                                ? "rgba(255,255,255,0.08)"
+                                : `${currentTheme.accent}15`
+                              : "transparent",
+                          borderColor:
+                            conversation.id === activeConversationId
+                              ? currentTheme.accent
+                              : "transparent",
+                        }}
                       >
                         <button
                           type="button"
                           onClick={() => openConversation(conversation.id)}
                           className="min-w-0 flex-1 text-right cursor-pointer"
                         >
-                          <span className="flex items-center gap-1.5 truncate text-[12px] font-display font-black text-[#2b1a10]">
+                          <span
+                            className="flex items-center gap-1.5 truncate text-xs font-zain-bold"
+                            style={{ color: currentTheme.text }}
+                          >
                             {conversation.pinnedAt && (
                               <Pin
                                 size={11}
-                                className="shrink-0 text-[#b88a4f]"
+                                className="shrink-0"
+                                style={{ color: currentTheme.accent }}
                                 aria-label="مثبتة"
                               />
                             )}
@@ -935,7 +1109,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                               {conversation.title}
                             </span>
                           </span>
-                          <span className="mt-1 block text-[10px] font-bold text-[#7f6a55]">
+                          <span
+                            className="mt-0.5 block text-[10px] font-zain-reg"
+                            style={{ color: currentTheme.secondary }}
+                          >
                             {conversation.lastMessageAt.toLocaleDateString(
                               "ar-EG",
                               { day: "numeric", month: "short" }
@@ -952,18 +1129,19 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 : conversation.id
                             );
                           }}
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-[#f5ebd9]/75 cursor-pointer ${
-                            conversation.pinnedAt
-                              ? "text-[#b88a4f]"
-                              : "text-[#7f6a55]/70 hover:text-[#2b1a10]"
-                          }`}
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                          style={{
+                            color: conversation.pinnedAt
+                              ? currentTheme.accent
+                              : currentTheme.secondary,
+                          }}
                           aria-label={`إجراءات ${conversation.title}`}
                           title="إجراءات المحادثة"
                         >
                           {conversation.pinnedAt ? (
-                            <Pin size={15} fill="currentColor" />
+                            <Pin size={13} fill="currentColor" />
                           ) : (
-                            <MoreVertical size={16} />
+                            <MoreVertical size={14} />
                           )}
                         </button>
                         <AnimatePresence>
@@ -973,16 +1151,21 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.96, y: -4 }}
                               transition={{ duration: 0.12 }}
-                              className="!absolute left-2 top-10 z-[70] w-[184px] cut-crystal-panel rounded-[20px] shadow-2xl overflow-hidden p-1.5"
+                              className="!absolute left-2 top-10 z-[70] w-[170px] rounded-[18px] shadow-xl overflow-hidden p-1.5 border backdrop-blur-2xl"
+                              style={{
+                                backgroundColor: currentTheme.glass,
+                                borderColor: currentTheme.border,
+                              }}
                             >
                               <button
                                 type="button"
                                 onClick={() =>
                                   handleShareConversation(conversation)
                                 }
-                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                                style={{ color: currentTheme.text }}
                               >
-                                <Share2 size={14} className="text-[#b88a4f]" />
+                                <Share2 size={13} style={{ color: currentTheme.accent }} />
                                 <span>مشاركة المحادثة</span>
                               </button>
                               <button
@@ -990,15 +1173,13 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 onClick={() =>
                                   handlePinConversation(conversation)
                                 }
-                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                                style={{ color: currentTheme.text }}
                               >
                                 <Pin
-                                  size={14}
-                                  className={
-                                    conversation.pinnedAt
-                                      ? "fill-[#b88a4f] text-[#b88a4f]"
-                                      : "text-[#b88a4f]"
-                                  }
+                                  size={13}
+                                  style={{ color: currentTheme.accent }}
+                                  fill={conversation.pinnedAt ? "currentColor" : "none"}
                                 />
                                 <span>
                                   {conversation.pinnedAt
@@ -1011,9 +1192,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 onClick={() =>
                                   openRenameConversation(conversation)
                                 }
-                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                                style={{ color: currentTheme.text }}
                               >
-                                <Pencil size={14} className="text-[#b88a4f]" />
+                                <Pencil size={13} style={{ color: currentTheme.accent }} />
                                 <span>إعادة التسمية</span>
                               </button>
                               <button
@@ -1022,9 +1204,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                   setOpenConversationMenuId(null);
                                   setDeleteTarget(conversation);
                                 }}
-                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-red-500/10 cursor-pointer text-red-500"
                               >
-                                <Trash2 size={14} className="text-[#b88a4f]" />
+                                <Trash2 size={13} />
                                 <span>حذف</span>
                               </button>
                             </motion.div>
@@ -1044,41 +1226,48 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       <AnimatePresence>
         {shareResult && (
           <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#2b1a10]/20 px-5 backdrop-blur-[3px]"
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
               dir="rtl"
-              className="cut-crystal-panel w-full max-w-[360px] rounded-[28px] p-5"
+              className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
+              style={{
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                color: currentTheme.text,
+              }}
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[15px] font-display font-black text-[#2b1a10]">
+                  <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
                     تم نسخ نص المحادثة
                   </p>
-                  <p className="mt-1 text-[11px] font-bold text-[#7f6a55]">
+                  <p className="mt-1 text-xs font-zain-reg" style={{ color: currentTheme.secondary }}>
                     تم نسخ كامل مجريات الحوار الأدبي للحافظة بنجاح.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShareResult(null)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#7f6a55] hover:bg-[#f5ebd9] cursor-pointer"
+                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  style={{ color: currentTheme.secondary }}
                   aria-label="إغلاق"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShareResult(null)}
-                  className="h-10 flex-1 rounded-full bg-[#b88a4f] text-[12px] font-black text-white hover:bg-[#a0753e] cursor-pointer"
+                  className="h-9 flex-1 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 cursor-pointer"
+                  style={{ backgroundColor: currentTheme.accent }}
                 >
                   تم
                 </button>
@@ -1089,7 +1278,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
         {renameTarget && (
           <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#2b1a10]/20 px-5 backdrop-blur-[3px]"
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1100,12 +1289,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 event.preventDefault();
                 handleRenameConversation();
               }}
-              className="cut-crystal-panel w-full max-w-[360px] rounded-[28px] p-5"
+              className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
+              style={{
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                color: currentTheme.text,
+              }}
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
             >
-              <p className="text-[16px] font-display font-black text-[#2b1a10]">
+              <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
                 إعادة تسمية المحادثة
               </p>
               <input
@@ -1113,21 +1307,31 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 value={renameValue}
                 onChange={(event) => setRenameValue(event.target.value)}
                 maxLength={160}
-                className="cut-crystal-input mt-4 h-11 w-full rounded-[18px] px-4 text-right text-[13px] font-bold text-[#2b1a10] outline-none focus:border-[#b88a4f]"
+                className="mt-3.5 h-10 w-full rounded-[16px] px-3.5 text-right text-xs font-zain-bold outline-none border transition-colors"
+                style={{
+                  backgroundColor: currentTheme.isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.7)",
+                  borderColor: currentTheme.border,
+                  color: currentTheme.text,
+                }}
                 aria-label="اسم المحادثة الجديد"
               />
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setRenameTarget(null)}
-                  className="h-10 flex-1 rounded-full border border-[#d8c9b8] text-[12px] font-black text-[#7f6a55] hover:bg-[#f5ebd9] cursor-pointer"
+                  className="h-9 flex-1 rounded-full border text-xs font-zain-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  style={{
+                    borderColor: currentTheme.border,
+                    color: currentTheme.secondary,
+                  }}
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={!renameValue.trim() || actionLoading}
-                  className="h-10 flex-1 rounded-full bg-[#b88a4f] text-[12px] font-black text-white disabled:opacity-50 cursor-pointer"
+                  className="h-9 flex-1 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                  style={{ backgroundColor: currentTheme.accent }}
                 >
                   حفظ
                 </button>
@@ -1138,38 +1342,46 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
         {deleteTarget && (
           <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#2b1a10]/25 px-5 backdrop-blur-[3px]"
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
               dir="rtl"
-              className="cut-crystal-panel w-full max-w-[360px] rounded-[28px] p-5"
+              className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
+              style={{
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                color: currentTheme.text,
+              }}
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
             >
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#8f3c35] to-[#6f2d29] text-white shadow-sm">
-                  <Trash2 size={18} />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-500 shadow-xs">
+                  <Trash2 size={16} />
                 </div>
                 <div>
-                  <p className="text-[16px] font-display font-black text-[#2b1a10]">
+                  <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
                     حذف المحادثة نهائيًا؟
                   </p>
-                  <p className="mt-2 text-[12px] font-bold leading-6 text-[#7f6a55]">
-                    سيتم حذف المحادثة وجميع رسائلها نهائيًا. لا يمكن التراجع عن
-                    هذا الإجراء.
+                  <p className="mt-1 text-xs font-zain-reg leading-5" style={{ color: currentTheme.secondary }}>
+                    سيتم حذف المحادثة وجميع رسائلها نهائيًا. لا يمكن التراجع عن هذا الإجراء.
                   </p>
                 </div>
               </div>
-              <div className="mt-5 flex gap-2">
+              <div className="mt-4 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setDeleteTarget(null)}
                   disabled={actionLoading}
-                  className="h-10 flex-1 rounded-full border border-[#d8c9b8] text-[12px] font-black text-[#7f6a55] hover:bg-[#f5ebd9] cursor-pointer"
+                  className="h-9 flex-1 rounded-full border text-xs font-zain-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  style={{
+                    borderColor: currentTheme.border,
+                    color: currentTheme.secondary,
+                  }}
                 >
                   إلغاء
                 </button>
@@ -1177,7 +1389,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                   type="button"
                   onClick={() => handleDeleteConversation(deleteTarget.id)}
                   disabled={actionLoading}
-                  className="h-10 flex-1 rounded-full border border-[#8f3c35]/35 bg-gradient-to-br from-[#8f3c35] to-[#6f2d29] text-[12px] font-black text-white shadow-[0_10px_22px_-12px_rgba(111,45,41,0.9)] transition-[transform,filter] duration-150 hover:brightness-110 active:scale-[0.97] disabled:opacity-50 cursor-pointer"
+                  className="h-9 flex-1 rounded-full bg-red-600 text-xs font-zain-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {actionLoading ? "جارٍ الحذف..." : "حذف نهائي"}
                 </button>
@@ -1193,35 +1405,99 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            className="fixed bottom-6 left-5 right-5 z-[120] mx-auto max-w-[360px] rounded-[20px] border border-white/45 bg-[#ece7de]/55 px-4 py-3 text-center text-[11px] font-black text-[#2b1a10] shadow-[0_18px_42px_rgba(43,26,16,0.24)] backdrop-blur-2xl"
+            className="fixed bottom-16 left-4 right-4 z-[120] mx-auto max-w-xs rounded-full border px-4 py-2 text-center text-xs font-zain-bold shadow-lg backdrop-blur-2xl"
+            style={{
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              color: currentTheme.text,
+            }}
           >
             {storageError}
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* Top smooth fade gradient mask */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 transition-colors duration-300"
+        style={{
+          background: `linear-gradient(to bottom, ${currentTheme.bg} 0%, ${currentTheme.bg} 35%, transparent 100%)`,
+        }}
+        aria-hidden="true"
+      />
+
+      {/* Bottom smooth fade gradient mask */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-24 transition-colors duration-300"
+        style={{
+          background: `linear-gradient(to top, ${currentTheme.bg} 0%, ${currentTheme.bg} 40%, transparent 100%)`,
+        }}
+        aria-hidden="true"
+      />
+
       {/* ── MAIN CHAT AREA / EMPTY STATE ── */}
       <div className="flex-1 min-h-0 flex flex-col relative z-10 overflow-hidden">
         {messages.length === 0 ? (
-          <div className="flex-1 min-h-0 overflow-y-auto pt-20 pb-28 flex flex-col items-center justify-center">
+          <div className="flex-1 min-h-0 px-4 pt-16 pb-24 flex flex-col items-center justify-center">
             <AnimatePresence mode="wait">
               <motion.div
                 key={welcomeLineIndex}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
-                className="flex flex-col items-center justify-center px-6 text-center max-w-[460px]"
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.24, ease: "easeOut" }}
+                className="flex flex-col items-center justify-center text-center max-w-[340px] space-y-3"
               >
-                <p className="text-[13px] font-bold text-[#8a6a3d]">
+                <div
+                  className="w-11 h-11 rounded-full border flex items-center justify-center shadow-xs"
+                  style={{
+                    backgroundColor: currentTheme.glass,
+                    borderColor: currentTheme.border,
+                  }}
+                >
+                  <Sparkles size={20} style={{ color: currentTheme.accent }} />
+                </div>
+                <p
+                  className="text-xs font-zain-bold tracking-wide"
+                  style={{ color: currentTheme.accent }}
+                >
                   أهلًا بكِ، {userName}
                 </p>
-                <h1 className="mt-2 text-xl md:text-2xl font-display font-black leading-snug text-[#2b1a10]">
+                <h2
+                  className="text-base md:text-lg font-zain-xbold leading-snug"
+                  style={{ color: currentTheme.text }}
+                >
                   {welcomeLines[welcomeLineIndex].title}
-                </h1>
-                <p className="mt-2 text-[13px] font-bold leading-relaxed text-[#7f6a55]">
+                </h2>
+                <p
+                  className="text-xs font-zain-reg leading-relaxed px-2"
+                  style={{ color: currentTheme.secondary }}
+                >
                   {welcomeLines[welcomeLineIndex].subtitle}
                 </p>
+
+                {/* Quick Prompts Suggestions */}
+                <div className="pt-2 flex flex-wrap gap-1.5 justify-center">
+                  {[
+                    "اقترح حبكة مشوقة للمشهد",
+                    "صقل وتدقيق لغة السرد",
+                    "تطوير حوار بين الشخصيات",
+                  ].map((promptText, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleSendMessage(promptText)}
+                      className="px-3 py-1 rounded-full border text-[11px] font-zain-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      style={{
+                        backgroundColor: currentTheme.glass,
+                        borderColor: currentTheme.border,
+                        color: currentTheme.text,
+                      }}
+                    >
+                      {promptText}
+                    </button>
+                  ))}
+                </div>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -1229,7 +1505,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pt-20 pb-36 space-y-4 scrollbar-thin hide-scrollbar"
+            className="flex-1 min-h-0 overflow-y-auto px-4 pt-18 pb-28 space-y-4 scrollbar-thin hide-scrollbar"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
@@ -1256,14 +1532,26 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 <div key={m.id} className="w-full">
                   <div className={isUser ? "mr-auto max-w-[85%]" : "w-full"}>
                     {!isUser && (
-                      <div className="flex items-center gap-1.5 mb-2 text-[11px] font-display font-black text-[#b88a4f] select-none">
-                        <span>دار الحكايات AI</span>
+                      <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
+                        <Sparkles size={11} style={{ color: currentTheme.accent }} />
+                        <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
                       </div>
                     )}
 
                     {isUser ? (
                       <>
-                        <div className="relative text-right bg-gradient-to-br from-[#2b1a10] to-[#3f281a] text-[#fff9f1] border border-[#2b1a10]/20 rounded-[28px] shadow-md transition-all duration-300 overflow-hidden">
+                        <div
+                          className="relative text-right border rounded-[22px] shadow-xs transition-all duration-300 overflow-hidden"
+                          style={{
+                            backgroundColor: currentTheme.isDark
+                              ? "rgba(255, 255, 255, 0.08)"
+                              : `${currentTheme.accent}14`,
+                            borderColor: currentTheme.isDark
+                              ? "rgba(255, 255, 255, 0.12)"
+                              : `${currentTheme.accent}30`,
+                            color: currentTheme.text,
+                          }}
+                        >
                           {isEditingThisMessage ? (
                             <textarea
                               autoFocus
@@ -1273,41 +1561,55 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 setEditingContent(event.target.value)
                               }
                               aria-label="تعديل رسالة المستخدم"
-                              className={`w-full resize-none bg-transparent p-4 text-right text-[14px] font-sans font-bold leading-relaxed text-[#fff9f1] outline-none placeholder:text-white/50 ${
-                                isEditingLongMessage
-                                  ? "min-h-[156px] max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth"
-                                  : "min-h-[92px] max-h-[130px] overflow-y-auto"
-                              }`}
+                              className="w-full resize-none bg-transparent p-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none"
+                              style={{ color: currentTheme.text }}
                             />
                           ) : (
                             <>
                               <div
-                                className={`p-4 transition-all duration-300 ease-in-out ${
+                                className={`p-3.5 transition-all duration-300 ease-in-out ${
                                   longMsgs.has(m.id) && !expandedMsgs.has(m.id)
                                     ? "max-h-[105px] overflow-hidden relative"
                                     : "max-h-none"
                                 }`}
                               >
-                                <p className="font-sans text-[14px] leading-relaxed font-bold whitespace-pre-wrap break-words">
+                                <p
+                                  className="text-xs font-zain-bold leading-relaxed whitespace-pre-wrap break-words"
+                                  style={{ color: currentTheme.text }}
+                                >
                                   {m.content}
                                 </p>
                                 {longMsgs.has(m.id) &&
                                   !expandedMsgs.has(m.id) && (
-                                    <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#2b1a10] via-[#2b1a10]/85 to-transparent pointer-events-none rounded-b-[28px]" />
+                                    <div
+                                      className="absolute inset-x-0 bottom-0 h-10 pointer-events-none rounded-b-[22px]"
+                                      style={{
+                                        background: `linear-gradient(to top, ${
+                                          currentTheme.isDark
+                                            ? "rgba(30, 30, 30, 0.9)"
+                                            : "rgba(245, 235, 220, 0.95)"
+                                        } 0%, transparent 100%)`,
+                                      }}
+                                    />
                                   )}
                               </div>
                               {longMsgs.has(m.id) && (
                                 <div
                                   className={`flex items-center justify-start ${
                                     !expandedMsgs.has(m.id)
-                                      ? "absolute bottom-2.5 left-2.5 z-10"
-                                      : "px-4 pb-3 pt-0"
+                                      ? "absolute bottom-2 left-2 z-10"
+                                      : "px-3.5 pb-2.5 pt-0"
                                   }`}
                                 >
                                   <button
                                     type="button"
                                     onClick={() => toggleExpand(m.id)}
-                                    className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white cursor-pointer transition-all active:scale-90 shadow-md backdrop-blur-xs"
+                                    className="w-6 h-6 rounded-full border flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-xs backdrop-blur-xs"
+                                    style={{
+                                      backgroundColor: currentTheme.glass,
+                                      borderColor: currentTheme.border,
+                                      color: currentTheme.text,
+                                    }}
                                     title={
                                       expandedMsgs.has(m.id)
                                         ? "طي النص"
@@ -1315,9 +1617,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                     }
                                   >
                                     {expandedMsgs.has(m.id) ? (
-                                      <ChevronUp size={15} />
+                                      <ChevronUp size={13} />
                                     ) : (
-                                      <ChevronDown size={15} />
+                                      <ChevronDown size={13} />
                                     )}
                                   </button>
                                 </div>
@@ -1329,7 +1631,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         {isEditingThisMessage ? (
                           <div
                             dir="ltr"
-                            className="mt-2 flex items-center justify-start gap-3 px-1 text-[12px] font-bold"
+                            className="mt-2 flex items-center justify-start gap-2.5 px-1 text-xs font-zain-bold"
                           >
                             <button
                               type="button"
@@ -1337,18 +1639,16 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 !hasEditedContent || !editingContent.trim()
                               }
                               onClick={confirmEditingUserMessage}
-                              className={`inline-flex h-7 items-center justify-center rounded-full px-3 text-[12px] font-bold transition-all ${
-                                hasEditedContent && editingContent.trim()
-                                  ? "bg-[#b88a4f] text-[#fff9f1] shadow-sm hover:bg-[#a0753e] active:scale-95 cursor-pointer"
-                                  : "bg-[#e6dccf]/60 text-[#7f6a55]/40 cursor-not-allowed"
-                              }`}
+                              className="inline-flex h-7 items-center justify-center rounded-full px-3 text-xs font-zain-bold transition-all disabled:opacity-50 text-white cursor-pointer"
+                              style={{ backgroundColor: currentTheme.accent }}
                             >
                               تعديل
                             </button>
                             <button
                               type="button"
                               onClick={cancelEditingUserMessage}
-                              className="text-[#7f6a55] transition-colors hover:text-[#2b1a10] cursor-pointer"
+                              className="transition-colors hover:opacity-80 cursor-pointer text-xs font-zain-bold"
+                              style={{ color: currentTheme.secondary }}
                             >
                               إلغاء
                             </button>
@@ -1356,13 +1656,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         ) : (
                           <div
                             dir="ltr"
-                            className="mt-2 flex items-center justify-start gap-1"
+                            className="mt-1 flex items-center justify-start gap-1"
                           >
                             {canEditThisMessage && (
                               <button
                                 type="button"
                                 onClick={() => startEditingUserMessage(m)}
-                                className="inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-colors hover:text-[#b88a4f] active:scale-90 cursor-pointer"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors active:scale-90 cursor-pointer"
+                                style={{ color: currentTheme.secondary }}
                                 title="تعديل الرسالة"
                               >
                                 <Pencil size={13} />
@@ -1373,11 +1674,13 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                               onClick={() =>
                                 handleCopyMsgContent(m.id, m.content)
                               }
-                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-colors hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
-                                copiedResponseId === m.id
-                                  ? "text-emerald-600"
-                                  : ""
-                              }`}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors active:scale-90 cursor-pointer"
+                              style={{
+                                color:
+                                  copiedResponseId === m.id
+                                    ? "#10b981"
+                                    : currentTheme.secondary,
+                              }}
                               title="نسخ الرسالة"
                             >
                               {copiedResponseId === m.id ? (
@@ -1390,18 +1693,31 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         )}
                       </>
                     ) : (
-                      <div className="w-full text-right bg-transparent border-none shadow-none px-0 py-2 text-[#2b1a10]">
+                      <div
+                        className="w-full text-right bg-transparent border-none shadow-none px-0 py-1"
+                        style={{ color: currentTheme.text }}
+                      >
                         <div>
                           {m.content.trim() === "" && m.isStreaming ? (
-                            <div className="flex items-center gap-1.5 py-3 justify-start">
-                              <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce [animation-delay:-0.3s]"></span>
-                              <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce [animation-delay:-0.15s]"></span>
-                              <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce"></span>
+                            <div className="flex items-center gap-1.5 py-2 justify-start">
+                              <span
+                                className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.3s]"
+                                style={{ backgroundColor: currentTheme.accent }}
+                              />
+                              <span
+                                className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.15s]"
+                                style={{ backgroundColor: currentTheme.accent }}
+                              />
+                              <span
+                                className="w-2 h-2 rounded-full animate-bounce"
+                                style={{ backgroundColor: currentTheme.accent }}
+                              />
                             </div>
                           ) : (
                             <MarkdownRenderer
                               content={m.content}
                               animate={m.isNew && !m.isStreaming}
+                              theme={currentTheme}
                               onComplete={() => {
                                 setMessages((prev) =>
                                   prev.map((msg) =>
@@ -1417,7 +1733,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         {isLastAI && (
                           <div
                             dir="ltr"
-                            className="mt-4 flex w-full items-center justify-end gap-2 border-t border-[#e6dccf]/40 pt-3 text-[#7f6a55] select-none"
+                            className="mt-3 flex w-full items-center justify-end gap-1.5 border-t pt-2 select-none"
+                            style={{ borderColor: currentTheme.border }}
                           >
                             <button
                               type="button"
@@ -1430,15 +1747,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                       : "dislike",
                                 }))
                               }
-                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-all hover:text-red-500 active:scale-90 cursor-pointer ${
-                                feedback[m.id] === "dislike"
-                                  ? "text-red-600"
-                                  : ""
-                              }`}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-all active:scale-90 cursor-pointer"
+                              style={{
+                                color:
+                                  feedback[m.id] === "dislike"
+                                    ? "#ef4444"
+                                    : currentTheme.secondary,
+                              }}
                               title="لم يعجبني"
                             >
                               <ThumbsDown
-                                size={14}
+                                size={13}
                                 fill={
                                   feedback[m.id] === "dislike"
                                     ? "currentColor"
@@ -1456,15 +1775,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                     prev[m.id] === "like" ? undefined : "like",
                                 }))
                               }
-                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-all hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
-                                feedback[m.id] === "like"
-                                  ? "text-[#b88a4f]"
-                                  : ""
-                              }`}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-all active:scale-90 cursor-pointer"
+                              style={{
+                                color:
+                                  feedback[m.id] === "like"
+                                    ? currentTheme.accent
+                                    : currentTheme.secondary,
+                              }}
                               title="أعجبني"
                             >
                               <ThumbsUp
-                                size={14}
+                                size={13}
                                 fill={
                                   feedback[m.id] === "like"
                                     ? "currentColor"
@@ -1478,17 +1799,19 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                               onClick={() =>
                                 handleCopyMsgContent(m.id, m.content)
                               }
-                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-all hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
-                                copiedResponseId === m.id
-                                  ? "text-emerald-600"
-                                  : ""
-                              }`}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-all active:scale-90 cursor-pointer"
+                              style={{
+                                color:
+                                  copiedResponseId === m.id
+                                    ? "#10b981"
+                                    : currentTheme.secondary,
+                              }}
                               title="نسخ الإجابة"
                             >
                               {copiedResponseId === m.id ? (
-                                <Check size={14} className="text-emerald-600" />
+                                <Check size={13} />
                               ) : (
-                                <Copy size={14} />
+                                <Copy size={13} />
                               )}
                             </button>
                           </div>
@@ -1501,16 +1824,23 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             })}
 
             {isLoading && (
-              <div className="flex justify-start w-full pr-1 py-2 pl-12">
-                <div className="relative inline-flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#b88a4f]/20 border border-[#b88a4f]/40 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-[#b88a4f] animate-pulse" />
-                  </div>
+              <div className="flex justify-start w-full pr-1 py-1 pl-4">
+                <div
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-xs"
+                  style={{
+                    backgroundColor: currentTheme.glass,
+                    borderColor: currentTheme.border,
+                  }}
+                >
+                  <Sparkles
+                    className="w-3.5 h-3.5 animate-pulse"
+                    style={{ color: currentTheme.accent }}
+                  />
                   <span
-                    dir="ltr"
-                    className="text-[14px] font-display font-bold select-none thinking-shimmer"
+                    className="text-xs font-zain-bold thinking-shimmer"
+                    style={{ color: currentTheme.accent }}
                   >
-                    Thinking
+                    جارٍ التفكير وصياغة الرد...
                   </span>
                 </div>
               </div>
@@ -1519,88 +1849,66 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           </div>
         )}
 
-        {/* ── BACKGROUND UNDER INPUT BAR ── */}
-        <div
-          className={`absolute inset-x-0 bottom-0 z-10 pointer-events-none h-28 ${
-            messages.length === 0
-              ? "bg-gradient-to-t from-[#d8b27b]/55 via-[#d8b27b]/20 to-transparent"
-              : "bg-gradient-to-t from-[#ece7de] via-[#ece7de]/80 to-transparent"
-          }`}
-          style={{
-            background:
-              messages.length === 0
-                ? "linear-gradient(to top, rgba(216, 178, 123, 0.55) 0%, rgba(216, 178, 123, 0.20) 40%, transparent 100%)"
-                : "linear-gradient(to top, #ece7de 0%, rgba(236, 231, 222, 0.85) 60%, transparent 100%)",
-          }}
-        />
-
-        {/* ── FLOATING INPUT FIELD BAR ── */}
-        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-3 md:px-6 pb-4">
-          <div className="w-full max-w-[640px] pointer-events-auto">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage(inputValue);
-              }}
-              className="flex items-end gap-2 p-2 transition-shadow duration-300"
+        {/* ── FLOATING INPUT FIELD BAR: EXACT MATCH WITH DAR AL HIKAYAT BOTTOM FLOATING CAPSULE ── */}
+        <footer className="absolute bottom-3 inset-x-0 z-30 flex flex-col items-center pointer-events-none px-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendMessage(inputValue);
+            }}
+            className="pointer-events-auto w-full max-w-sm min-h-[46px] p-1.5 rounded-full backdrop-blur-2xl border flex items-center gap-1.5 transition-all duration-300"
+            style={{
+              borderRadius: isMultiline ? "20px" : "9999px",
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              boxShadow: currentTheme.isDark
+                ? "0 8px 24px -4px rgba(0,0,0,0.45)"
+                : "0 8px 24px -4px rgba(0,0,0,0.08)",
+            }}
+          >
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="اسأل المساعد الأدبي عن أي فكرة أو صياغة..."
+              disabled={isLoading || editingMessageId !== null}
+              rows={1}
+              className="flex-1 bg-transparent border-none outline-none px-3 py-1.5 text-xs font-zain-bold disabled:opacity-50 resize-none max-h-24 overflow-y-auto leading-relaxed text-right break-words placeholder:font-zain-reg"
               style={{
-                borderRadius: isMultiline ? "22px" : "9999px",
-                overflow: "hidden",
-                background:
-                  "linear-gradient(180deg, rgba(253,252,251,0.75) 0%, rgba(244,240,234,0.60) 100%)",
-                backdropFilter:
-                  "blur(26px) saturate(210%) contrast(99%) brightness(102%)",
-                WebkitBackdropFilter:
-                  "blur(26px) saturate(210%) contrast(99%) brightness(102%)",
-                border: "1px solid rgba(43,26,16,0.09)",
-                boxShadow:
-                  "0 16px 36px -12px rgba(43,26,16,0.14), 0 4px 10px -2px rgba(43,26,16,0.06), inset 0 1px 0 0 rgba(255,255,255,0.90), inset 0 -1px 0 0 rgba(43,26,16,0.05)",
-                transition: "border-radius 0.3s ease",
+                color: currentTheme.text,
               }}
-            >
-              <textarea
-                ref={textareaRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="اسأل المساعد الأدبي عن أي فكرة أو صياغة أو حبكة..."
-                disabled={isLoading || editingMessageId !== null}
-                rows={1}
-                className="flex-1 min-h-[38px] text-right bg-transparent border-none outline-none px-3 py-2 text-[13.5px] font-sans font-bold text-[#2b1a10] placeholder-[#7f6a55]/60 disabled:opacity-50 resize-none max-h-[130px] overflow-y-auto leading-relaxed break-words"
-                style={{ color: "#2b1a10" }}
-              />
+            />
 
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                type="submit"
-                disabled={
-                  !inputValue.trim() || isLoading || editingMessageId !== null
-                }
-                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              type="submit"
+              disabled={!inputValue.trim() || isLoading || editingMessageId !== null}
+              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer"
+              style={{
+                backgroundColor:
                   inputValue.trim() && !isLoading && editingMessageId === null
-                    ? "bg-[#b88a4f] text-[#fff9f1] shadow-md hover:bg-[#a0753e] active:scale-90 cursor-pointer"
-                    : "bg-[#e8dfd4]/60 text-[#7f6a55]/40 cursor-not-allowed"
-                }`}
-                style={{
-                  backgroundColor:
-                    inputValue.trim() && !isLoading && editingMessageId === null
-                      ? "#b88a4f"
-                      : "rgba(232, 223, 212, 0.6)",
-                  color:
-                    inputValue.trim() && !isLoading && editingMessageId === null
-                      ? "#fff9f1"
-                      : "rgba(127, 106, 85, 0.4)",
-                }}
-                aria-label="إرسال السؤال"
-              >
-                <ArrowUp size={15} strokeWidth={2.5} />
-              </motion.button>
-            </form>
-            <div className="text-center mt-1.5 flex items-center justify-center gap-1 text-[10px] font-sans text-[#7f6a55]/80 font-bold">
-              <AlertCircle size={10} className="text-[#b88a4f]" style={{ color: "#b88a4f" }} />
-              <span style={{ color: "rgba(127, 106, 85, 0.8)" }}>دار الحكايات AI • المساعد الأدبي للكاتبة رحمة السيد موافي</span>
-            </div>
+                    ? currentTheme.accent
+                    : currentTheme.isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : `${currentTheme.accent}25`,
+                color:
+                  inputValue.trim() && !isLoading && editingMessageId === null
+                    ? "#ffffff"
+                    : currentTheme.secondary,
+              }}
+              aria-label="إرسال"
+              title="إرسال"
+            >
+              <ArrowUp size={15} strokeWidth={2.4} />
+            </motion.button>
+          </form>
+
+          <div className="mt-1 flex items-center justify-center gap-1 text-[10px] font-zain-bold select-none opacity-80">
+            <span style={{ color: currentTheme.secondary }}>
+              دار الحكايات AI • المساعد الأدبي للكاتبة رحمة السيد موافي
+            </span>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

@@ -2010,7 +2010,7 @@ const DarAlHikayatMaster: React.FC = () => {
         ref={headerRef}
         className={`fixed top-4 z-50 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
           showAIAssistant && isWideScreen
-            ? "right-[46%] lg:right-[48%] xl:right-[46%] left-0"
+            ? "right-[420px] xl:right-[460px] left-0"
             : "left-0 right-0"
         } ${showUI ? "translate-y-0 opacity-100" : "-translate-y-16 opacity-0"}`}
       >
@@ -2469,11 +2469,11 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
       <div className="w-full min-h-screen flex flex-row relative overflow-x-hidden">
-        {/* AI Assistant Studio Pane: Generous wide split screen (Strictly Wide Screens Only >= 768dp) */}
+        {/* AI Assistant Studio Pane: Fixed stable width split screen */}
         {showAIAssistant && isWideScreen && (
           <div
-            className="w-[46%] lg:w-[48%] xl:w-[46%] min-w-[420px] max-w-[680px] h-screen max-h-screen sticky top-0 border-l z-40 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-in-out bg-[#ece7de]"
-            style={{ backgroundColor: "#ece7de", borderColor: "#d8c9b8" }}
+            className="w-[420px] xl:w-[460px] flex-shrink-0 flex-grow-0 h-screen max-h-screen sticky top-0 border-l z-40 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+            style={{ backgroundColor: currentTheme.bg, borderColor: currentTheme.border }}
           >
             <DarAlHikayatAIAssistant
               onClose={() => setShowAIAssistant(false)}
@@ -2539,7 +2539,10 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Mobile AI Assistant Full-Screen Sheet */}
       {showAIAssistant && !isWideScreen && (
-        <div className="fixed inset-0 z-50 bg-[#ece7de] flex flex-col">
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ backgroundColor: currentTheme.bg }}
+        >
           <DarAlHikayatAIAssistant
             onClose={() => setShowAIAssistant(false)}
             storyContext={currentStoryContext}
@@ -2564,7 +2567,7 @@ const DarAlHikayatMaster: React.FC = () => {
         <footer
           className={`fixed bottom-4 z-40 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
             showAIAssistant && isWideScreen
-              ? "right-[46%] lg:right-[48%] xl:right-[46%] left-0"
+              ? "right-[420px] xl:right-[460px] left-0"
               : "left-0 right-0"
           } ${showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}
         >
