@@ -45,7 +45,8 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x android/gradlew
-          android/gradlew --no-daemon assembleDebug
+          cd android
+          ./gradlew --no-daemon assembleDebug
 
       - name: Upload APK as workflow artifact
         uses: actions/upload-artifact@v4
