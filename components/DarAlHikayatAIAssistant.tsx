@@ -19,6 +19,7 @@ import {
   Share2,
   Sparkles,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -55,6 +56,7 @@ type DarAlHikayatAIAssistantProps = {
     secondary: string;
     border: string;
     glass: string;
+    shadow?: string;
     mode?: string;
     isDark?: boolean;
   };
@@ -622,7 +624,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     messages.forEach((m) => {
       if (
         m.role === "user" &&
-        (m.content.length > 110 || m.content.split("\n").length > 3)
+        (m.content.length > 180 || m.content.split("\n").length > 4)
       ) {
         newLongMsgs.add(m.id);
       }
@@ -926,65 +928,79 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         style={{ backgroundColor: currentTheme.accent }}
       />
 
-      {/* ── TOP HEADER BAR: FIXED/STATIC FLEX SIBLING ABOVE SCROLL VIEW ── */}
-      <header className="shrink-0 z-30 pt-4 px-4 pb-2 flex items-center justify-between select-none">
+      {/* ── FLOATING TOP HEADER CAPSULES: ABSOLUTE OVERLAY (ZERO BACKGROUND BAR) ── */}
+      <header className="absolute top-4 inset-x-0 z-40 flex items-center justify-between pointer-events-none px-4 select-none">
         {/* Right Capsule: Dar Al Hikayat AI Title Only */}
         <div
-          className="h-11 px-4 rounded-full backdrop-blur-2xl border flex items-center gap-2 transition-all duration-300 shadow-md"
+          className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
           style={{
+            height: "44px",
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
-            boxShadow: currentTheme.isDark
-              ? "0 8px 24px -4px rgba(0,0,0,0.45)"
-              : "0 8px 24px -4px rgba(0,0,0,0.08)",
+            boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+            borderRadius: "9999px",
           }}
         >
-          <Sparkles size={15} style={{ color: currentTheme.accent }} />
-          <span
-            className="font-zain-xbold text-xs tracking-wide leading-none pt-0.5"
-            style={{ color: currentTheme.text }}
-          >
-            دار الحكايات AI
-          </span>
+          <div className="flex items-center gap-2">
+            <Sparkles size={15} style={{ color: currentTheme.accent }} />
+            <span
+              className="font-zain-xbold text-sm tracking-wide leading-none pt-0.5 select-none"
+              style={{ color: currentTheme.text }}
+            >
+              دار الحكايات AI
+            </span>
+          </div>
         </div>
 
-        {/* Left Side: Actions (New Chat if active messages, and Circular Close Button) */}
-        <div className="flex items-center gap-2">
+        {/* Left Side: Circular Action Buttons (New Chat & Close Button) */}
+        <div className="flex items-center gap-2 pointer-events-auto">
           {messages.length > 0 && (
             <button
               type="button"
               onClick={startNewConversation}
-              className="w-11 h-11 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
+              className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
               style={{
+                width: "44px",
+                height: "44px",
+                minWidth: "44px",
+                minHeight: "44px",
                 backgroundColor: currentTheme.glass,
                 borderColor: currentTheme.border,
-                color: currentTheme.accent,
-                boxShadow: currentTheme.isDark
-                  ? "0 8px 24px -4px rgba(0,0,0,0.45)"
-                  : "0 8px 24px -4px rgba(0,0,0,0.08)",
+                boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+                borderRadius: "50%",
               }}
               aria-label="محادثة جديدة"
               title="محادثة جديدة"
             >
-              <MessageCirclePlus size={17} />
+              <Plus
+                className="w-4 h-4 transition-transform duration-200"
+                style={{ color: currentTheme.accent }}
+                strokeWidth={2.5}
+              />
             </button>
           )}
           <button
             type="button"
             onClick={onClose}
-            className="w-11 h-11 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
+            className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
             style={{
+              width: "44px",
+              height: "44px",
+              minWidth: "44px",
+              minHeight: "44px",
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
-              color: currentTheme.text,
-              boxShadow: currentTheme.isDark
-                ? "0 8px 24px -4px rgba(0,0,0,0.45)"
-                : "0 8px 24px -4px rgba(0,0,0,0.08)",
+              boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+              borderRadius: "50%",
             }}
             aria-label="إغلاق"
             title="إغلاق"
           >
-            <X size={17} />
+            <X
+              className="w-4 h-4 transition-transform duration-200"
+              style={{ color: currentTheme.accent }}
+              strokeWidth={2.5}
+            />
           </button>
         </div>
       </header>
@@ -1438,7 +1454,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       {/* ── MAIN CHAT AREA / EMPTY STATE ── */}
       <div className="flex-1 min-h-0 flex flex-col relative z-10 overflow-hidden">
         {messages.length === 0 ? (
-          <div className="flex-1 min-h-0 px-4 pt-4 pb-24 flex flex-col items-center justify-center">
+          <div className="flex-1 min-h-0 px-4 pt-28 pb-24 flex flex-col items-center justify-center">
             <AnimatePresence mode="wait">
               <motion.div
                 key={welcomeLineIndex}
@@ -1505,7 +1521,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
+            className="flex-1 min-h-0 overflow-y-auto px-4 pt-28 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
@@ -1520,8 +1536,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               const isEditingLongMessage =
                 isEditingThisMessage &&
                 (longMsgs.has(m.id) ||
-                  editingContent.length > 110 ||
-                  editingContent.split("\n").length > 3);
+                  editingContent.length > 180 ||
+                  editingContent.split("\n").length > 4);
               const isLastAI =
                 !isUser &&
                 idx === lastAssistantMessageIndex &&
@@ -1529,8 +1545,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 m.isStreaming !== true;
 
               return (
-                <div key={m.id} className="w-full">
-                  <div className={isUser ? "mr-auto max-w-[85%]" : "w-full"}>
+                <div key={m.id} className="w-full flex flex-col">
+                  <div
+                    className={
+                      isUser
+                        ? "flex flex-col items-start w-full"
+                        : "w-full"
+                    }
+                  >
                     {!isUser && (
                       <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
                         <Sparkles size={11} style={{ color: currentTheme.accent }} />
@@ -1539,16 +1561,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     )}
 
                     {isUser ? (
-                      <>
+                      <div className="w-full flex flex-col items-start">
+                        {/* 1. The Bubble itself */}
                         <div
-                          className="relative text-right border rounded-[22px] shadow-xs transition-all duration-300 overflow-hidden"
+                          className="w-fit max-w-[85%] text-right border rounded-[20px] shadow-sm transition-all duration-300 overflow-hidden"
                           style={{
                             backgroundColor: currentTheme.isDark
                               ? "rgba(255, 255, 255, 0.08)"
                               : `${currentTheme.accent}14`,
                             borderColor: currentTheme.isDark
-                              ? "rgba(255, 255, 255, 0.12)"
-                              : `${currentTheme.accent}30`,
+                              ? "rgba(255, 255, 255, 0.18)"
+                              : `${currentTheme.accent}35`,
                             color: currentTheme.text,
                           }}
                         >
@@ -1561,77 +1584,77 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 setEditingContent(event.target.value)
                               }
                               aria-label="تعديل رسالة المستخدم"
-                              className="w-full resize-none bg-transparent p-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none"
+                              className="w-full min-w-[240px] resize-none bg-transparent p-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none"
                               style={{ color: currentTheme.text }}
                             />
                           ) : (
-                            <>
-                              <div
-                                className={`p-3.5 transition-all duration-300 ease-in-out ${
-                                  longMsgs.has(m.id) && !expandedMsgs.has(m.id)
-                                    ? "max-h-[105px] overflow-hidden relative"
-                                    : "max-h-none"
-                                }`}
+                            <div
+                              className={`p-3.5 transition-all duration-300 ease-in-out ${
+                                longMsgs.has(m.id) && !expandedMsgs.has(m.id)
+                                  ? "max-h-[110px] overflow-hidden relative"
+                                  : "max-h-none"
+                              }`}
+                            >
+                              <p
+                                className="text-xs font-zain-bold leading-relaxed whitespace-pre-wrap break-words"
+                                style={{ color: currentTheme.text }}
                               >
-                                <p
-                                  className="text-xs font-zain-bold leading-relaxed whitespace-pre-wrap break-words"
-                                  style={{ color: currentTheme.text }}
-                                >
-                                  {m.content}
-                                </p>
-                                {longMsgs.has(m.id) &&
-                                  !expandedMsgs.has(m.id) && (
-                                    <div
-                                      className="absolute inset-x-0 bottom-0 h-10 pointer-events-none rounded-b-[22px]"
-                                      style={{
-                                        background: `linear-gradient(to top, ${
-                                          currentTheme.isDark
-                                            ? "rgba(30, 30, 30, 0.9)"
-                                            : "rgba(245, 235, 220, 0.95)"
-                                        } 0%, transparent 100%)`,
-                                      }}
-                                    />
-                                  )}
-                              </div>
-                              {longMsgs.has(m.id) && (
-                                <div
-                                  className={`flex items-center justify-start ${
-                                    !expandedMsgs.has(m.id)
-                                      ? "absolute bottom-2 left-2 z-10"
-                                      : "px-3.5 pb-2.5 pt-0"
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleExpand(m.id)}
-                                    className="w-6 h-6 rounded-full border flex items-center justify-center cursor-pointer transition-all active:scale-90 shadow-xs backdrop-blur-xs"
+                                {m.content}
+                              </p>
+                              {longMsgs.has(m.id) &&
+                                !expandedMsgs.has(m.id) && (
+                                  <div
+                                    className="absolute inset-x-0 bottom-0 h-10 pointer-events-none rounded-b-[20px]"
                                     style={{
-                                      backgroundColor: currentTheme.glass,
-                                      borderColor: currentTheme.border,
-                                      color: currentTheme.text,
+                                      background: `linear-gradient(to top, ${
+                                        currentTheme.isDark
+                                          ? "rgba(35, 35, 35, 0.95)"
+                                          : "rgba(245, 238, 226, 0.98)"
+                                      } 0%, transparent 100%)`,
                                     }}
-                                    title={
-                                      expandedMsgs.has(m.id)
-                                        ? "طي النص"
-                                        : "توسيع النص"
-                                    }
-                                  >
-                                    {expandedMsgs.has(m.id) ? (
-                                      <ChevronUp size={13} />
-                                    ) : (
-                                      <ChevronDown size={13} />
-                                    )}
-                                  </button>
-                                </div>
-                              )}
-                            </>
+                                  />
+                                )}
+                            </div>
                           )}
                         </div>
 
+                        {/* 2. Expand / Collapse Toggle for Long User Messages */}
+                        {longMsgs.has(m.id) && !isEditingThisMessage && (
+                          <div className="mt-1.5 flex items-center justify-start">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(m.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-zain-bold border transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                              style={{
+                                backgroundColor: currentTheme.glass,
+                                borderColor: currentTheme.border,
+                                color: currentTheme.accent,
+                              }}
+                              title={
+                                expandedMsgs.has(m.id)
+                                  ? "طي النص"
+                                  : "توسيع النص"
+                              }
+                            >
+                              <span>
+                                {expandedMsgs.has(m.id)
+                                  ? "عرض أقل"
+                                  : "عرض المزيد"}
+                              </span>
+                              {expandedMsgs.has(m.id) ? (
+                                <ChevronUp size={12} />
+                              ) : (
+                                <ChevronDown size={12} />
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* 3. Action Buttons Row (outside bubble to prevent stretching it) */}
                         {isEditingThisMessage ? (
                           <div
-                            dir="ltr"
-                            className="mt-2 flex items-center justify-start gap-2.5 px-1 text-xs font-zain-bold"
+                            dir="rtl"
+                            className="mt-2 flex items-center justify-start gap-2.5 px-1 text-xs font-zain-bold animate-fade-in"
                           >
                             <button
                               type="button"
@@ -1655,8 +1678,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                           </div>
                         ) : (
                           <div
-                            dir="ltr"
-                            className="mt-1 flex items-center justify-start gap-1"
+                            dir="rtl"
+                            className="mt-1 flex items-center justify-start gap-1 px-1"
                           >
                             {canEditThisMessage && (
                               <button
@@ -1691,7 +1714,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             </button>
                           </div>
                         )}
-                      </>
+                      </div>
                     ) : (
                       <div
                         className="w-full text-right bg-transparent border-none shadow-none px-0 py-1"
