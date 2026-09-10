@@ -515,16 +515,6 @@ const DarAlHikayatMaster: React.FC = () => {
   const [showAIAssistant, setShowAIAssistant] = useState(false);
 
   const handleToggleAIAssistant = () => {
-    // STRICT RULE 1: Complete and absolute prohibition on mobile screens (< 768dp)
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setShowAIAssistant(false);
-      return;
-    }
-    // STRICT RULE 2: Minimum 500 words threshold required
-    if (wordCount < 500) {
-      setShowAIAssistant(false);
-      return;
-    }
     setShowAIAssistant((prev) => !prev);
   };
 
@@ -1630,13 +1620,6 @@ const DarAlHikayatMaster: React.FC = () => {
   const speakingTime = Math.ceil(wordCount / 130); // Average speaking speed
   const estimatedPages = Math.max(1, Math.ceil(wordCount / 500)); // Approx 500 words per single-spaced A4 page
 
-  // STRICT RULE 2: Live reactive threshold: if word count drops below 500 words, immediately close assistant
-  useEffect(() => {
-    if (wordCount < 500 && showAIAssistant) {
-      setShowAIAssistant(false);
-    }
-  }, [wordCount, showAIAssistant]);
-
   return (
     <div
       className="min-h-screen w-full relative font-sans transition-all duration-500 ease-in-out"
@@ -2591,25 +2574,23 @@ const DarAlHikayatMaster: React.FC = () => {
                   <Plus className="w-4 h-4" />
                 </button>
               )}
-              {/* STRICT RULE 1 & 2: Button is ONLY rendered if isWideScreen (>= 768px) AND wordCount >= 500 words */}
-              {isWideScreen && wordCount >= 500 && (
-                <button
-                  id="dar-alhikayat-ai-toggle-btn"
-                  onClick={handleToggleAIAssistant}
-                  className={`h-9 px-3 rounded-full flex items-center gap-1.5 transition-all duration-300 active:scale-95 cursor-pointer border ${
-                    showAIAssistant ? "shadow-inner" : "hover:scale-105"
-                  }`}
-                  style={{
-                    backgroundColor: showAIAssistant ? `${currentTheme.accent}25` : `${currentTheme.accent}12`,
-                    borderColor: `${currentTheme.accent}45`,
-                    color: currentTheme.accent,
-                  }}
-                  title="المساعد الأدبي"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span className="font-zain-bold text-xs pt-0.5 whitespace-nowrap">المساعد الأدبي</span>
-                </button>
-              )}
+              {/* AI Assistant Button - Always available */}
+              <button
+                id="dar-alhikayat-ai-toggle-btn"
+                onClick={handleToggleAIAssistant}
+                className={`h-9 px-3 rounded-full flex items-center gap-1.5 transition-all duration-300 active:scale-95 cursor-pointer border ${
+                  showAIAssistant ? "shadow-inner" : "hover:scale-105"
+                }`}
+                style={{
+                  backgroundColor: showAIAssistant ? `${currentTheme.accent}25` : `${currentTheme.accent}12`,
+                  borderColor: `${currentTheme.accent}45`,
+                  color: currentTheme.accent,
+                }}
+                title="المساعد الأدبي"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="font-zain-bold text-xs pt-0.5 whitespace-nowrap">المساعد الأدبي</span>
+              </button>
             </div>
 
             {/* Center Button */}

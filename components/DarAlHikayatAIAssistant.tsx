@@ -927,7 +927,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       />
 
       {/* ── FLOATING TOP HEADER CAPSULE: EXACT MATCH WITH DAR AL HIKAYAT FLOATING CAPSULE ── */}
-      <header className="absolute top-4 inset-x-0 z-30 flex justify-center pointer-events-none px-4">
+      <header className="absolute top-4 inset-x-0 z-40 flex justify-center pointer-events-none px-4">
         <div
           className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all duration-300"
           style={{
@@ -1850,7 +1850,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         )}
 
         {/* ── FLOATING INPUT FIELD BAR: EXACT MATCH WITH DAR AL HIKAYAT BOTTOM FLOATING CAPSULE ── */}
-        <footer className="absolute bottom-4 inset-x-0 z-30 flex flex-col items-center pointer-events-none px-4">
+        <footer className="absolute bottom-4 inset-x-0 z-40 flex flex-col items-center pointer-events-none px-4">
           <form
             onSubmit={(e) => {
               e.preventDefault();
