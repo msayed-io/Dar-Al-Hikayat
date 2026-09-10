@@ -18,6 +18,7 @@ import {
   Pin,
   Share2,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -772,14 +773,31 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   return (
     <div
       dir="rtl"
-      className="mx-auto w-full max-w-[390px] px-5 pt-0 pb-4 font-sans bg-[#ece7de] h-screen relative flex flex-col overflow-hidden"
+      className="w-full h-full relative flex flex-col overflow-hidden bg-[#ece7de] text-[#2b1a10] font-sans"
+      style={{ backgroundColor: "#ece7de", color: "#2b1a10" }}
     >
       {/* Background soft ambient shapes */}
-      <div className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] bg-[#b88a4f]/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[250px] h-[250px] bg-[#deab65]/5 rounded-full blur-[100px] pointer-events-none" />
+      <div
+        className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] rounded-full pointer-events-none bg-[#b88a4f]/5 blur-[120px]"
+        style={{
+          backgroundColor: "rgba(184, 138, 79, 0.05)",
+          filter: "blur(120px)",
+        }}
+      />
+      <div
+        className="absolute bottom-[-10%] left-[-10%] w-[250px] h-[250px] rounded-full pointer-events-none bg-[#deab65]/5 blur-[100px]"
+        style={{
+          backgroundColor: "rgba(222, 171, 101, 0.05)",
+          filter: "blur(100px)",
+        }}
+      />
       {messages.length === 0 && (
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[38vh] bg-gradient-to-t from-[#d8b27b]/55 via-[#d8b27b]/20 to-transparent"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(216, 178, 123, 0.55) 0%, rgba(216, 178, 123, 0.20) 40%, transparent 100%)",
+          }}
           aria-hidden="true"
         />
       )}
@@ -1503,15 +1521,21 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
         {/* ── BACKGROUND UNDER INPUT BAR ── */}
         <div
-          className={`fixed inset-x-0 bottom-0 z-10 pointer-events-none h-28 ${
+          className={`absolute inset-x-0 bottom-0 z-10 pointer-events-none h-28 ${
             messages.length === 0
               ? "bg-gradient-to-t from-[#d8b27b]/55 via-[#d8b27b]/20 to-transparent"
               : "bg-gradient-to-t from-[#ece7de] via-[#ece7de]/80 to-transparent"
           }`}
+          style={{
+            background:
+              messages.length === 0
+                ? "linear-gradient(to top, rgba(216, 178, 123, 0.55) 0%, rgba(216, 178, 123, 0.20) 40%, transparent 100%)"
+                : "linear-gradient(to top, #ece7de 0%, rgba(236, 231, 222, 0.85) 60%, transparent 100%)",
+          }}
         />
 
         {/* ── FLOATING INPUT FIELD BAR ── */}
-        <div className="fixed inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-4 pb-4">
+        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-4 pb-4">
           <div className="w-full max-w-[390px] pointer-events-auto">
             <form
               onSubmit={(e) => {
@@ -1542,6 +1566,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 disabled={isLoading || editingMessageId !== null}
                 rows={1}
                 className="flex-1 min-h-[38px] text-right bg-transparent border-none outline-none px-3 py-2 text-[13.5px] font-sans font-bold text-[#2b1a10] placeholder-[#7f6a55]/60 disabled:opacity-50 resize-none max-h-[130px] overflow-y-auto leading-relaxed break-words"
+                style={{ color: "#2b1a10" }}
               />
 
               <motion.button
@@ -1555,14 +1580,24 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     ? "bg-[#b88a4f] text-[#fff9f1] shadow-md hover:bg-[#a0753e] active:scale-90 cursor-pointer"
                     : "bg-[#e8dfd4]/60 text-[#7f6a55]/40 cursor-not-allowed"
                 }`}
+                style={{
+                  backgroundColor:
+                    inputValue.trim() && !isLoading && editingMessageId === null
+                      ? "#b88a4f"
+                      : "rgba(232, 223, 212, 0.6)",
+                  color:
+                    inputValue.trim() && !isLoading && editingMessageId === null
+                      ? "#fff9f1"
+                      : "rgba(127, 106, 85, 0.4)",
+                }}
                 aria-label="إرسال السؤال"
               >
                 <ArrowUp size={15} strokeWidth={2.5} />
               </motion.button>
             </form>
             <div className="text-center mt-1.5 flex items-center justify-center gap-1 text-[10px] font-sans text-[#7f6a55]/80 font-bold">
-              <Sparkles size={10} className="text-[#b88a4f]" />
-              <span>المساعد الأدبي الذكي • دار الحكايات</span>
+              <AlertCircle size={10} className="text-[#b88a4f]" style={{ color: "#b88a4f" }} />
+              <span style={{ color: "rgba(127, 106, 85, 0.8)" }}>دار الحكايات AI • المساعد الأدبي للكاتبة رحمة السيد موافي</span>
             </div>
           </div>
         </div>

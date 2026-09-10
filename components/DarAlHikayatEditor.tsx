@@ -2467,7 +2467,10 @@ const DarAlHikayatMaster: React.FC = () => {
       <div className="w-full min-h-screen flex flex-row relative overflow-x-hidden">
         {/* AI Assistant Studio Pane: Exactly 35% side-by-side in real time (Strictly Wide Screens Only >= 768dp) */}
         {showAIAssistant && isWideScreen && (
-          <div className="w-[35%] h-screen sticky top-0 border-l z-30 shadow-2xl transition-all duration-300 ease-in-out">
+          <div
+            className="w-[35%] h-screen sticky top-0 border-l z-30 shadow-2xl transition-all duration-300 ease-in-out bg-[#ece7de]"
+            style={{ backgroundColor: "#ece7de", borderColor: "#d8c9b8" }}
+          >
             <DarAlHikayatAIAssistant
               onClose={() => setShowAIAssistant(false)}
               storyContext={currentStoryContext}
