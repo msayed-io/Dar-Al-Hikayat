@@ -926,10 +926,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         style={{ backgroundColor: currentTheme.accent }}
       />
 
-      {/* ── FLOATING TOP HEADER CAPSULE: EXACT MATCH WITH DAR AL HIKAYAT FLOATING CAPSULE ── */}
-      <header className="absolute top-4 inset-x-0 z-40 flex justify-center pointer-events-none px-4">
+      {/* ── FLOATING TOP HEADER CAPSULES: EXACT MATCH WITH DAR AL HIKAYAT DESIGN SYSTEM ── */}
+      <header className="absolute top-4 inset-x-0 z-40 flex items-center justify-between pointer-events-none px-4">
+        {/* Right Capsule: Dar Al Hikayat AI Title Only */}
         <div
-          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all duration-300"
+          className="pointer-events-auto h-12 px-4 rounded-full backdrop-blur-2xl border flex items-center gap-2 transition-all duration-300 shadow-md select-none"
           style={{
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
@@ -938,54 +939,53 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               : "0 12px 32px -4px rgba(0,0,0,0.08)",
           }}
         >
-          {/* Right: Drawer Button & Title */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(true)}
-              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
-              style={{ color: currentTheme.text }}
-              aria-label="المحادثات المحفوظة"
-              title="المحادثات المحفوظة"
-            >
-              <PanelLeftOpen size={16} />
-            </button>
-            <div className="flex items-center gap-1.5 select-none">
-              <Sparkles size={14} style={{ color: currentTheme.accent }} />
-              <span
-                className="font-zain-xbold text-xs tracking-wide leading-none pt-0.5"
-                style={{ color: currentTheme.text }}
-              >
-                دار الحكايات AI
-              </span>
-            </div>
-          </div>
+          <Sparkles size={15} style={{ color: currentTheme.accent }} />
+          <span
+            className="font-zain-xbold text-xs tracking-wide leading-none pt-0.5"
+            style={{ color: currentTheme.text }}
+          >
+            دار الحكايات AI
+          </span>
+        </div>
 
-          {/* Left: New Chat & Close */}
-          <div className="flex items-center gap-1">
-            {messages.length > 0 && (
-              <button
-                type="button"
-                onClick={startNewConversation}
-                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
-                style={{ color: currentTheme.accent }}
-                aria-label="محادثة جديدة"
-                title="محادثة جديدة"
-              >
-                <MessageCirclePlus size={16} />
-              </button>
-            )}
+        {/* Left Side: Actions (New Chat if active messages, and Circular Close Button) */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {messages.length > 0 && (
             <button
               type="button"
-              onClick={onClose}
-              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
-              style={{ color: currentTheme.text }}
-              aria-label="إغلاق"
-              title="إغلاق"
+              onClick={startNewConversation}
+              className="w-12 h-12 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
+              style={{
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                color: currentTheme.accent,
+                boxShadow: currentTheme.isDark
+                  ? "0 12px 32px -4px rgba(0,0,0,0.45)"
+                  : "0 12px 32px -4px rgba(0,0,0,0.08)",
+              }}
+              aria-label="محادثة جديدة"
+              title="محادثة جديدة"
             >
-              <X size={16} />
+              <MessageCirclePlus size={17} />
             </button>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-12 h-12 rounded-full border backdrop-blur-2xl flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shadow-md"
+            style={{
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              color: currentTheme.text,
+              boxShadow: currentTheme.isDark
+                ? "0 12px 32px -4px rgba(0,0,0,0.45)"
+                : "0 12px 32px -4px rgba(0,0,0,0.08)",
+            }}
+            aria-label="إغلاق"
+            title="إغلاق"
+          >
+            <X size={17} />
+          </button>
         </div>
       </header>
 
@@ -1505,7 +1505,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto px-4 pt-20 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
+            className="flex-1 min-h-0 overflow-y-auto px-4 pt-24 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
@@ -1856,7 +1856,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               e.preventDefault();
               handleSendMessage(inputValue);
             }}
-            className="pointer-events-auto w-full max-w-sm min-h-[48px] p-1.5 rounded-full backdrop-blur-2xl border flex items-center gap-1.5 transition-all duration-300"
+            className="pointer-events-auto w-full min-h-[48px] p-1.5 rounded-full backdrop-blur-2xl border flex items-center gap-1.5 transition-all duration-300"
             style={{
               borderRadius: isMultiline ? "24px" : "9999px",
               backgroundColor: currentTheme.glass,

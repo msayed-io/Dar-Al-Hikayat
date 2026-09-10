@@ -2471,16 +2471,18 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
-      <div className="w-full min-h-screen relative flex flex-row overflow-x-hidden" dir="rtl">
-        {/* AI Assistant Studio Pane: Completely docked to the right in RTL */}
+      <div className="w-full min-h-screen relative overflow-x-hidden" dir="rtl">
+        {/* AI Assistant Studio Pane: Completely fixed to the viewport - 100% immune to editor scrolling or text length */}
         {showAIAssistant && isWideScreen && (
           <aside
             aria-label="المساعد الأدبي الذكي"
-            className="w-[420px] flex-shrink-0 h-screen sticky top-0 z-40 border-l flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ease-in-out"
+            className="fixed top-0 bottom-0 right-0 w-[420px] h-screen max-h-screen z-40 border-l flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ease-in-out overscroll-contain"
             style={{
               width: "420px",
               minWidth: "420px",
               maxWidth: "420px",
+              height: "100vh",
+              maxHeight: "100vh",
               backgroundColor: currentTheme.bg,
               borderColor: currentTheme.border,
             }}
@@ -2493,11 +2495,12 @@ const DarAlHikayatMaster: React.FC = () => {
           </aside>
         )}
 
-        {/* Editor Area: Fills 100% of remaining space smoothly */}
+        {/* Editor Area: Offset by exactly 420px on the right when assistant is open, fills 100% smoothly */}
         <div
-          className="flex-1 min-w-0 min-h-screen relative flex flex-col transition-all duration-300 ease-in-out"
+          className="min-w-0 min-h-screen relative flex flex-col transition-all duration-300 ease-in-out"
           style={{
-            flex: "1 1 0%",
+            marginRight: showAIAssistant && isWideScreen ? "420px" : "0",
+            width: showAIAssistant && isWideScreen ? "calc(100% - 420px)" : "100%",
             minWidth: 0,
           }}
         >
