@@ -2465,6 +2465,17 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
       <div className="w-full min-h-screen flex flex-row relative overflow-x-hidden">
+        {/* AI Assistant Studio Pane: Exactly 35% side-by-side in real time (Strictly Wide Screens Only >= 768dp) */}
+        {showAIAssistant && isWideScreen && (
+          <div className="w-[35%] h-screen sticky top-0 border-l z-30 shadow-2xl transition-all duration-300 ease-in-out">
+            <DarAlHikayatAIAssistant
+              onClose={() => setShowAIAssistant(false)}
+              storyContext={currentStoryContext}
+              theme={currentTheme}
+            />
+          </div>
+        )}
+
         {/* Editor Area: Exactly 65% on wide screen when assistant is active, 100% when closed */}
         <div className={`transition-all duration-300 ease-in-out ${showAIAssistant && isWideScreen ? "w-[65%]" : "w-full"}`}>
           <main id="story-content" className="w-full relative z-0 pb-36">
@@ -2517,18 +2528,18 @@ const DarAlHikayatMaster: React.FC = () => {
             )}
           </main>
         </div>
-
-        {/* AI Assistant Studio Pane: Exactly 35% side-by-side in real time (Strictly Wide Screens Only >= 768dp) */}
-        {showAIAssistant && isWideScreen && (
-          <div className="w-[35%] h-screen sticky top-0 border-r z-30 shadow-2xl transition-all duration-300 ease-in-out">
-            <DarAlHikayatAIAssistant
-              onClose={() => setShowAIAssistant(false)}
-              storyContext={currentStoryContext}
-              theme={currentTheme}
-            />
-          </div>
-        )}
       </div>
+
+      {/* Mobile AI Assistant Full-Screen Sheet */}
+      {showAIAssistant && !isWideScreen && (
+        <div className="fixed inset-0 z-50 bg-[#ece7de] flex flex-col">
+          <DarAlHikayatAIAssistant
+            onClose={() => setShowAIAssistant(false)}
+            storyContext={currentStoryContext}
+            theme={currentTheme}
+          />
+        </div>
+      )}
 
       {isSavedMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">

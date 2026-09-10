@@ -2,8 +2,11 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowUp,
+  ChevronRight,
   MessageCirclePlus,
+  PanelLeftOpen,
   X,
+  Trash2,
   ChevronDown,
   ChevronUp,
   Check,
@@ -11,22 +14,39 @@ import {
   Pencil,
   ThumbsUp,
   ThumbsDown,
-  Feather,
-  RefreshCw,
+  MoreVertical,
+  Pin,
+  Share2,
+  Sparkles,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  initializeStoryAssistant,
   streamLiteraryAssistantResponse,
-  type AIMessage,
   type StoryContext,
 } from "../lib/ai-assistant-service";
+
+export type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  isNew?: boolean;
+  isStreaming?: boolean;
+};
+
+export type StoredConversation = {
+  id: string;
+  title: string;
+  lastMessageAt: Date;
+  pinnedAt?: Date | null;
+  messages: Message[];
+};
 
 type DarAlHikayatAIAssistantProps = {
   onClose: () => void;
   storyContext: StoryContext;
-  theme: {
+  theme?: {
     bg: string;
     text: string;
     accent: string;
@@ -36,6 +56,40 @@ type DarAlHikayatAIAssistantProps = {
     mode?: string;
     isDark?: boolean;
   };
+};
+
+type WelcomeLine = {
+  title: string;
+  subtitle: string;
+};
+
+const welcomeLines: WelcomeLine[] = [
+  {
+    title: "ما الذي نكتبه معًا اليوم؟",
+    subtitle: "اسألي بهدوء عن الحبكة، الشخصيات، الصياغة، أو تطور الأحداث.",
+  },
+  {
+    title: "كيف نطور الحكاية اليوم؟",
+    subtitle: "أنا هنا لمعاونتكِ خطوة بخطوة في صقل السرد وبناء المشاهد.",
+  },
+  {
+    title: "في أي تفصيل سردي نبدأ معًا؟",
+    subtitle: "مساحة هادئة لمراجعة النص وتدقيق الأسلوب باحترافية وتوازن.",
+  },
+];
+
+const getInitialWelcomeLineIndex = () => {
+  try {
+    const previous = Number.parseInt(
+      localStorage.getItem("dar_alhikayat_ai_welcome_line_index") ?? "-1",
+      10
+    );
+    return Number.isInteger(previous) && previous >= 0
+      ? (previous + 1) % welcomeLines.length
+      : 0;
+  } catch {
+    return 0;
+  }
 };
 
 const CodeBlock = ({ children }: { children: string }) => {
@@ -67,7 +121,7 @@ const CodeBlock = ({ children }: { children: string }) => {
             <Copy size={12} />
           )}
           <span className="text-[10px] font-bold">
-            {copied ? "Copied!" : "Copy"}
+            {copied ? "تم النسخ!" : "نسخ"}
           </span>
         </button>
       </div>
@@ -79,7 +133,6 @@ const CodeBlock = ({ children }: { children: string }) => {
 };
 
 const ListContext = React.createContext(false);
-
 const GHOST_LINE = /^[ \t\u00A0\u200B\u200C\u200D\uFEFF]+$/gm;
 const TRAILING_SPACES = /[ \t]+$/gm;
 
@@ -101,23 +154,38 @@ const normalizeMarkdownSpacing = (raw: string): string => {
 
 const markdownComponents = {
   h1: ({ children }: any) => (
-    <h1 className="text-[17px] font-zain-xbold text-[#2b1a10] dark:text-[#f4f1ea] mt-4 mb-2 text-right">
+    <h1 className="text-[17px] font-display font-black text-[#2b1a10] mt-4 mb-2 text-right">
       {children}
     </h1>
   ),
   h2: ({ children }: any) => (
-    <h2 className="text-[16px] font-zain-xbold text-[#2b1a10] dark:text-[#f4f1ea] mt-4 mb-2 text-right">
+    <h2 className="text-[16px] font-display font-black text-[#2b1a10] mt-4 mb-2 text-right">
       {children}
     </h2>
   ),
   h3: ({ children }: any) => (
-    <h3 className="text-[15px] font-zain-xbold text-[#2b1a10] dark:text-[#f4f1ea] mt-3 mb-1.5 text-right">
+    <h3 className="text-[16px] font-display font-black text-[#2b1a10] mt-4 mb-2 text-right">
       {children}
     </h3>
   ),
+  h4: ({ children }: any) => (
+    <h4 className="text-[15px] font-display font-black text-[#2b1a10] mt-3 mb-1 text-right">
+      {children}
+    </h4>
+  ),
+  h5: ({ children }: any) => (
+    <h5 className="text-[14px] font-display font-black text-[#2b1a10] mt-3 mb-1.5 text-right">
+      {children}
+    </h5>
+  ),
+  h6: ({ children }: any) => (
+    <h6 className="text-[14px] font-display font-black text-[#2b1a10]/90 mt-3 mb-1.5 text-right">
+      {children}
+    </h6>
+  ),
   p: ({ children }: any) => (
     <p
-      className="text-[13.5px] font-zain-bold leading-relaxed text-[#2b1a10] dark:text-[#e2dfd2] mb-2 text-right break-words whitespace-pre-wrap"
+      className="text-[14px] font-sans leading-relaxed text-[#2b1a10] mb-2 text-right break-words whitespace-pre-wrap"
       dir="auto"
       style={{ unicodeBidi: "plaintext" }}
     >
@@ -125,7 +193,7 @@ const markdownComponents = {
     </p>
   ),
   strong: ({ children }: any) => (
-    <strong className="font-zain-xbold text-[#b88a4f] dark:text-[#deab65]">
+    <strong className="font-display font-black text-[#2b1a10]">
       {children}
     </strong>
   ),
@@ -147,7 +215,7 @@ const markdownComponents = {
   ),
   ol: ({ children }: any) => (
     <ListContext.Provider value={true}>
-      <ol className="list-decimal list-inside space-y-1.5 mb-3 pr-2 text-right font-zain-bold text-[13px]">
+      <ol className="list-decimal list-inside space-y-1.5 mb-3 pr-2 text-right">
         {children}
       </ol>
     </ListContext.Provider>
@@ -163,7 +231,7 @@ const markdownComponents = {
     if (ordered) {
       return (
         <li
-          className="block w-full text-[13.5px] font-zain-bold leading-relaxed text-[#2b1a10] dark:text-[#e2dfd2] text-right"
+          className="block w-full text-[14px] font-sans leading-relaxed text-[#2b1a10] text-right"
           dir="auto"
           style={{ unicodeBidi: "plaintext" }}
         >
@@ -173,11 +241,11 @@ const markdownComponents = {
     }
     return (
       <li
-        className="flex items-start gap-2 text-[13.5px] font-zain-bold leading-relaxed text-[#2b1a10] dark:text-[#e2dfd2]"
+        className="flex items-start gap-2 text-[14px] font-sans leading-relaxed text-[#2b1a10]"
         dir="auto"
         style={{ unicodeBidi: "plaintext" }}
       >
-        <span className="text-[#b88a4f] mt-1 shrink-0 select-none text-[8px]">
+        <span className="text-[#b88a4f] mt-1.5 shrink-0 select-none text-[8px]">
           ●
         </span>
         <span className="flex-1 text-right whitespace-pre-wrap">{compact}</span>
@@ -190,17 +258,43 @@ const markdownComponents = {
       return <CodeBlock>{children}</CodeBlock>;
     }
     return (
-      <code className="bg-[#f5ebd9] dark:bg-[#253234] border border-[#e6dccf] dark:border-[#384a4c] rounded-lg px-1.5 py-0.5 mx-0.5 font-mono text-[12.5px] text-[#2b1a10] dark:text-[#e2dfd2]">
+      <code className="bg-[#f5ebd9] border border-[#e6dccf] rounded-lg px-1.5 py-0.5 mx-0.5 font-mono text-[12.5px] text-[#2b1a10]">
         {children}
       </code>
     );
   },
   blockquote: ({ children }: any) => (
-    <blockquote className="border-r-4 border-[#b88a4f] pr-3 my-3 italic text-[#7f6a55] dark:text-[#a09580] text-right bg-[#f7f2ea]/50 dark:bg-[#1a2324]/60 py-1 rounded-l-md font-zain-reg text-[13px]">
+    <blockquote className="border-r-4 border-[#b88a4f] pr-3 my-3 italic text-[#7f6a55] text-right bg-[#f7f2ea]/40 py-1 rounded-l-md">
       {children}
     </blockquote>
   ),
-  hr: () => <hr className="my-3 h-px border-0 bg-[#e6dccf] dark:bg-[#384a4c]" />,
+  hr: () => <hr className="my-3 h-px border-0 bg-[#e6dccf]" />,
+  table: ({ children }: any) => (
+    <div className="overflow-x-auto my-3 border border-[#e6dccf] rounded-xl">
+      <table className="w-full text-right border-collapse text-[13px]">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }: any) => (
+    <thead className="bg-[#f7f2ea] text-[#2b1a10] font-display font-black">
+      {children}
+    </thead>
+  ),
+  tbody: ({ children }: any) => (
+    <tbody className="divide-y divide-[#e6dccf]/60">{children}</tbody>
+  ),
+  tr: ({ children }: any) => (
+    <tr className="hover:bg-white/40 transition-colors">{children}</tr>
+  ),
+  th: ({ children }: any) => (
+    <th className="p-2.5 font-display font-black border-b border-[#e6dccf]">
+      {children}
+    </th>
+  ),
+  td: ({ children }: any) => (
+    <td className="p-2.5 font-sans text-[#2b1a10]/90">{children}</td>
+  ),
 };
 
 const remarkPlugins = [remarkGfm];
@@ -246,7 +340,7 @@ const MarkdownRenderer = ({
         clearInterval(interval);
         onCompleteRef.current?.();
       }
-    }, 30);
+    }, 35);
 
     return () => clearInterval(interval);
   }, [normalizedContent, animate]);
@@ -263,68 +357,110 @@ const MarkdownRenderer = ({
   );
 };
 
-export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = ({
+const CONVERSATIONS_STORAGE_KEY = "dar_alhikayat_ai_saved_conversations";
+
+export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssistant({
   onClose,
   storyContext,
   theme,
-}) => {
-  const [messages, setMessages] = useState<AIMessage[]>([]);
+}: DarAlHikayatAIAssistantProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitializingSession, setIsInitializingSession] = useState(true);
-  const [initError, setInitError] = useState<string | null>(null);
-
   const [feedback, setFeedback] = useState<Record<string, "like" | "dislike">>({});
   const [copiedResponseId, setCopiedResponseId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
-
-  const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   const [isMultiline, setIsMultiline] = useState(false);
   const [longMsgs, setLongMsgs] = useState<Set<string>>(new Set());
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
+  const [welcomeLineIndex] = useState(getInitialWelcomeLineIndex);
+  const [conversations, setConversations] = useState<StoredConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isConversationsLoading, setIsConversationsLoading] = useState(true);
+  const [storageError, setStorageError] = useState<string | null>(null);
+  const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<StoredConversation | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<StoredConversation | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [shareResult, setShareResult] = useState<{ conversation: StoredConversation; url: string } | null>(null);
 
-  // ── REAL INITIALIZATION WITH GEMINI API ──
-  // Reads the full story draft and produces a dynamic greeting referencing actual story details
-  const initializeWithStory = useCallback(async () => {
-    setIsInitializingSession(true);
-    setInitError(null);
-    setMessages([]);
-
+  // Load saved conversations from localStorage
+  const loadStoredConversations = useCallback((): StoredConversation[] => {
     try {
-      const dynamicWelcome = await initializeStoryAssistant(storyContext);
-      const welcomeMsg: AIMessage = {
-        id: "welcome-init-" + Date.now(),
-        role: "assistant",
-        content: dynamicWelcome,
-        timestamp: new Date(),
-        isNew: true,
-      };
-      setMessages([welcomeMsg]);
-    } catch (err) {
-      console.error("Failed to initialize story assistant with Gemini:", err);
-      setInitError("تعذر الاتصال بالمحرر الأدبي حالياً. يرجى التأكد من الاتصال بالإنترنت.");
-      // Fallback greeting referencing the actual title
-      const fallbackWelcome: AIMessage = {
-        id: "welcome-fallback",
-        role: "assistant",
-        content: `أهلاً بكِ يا أستاذة رحمة. استوعبتُ حكايتكِ **"${storyContext.title || "حكايتكِ الحالية"}"** ونصوصها المكتوبة في المحرر. كيف تحبين أن نبدأ في مراجعة الحبكة أو الصياغة الأدبية؟`,
-        timestamp: new Date(),
-      };
-      setMessages([fallbackWelcome]);
-    } finally {
-      setIsInitializingSession(false);
+      const raw = localStorage.getItem(CONVERSATIONS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item: any) => ({
+          ...item,
+          lastMessageAt: new Date(item.lastMessageAt),
+          pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
+          messages: (item.messages || []).map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          })),
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to parse stored conversations", e);
     }
-  }, [storyContext]);
+    return [];
+  }, []);
+
+  const saveStoredConversations = useCallback((list: StoredConversation[]) => {
+    try {
+      localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error("Failed to save conversations to storage", e);
+    }
+  }, []);
 
   useEffect(() => {
-    initializeWithStory();
-  }, [initializeWithStory]);
+    localStorage.setItem(
+      "dar_alhikayat_ai_welcome_line_index",
+      String(welcomeLineIndex)
+    );
+  }, [welcomeLineIndex]);
 
-  // Auto-resize the textarea
+  // Initial load of conversations
+  useEffect(() => {
+    setIsConversationsLoading(true);
+    const loaded = loadStoredConversations();
+    setConversations(loaded);
+    setIsConversationsLoading(false);
+  }, [loadStoredConversations]);
+
+  // Auto-sync active conversation messages to storage
+  useEffect(() => {
+    if (!activeConversationId || messages.length === 0) return;
+    setConversations((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id === activeConversationId) {
+          const firstUserMsg = messages.find((m) => m.role === "user");
+          const title = firstUserMsg
+            ? firstUserMsg.content.slice(0, 48)
+            : c.title;
+          return {
+            ...c,
+            title: title || c.title,
+            messages,
+            lastMessageAt: new Date(),
+          };
+        }
+        return c;
+      });
+      saveStoredConversations(updated);
+      return updated;
+    });
+  }, [messages, activeConversationId, saveStoredConversations]);
+
+  // Adjust textarea height
   const adjustTextareaHeight = useCallback(() => {
     if (!textareaRef.current) return;
     const el = textareaRef.current;
@@ -339,7 +475,7 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
     adjustTextareaHeight();
   }, [adjustTextareaHeight]);
 
-  // Auto-detect long messages
+  // Identify long messages
   useEffect(() => {
     const newLongMsgs = new Set<string>();
     messages.forEach((m) => {
@@ -362,7 +498,6 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
     });
   }, []);
 
-  // Find the last assistant message index
   const lastAssistantMessageIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "assistant") return i;
@@ -382,11 +517,102 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
     [messages]
   );
 
-  // Copy helper
   const handleCopyMsgContent = (msgId: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedResponseId(msgId);
     setTimeout(() => setCopiedResponseId(null), 2000);
+  };
+
+  const startNewConversation = () => {
+    setActiveConversationId(null);
+    setMessages([]);
+    setInputValue("");
+    setIsDrawerOpen(false);
+    setEditingMessageId(null);
+  };
+
+  const openConversation = (conversationId: string) => {
+    if (isLoading) return;
+    const target = conversations.find((c) => c.id === conversationId);
+    if (target) {
+      setActiveConversationId(target.id);
+      setMessages(target.messages || []);
+      setIsDrawerOpen(false);
+      setEditingMessageId(null);
+    }
+  };
+
+  const handlePinConversation = (conv: StoredConversation) => {
+    setConversations((prev) => {
+      const updated = prev.map((c) =>
+        c.id === conv.id
+          ? { ...c, pinnedAt: c.pinnedAt ? null : new Date() }
+          : c
+      );
+      // Sort pinned first
+      updated.sort((a, b) => {
+        if (a.pinnedAt && !b.pinnedAt) return -1;
+        if (!a.pinnedAt && b.pinnedAt) return 1;
+        return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+      });
+      saveStoredConversations(updated);
+      return updated;
+    });
+    setOpenConversationMenuId(null);
+  };
+
+  const openRenameConversation = (conv: StoredConversation) => {
+    setRenameTarget(conv);
+    setRenameValue(conv.title);
+    setOpenConversationMenuId(null);
+  };
+
+  const handleRenameConversation = () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    setActionLoading(true);
+    setConversations((prev) => {
+      const updated = prev.map((c) =>
+        c.id === renameTarget.id ? { ...c, title: renameValue.trim() } : c
+      );
+      saveStoredConversations(updated);
+      return updated;
+    });
+    setRenameTarget(null);
+    setRenameValue("");
+    setActionLoading(false);
+  };
+
+  const handleDeleteConversation = (convId: string) => {
+    setActionLoading(true);
+    setConversations((prev) => {
+      const updated = prev.filter((c) => c.id !== convId);
+      saveStoredConversations(updated);
+      return updated;
+    });
+    if (activeConversationId === convId) {
+      startNewConversation();
+    }
+    setDeleteTarget(null);
+    setActionLoading(false);
+    setOpenConversationMenuId(null);
+  };
+
+  const handleShareConversation = (conv: StoredConversation) => {
+    const textSnapshot = (conv.messages || [])
+      .map(
+        (m) =>
+          `${m.role === "user" ? "الكاتبة رحمة:" : "المحرر الأدبي:"}\n${m.content}`
+      )
+      .join("\n\n---\n\n");
+    const shareUrl = window.location.href;
+    navigator.clipboard.writeText(
+      `حوار أدبي في دار الحكايات: "${conv.title}"\n\n${textSnapshot}`
+    );
+    setShareResult({
+      conversation: conv,
+      url: shareUrl,
+    });
+    setOpenConversationMenuId(null);
   };
 
   // Auto scroll to bottom
@@ -394,14 +620,11 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages, isLoading, isInitializingSession]);
+  }, [messages, isLoading]);
 
-  const handleSendMessage = async (
-    text: string,
-    replaceUserMessageId?: string
-  ) => {
+  const handleSendMessage = async (text: string, replaceUserMessageId?: string) => {
     const trimmed = text.trim();
-    if (!trimmed || isLoading || isInitializingSession) return;
+    if (!trimmed || isLoading) return;
 
     const replaceIndex = replaceUserMessageId
       ? messages.findIndex(
@@ -411,14 +634,14 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
 
     if (replaceUserMessageId && replaceIndex === -1) return;
 
-    const userMsg: AIMessage = {
+    const userMsg: Message = {
       id: replaceUserMessageId || Date.now().toString(),
       role: "user",
       content: trimmed,
       timestamp: new Date(),
     };
 
-    const historyForAI = replaceUserMessageId
+    const historyMessages = replaceUserMessageId
       ? [...messages.slice(0, replaceIndex), userMsg]
       : [...messages, userMsg];
 
@@ -435,40 +658,91 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
     setInputValue("");
     setIsLoading(true);
 
+    let currentConvId = activeConversationId;
+    if (!currentConvId) {
+      const newId = "conv-" + Date.now();
+      const newConv: StoredConversation = {
+        id: newId,
+        title: trimmed.slice(0, 48),
+        lastMessageAt: new Date(),
+        pinnedAt: null,
+        messages: [userMsg],
+      };
+      currentConvId = newId;
+      setActiveConversationId(newId);
+      setConversations((prev) => [newConv, ...prev]);
+    }
+
     const aiMsgId = (Date.now() + 1).toString();
-    const aiMsg: AIMessage = {
+    const aiMsg: Message = {
       id: aiMsgId,
       role: "assistant",
       content: "",
       timestamp: new Date(),
+      isNew: false,
       isStreaming: true,
     };
 
     setMessages((prev) => [...prev, aiMsg]);
-
-    await streamLiteraryAssistantResponse(
-      historyForAI,
-      trimmed,
-      storyContext,
-      (accumulatedText) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === aiMsgId ? { ...m, content: accumulatedText } : m
-          )
-        );
-      }
-    );
-
-    setMessages((prev) =>
-      prev.map((m) => (m.id === aiMsgId ? { ...m, isStreaming: false } : m))
-    );
     setIsLoading(false);
+
+    try {
+      let accumulated = "";
+      await streamLiteraryAssistantResponse(
+        historyMessages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+        })),
+        trimmed,
+        storyContext,
+        (chunk) => {
+          accumulated += chunk;
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === aiMsgId
+                ? { ...msg, content: accumulated, isStreaming: true }
+                : msg
+            )
+          );
+        }
+      );
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === aiMsgId ? { ...msg, isStreaming: false } : msg
+        )
+      );
+      setStorageError(null);
+    } catch (error) {
+      console.error("Dar Al-Hikayat AI assistant error:", error);
+      setMessages((prev) => {
+        const index = prev.findIndex((m) => m.id === aiMsgId);
+        if (index !== -1 && prev[index].content.trim()) {
+          return prev.map((msg) =>
+            msg.id === aiMsgId ? { ...msg, isStreaming: false } : msg
+          );
+        }
+        const cleaned = prev.filter((m) => m.id !== aiMsgId);
+        const errorMsg: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "عذرًا يا أستاذة رحمة، حدث تعذر مؤقت في الاتصال بالمحرر الأدبي. يُرجى المحاولة مرة أخرى.",
+          timestamp: new Date(),
+        };
+        return [...cleaned, errorMsg];
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const startEditingUserMessage = (msg: AIMessage) => {
-    if (isLoading || msg.id !== lastUserMessageId) return;
-    setEditingMessageId(msg.id);
-    setEditingContent(msg.content);
+  const startEditingUserMessage = (message: Message) => {
+    if (isLoading || message.id !== lastUserMessageId) return;
+    setEditingMessageId(message.id);
+    setEditingContent(message.content);
   };
 
   const cancelEditingUserMessage = () => {
@@ -493,387 +767,770 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
     void handleSendMessage(editingContent, messageId);
   };
 
+  const userName = "أستاذة رحمة";
+
   return (
     <div
       dir="rtl"
-      className="w-full h-full font-sans bg-[#ece7de] dark:bg-[#121819] relative flex flex-col overflow-hidden border-r border-[#b88a4f]/20 shadow-2xl"
-      style={{ backgroundColor: theme.bg }}
+      className="mx-auto w-full max-w-[390px] px-5 pt-0 pb-4 font-sans bg-[#ece7de] h-screen relative flex flex-col overflow-hidden"
     >
       {/* Background soft ambient shapes */}
-      <div className="absolute top-[-20%] right-[-10%] w-[260px] h-[260px] bg-[#b88a4f]/10 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-[220px] h-[220px] bg-[#deab65]/10 rounded-full blur-[90px] pointer-events-none" />
+      <div className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] bg-[#b88a4f]/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[250px] h-[250px] bg-[#deab65]/5 rounded-full blur-[100px] pointer-events-none" />
+      {messages.length === 0 && (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[38vh] bg-gradient-to-t from-[#d8b27b]/55 via-[#d8b27b]/20 to-transparent"
+          aria-hidden="true"
+        />
+      )}
 
-      {/* ── FLOATING TOP HEADER (MODIFIED: Drawer Capsule Removed entirely) ── */}
-      <div
-        className="h-14 px-4 border-b flex items-center justify-between z-30 shrink-0 backdrop-blur-xl transition-all"
-        style={{ borderColor: theme.border, backgroundColor: theme.glass }}
-      >
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center border shadow-xs"
-            style={{
-              backgroundColor: `${theme.accent}18`,
-              borderColor: `${theme.accent}35`,
-              color: theme.accent,
-            }}
+      {/* ── FLOATING TOP HEADER ── */}
+      <div className="absolute top-6 left-5 right-5 flex items-center justify-between z-[45] pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="w-10 h-10 cut-crystal-capsule rounded-full shadow-md text-[#2b1a10] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white flex items-center justify-center active:scale-[0.95] transition-all duration-300 cursor-pointer"
+            aria-label="فتح المحادثات المحفوظة"
+            title="المحادثات المحفوظة"
           >
-            <Feather size={16} strokeWidth={2.2} />
-          </div>
-          <div>
-            <span className="text-[14.5px] font-zain-xbold block leading-tight text-[#2b1a10] dark:text-[#f4f1ea]">
-              المساعد الأدبي
-            </span>
-            <span className="text-[10px] font-zain-bold opacity-75 block text-[#b88a4f]">
-              الاستوديو الأدبي للكاتبة رحمة السيد موافي
+            <PanelLeftOpen size={17} strokeWidth={2.2} />
+          </button>
+          <div className="cut-crystal-capsule px-5 h-10 rounded-full shadow-md flex items-center justify-center gap-1.5 transition-all duration-300">
+            <span className="text-[14.5px] font-display font-black whitespace-nowrap pt-0.5 text-[#2b1a10]">
+              دار الحكايات AI
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={initializeWithStory}
-            disabled={isLoading || isInitializingSession}
-            className="w-8 h-8 rounded-full border flex items-center justify-center text-[#7f6a55] dark:text-[#a09580] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white/50 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-            title="بدء جلسة جديدة وقراءة النص مجدداً"
-          >
-            <MessageCirclePlus size={16} strokeWidth={2.1} />
-          </button>
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={startNewConversation}
+              className="w-10 h-10 cut-crystal-capsule rounded-full shadow-md text-[#7f6a55] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white flex items-center justify-center active:scale-[0.95] transition-all duration-300 cursor-pointer"
+              aria-label="بدء محادثة جديدة"
+              title="محادثة جديدة"
+            >
+              <MessageCirclePlus size={17} strokeWidth={2.1} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full border flex items-center justify-center text-[#2b1a10] dark:text-[#f4f1ea] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white/50 active:scale-95 transition-all cursor-pointer"
-            title="إغلاق المساعد الأدبي"
-            aria-label="إغلاق"
+            className="w-10 h-10 cut-crystal-capsule rounded-full shadow-md text-[#2b1a10] hover:text-[#b88a4f] hover:border-[#b88a4f]/40 hover:bg-white flex items-center justify-center active:scale-[0.95] transition-all duration-300 cursor-pointer"
+            aria-label="رجوع"
+            title="رجوع"
           >
-            <X size={17} />
+            <ChevronRight size={18} className="mr-0.5" />
           </button>
         </div>
       </div>
 
-      {/* ── REAL LOADING BANNER WHILE READING STORY ── */}
+      {/* ── CONVERSATIONS DRAWER ── */}
       <AnimatePresence>
-        {isInitializingSession && (
+        {isDrawerOpen && (
+          <>
+            <motion.button
+              type="button"
+              aria-label="إغلاق قائمة المحادثات"
+              className="fixed inset-0 z-[55] bg-[#2b1a10]/18 backdrop-blur-[2px] cursor-default"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDrawerOpen(false)}
+            />
+            <motion.aside
+              dir="rtl"
+              className="fixed inset-y-0 right-0 left-auto z-[60] flex w-[min(286px,calc(100vw-16px))] flex-col overflow-hidden rounded-l-[30px] rounded-r-none border border-r-0 border-white/45 shadow-[0_24px_70px_-20px_rgba(43,26,16,0.42)]"
+              style={{
+                background:
+                  "linear-gradient(145deg, rgba(255,255,255,0.78), rgba(184,138,79,0.22))",
+                backdropFilter: "blur(28px) saturate(165%)",
+                WebkitBackdropFilter: "blur(28px) saturate(165%)",
+              }}
+              initial={{ opacity: 0, x: 18, scale: 0.995 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 18, scale: 0.995 }}
+              transition={{ duration: 0.14, ease: [0.23, 1, 0.32, 1] }}
+            >
+              <div className="flex h-12 shrink-0 items-center justify-between border-b border-[#b88a4f]/15 px-4">
+                <p className="text-[14px] font-display font-black text-[#2b1a10]">
+                  دار الحكايات AI
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#7f6a55] transition-colors hover:bg-white hover:text-[#2b1a10] active:scale-95 cursor-pointer"
+                  aria-label="إغلاق قائمة المحادثات"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={startNewConversation}
+                className="mx-3 mt-3 flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-[#b88a4f] px-4 text-[12px] font-display font-black text-[#fff9f1] shadow-sm transition-all hover:bg-[#a0753e] active:scale-[0.98] cursor-pointer"
+              >
+                <MessageCirclePlus size={16} />
+                <span>محادثة جديدة</span>
+              </button>
+
+              <div className="flex-1 overflow-y-auto px-3 pb-4 pt-4 hide-scrollbar">
+                {isConversationsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-10 text-[12px] font-bold text-[#7f6a55]">
+                    <span className="w-4 h-4 border-2 border-[#b88a4f] border-t-transparent rounded-full animate-spin" />
+                    <span>جارٍ تحميل المحادثات</span>
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="px-5 py-10 text-center text-[12px] font-bold leading-6 text-[#7f6a55]">
+                    لا توجد محادثات محفوظة بعد.
+                    <br />
+                    ابدأي سؤالًا جديدًا وستظهر هنا.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {conversations.map((conversation) => (
+                      <div
+                        key={conversation.id}
+                        className={`group relative flex items-center gap-1 rounded-[22px] border px-3 py-2 transition-all ${
+                          conversation.id === activeConversationId
+                            ? "border-[#b88a4f]/40 bg-[#f7f2ea] shadow-sm"
+                            : "border-transparent hover:border-[#b88a4f]/20 hover:bg-[#f7f2ea]/70"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openConversation(conversation.id)}
+                          className="min-w-0 flex-1 text-right cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1.5 truncate text-[12px] font-display font-black text-[#2b1a10]">
+                            {conversation.pinnedAt && (
+                              <Pin
+                                size={11}
+                                className="shrink-0 text-[#b88a4f]"
+                                aria-label="مثبتة"
+                              />
+                            )}
+                            <span className="truncate">
+                              {conversation.title}
+                            </span>
+                          </span>
+                          <span className="mt-1 block text-[10px] font-bold text-[#7f6a55]">
+                            {conversation.lastMessageAt.toLocaleDateString(
+                              "ar-EG",
+                              { day: "numeric", month: "short" }
+                            )}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenConversationMenuId((current) =>
+                              current === conversation.id
+                                ? null
+                                : conversation.id
+                            );
+                          }}
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-[#f5ebd9]/75 cursor-pointer ${
+                            conversation.pinnedAt
+                              ? "text-[#b88a4f]"
+                              : "text-[#7f6a55]/70 hover:text-[#2b1a10]"
+                          }`}
+                          aria-label={`إجراءات ${conversation.title}`}
+                          title="إجراءات المحادثة"
+                        >
+                          {conversation.pinnedAt ? (
+                            <Pin size={15} fill="currentColor" />
+                          ) : (
+                            <MoreVertical size={16} />
+                          )}
+                        </button>
+                        <AnimatePresence>
+                          {openConversationMenuId === conversation.id && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                              transition={{ duration: 0.12 }}
+                              className="!absolute left-2 top-10 z-[70] w-[184px] cut-crystal-panel rounded-[20px] shadow-2xl overflow-hidden p-1.5"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleShareConversation(conversation)
+                                }
+                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                              >
+                                <Share2 size={14} className="text-[#b88a4f]" />
+                                <span>مشاركة المحادثة</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handlePinConversation(conversation)
+                                }
+                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                              >
+                                <Pin
+                                  size={14}
+                                  className={
+                                    conversation.pinnedAt
+                                      ? "fill-[#b88a4f] text-[#b88a4f]"
+                                      : "text-[#b88a4f]"
+                                  }
+                                />
+                                <span>
+                                  {conversation.pinnedAt
+                                    ? "إلغاء التثبيت"
+                                    : "تثبيت"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openRenameConversation(conversation)
+                                }
+                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                              >
+                                <Pencil size={14} className="text-[#b88a4f]" />
+                                <span>إعادة التسمية</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenConversationMenuId(null);
+                                  setDeleteTarget(conversation);
+                                }}
+                                className="flex h-9 w-full items-center gap-2 rounded-[14px] px-3 text-right text-[11px] font-bold text-[#2b1a10] transition hover:bg-[#f5ebd9] cursor-pointer"
+                              >
+                                <Trash2 size={14} className="text-[#b88a4f]" />
+                                <span>حذف</span>
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODALS (SHARE, RENAME, DELETE) ── */}
+      <AnimatePresence>
+        {shareResult && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-2.5 border-b bg-[#f5ebd9] dark:bg-[#1b2425] flex items-center justify-center gap-2.5 text-xs font-zain-bold text-[#b88a4f] shrink-0"
-            style={{ borderColor: theme.border }}
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#2b1a10]/20 px-5 backdrop-blur-[3px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           >
-            <RefreshCw size={14} className="animate-spin" />
-            <span>جارٍ قراءة الحكاية واستيعاب الحبكة والأحداث...</span>
+            <motion.div
+              dir="rtl"
+              className="cut-crystal-panel w-full max-w-[360px] rounded-[28px] p-5"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[15px] font-display font-black text-[#2b1a10]">
+                    تم نسخ نص المحادثة
+                  </p>
+                  <p className="mt-1 text-[11px] font-bold text-[#7f6a55]">
+                    تم نسخ كامل مجريات الحوار الأدبي للحافظة بنجاح.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShareResult(null)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#7f6a55] hover:bg-[#f5ebd9] cursor-pointer"
+                  aria-label="إغلاق"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShareResult(null)}
+                  className="h-10 flex-1 rounded-full bg-[#b88a4f] text-[12px] font-black text-white hover:bg-[#a0753e] cursor-pointer"
+                >
+                  تم
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {renameTarget && (
+          <motion.div
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#2b1a10]/20 px-5 backdrop-blur-[3px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.form
+              dir="rtl"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleRenameConversation();
+              }}
+              className="cut-crystal-panel w-full max-w-[360px] rounded-[28px] p-5"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            >
+              <p className="text-[16px] font-display font-black text-[#2b1a10]">
+                إعادة تسمية المحادثة
+              </p>
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value)}
+                maxLength={160}
+                className="cut-crystal-input mt-4 h-11 w-full rounded-[18px] px-4 text-right text-[13px] font-bold text-[#2b1a10] outline-none focus:border-[#b88a4f]"
+                aria-label="اسم المحادثة الجديد"
+              />
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRenameTarget(null)}
+                  className="h-10 flex-1 rounded-full border border-[#d8c9b8] text-[12px] font-black text-[#7f6a55] hover:bg-[#f5ebd9] cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={!renameValue.trim() || actionLoading}
+                  className="h-10 flex-1 rounded-full bg-[#b88a4f] text-[12px] font-black text-white disabled:opacity-50 cursor-pointer"
+                >
+                  حفظ
+                </button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+
+        {deleteTarget && (
+          <motion.div
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-[#2b1a10]/25 px-5 backdrop-blur-[3px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              dir="rtl"
+              className="cut-crystal-panel w-full max-w-[360px] rounded-[28px] p-5"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#8f3c35] to-[#6f2d29] text-white shadow-sm">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <p className="text-[16px] font-display font-black text-[#2b1a10]">
+                    حذف المحادثة نهائيًا؟
+                  </p>
+                  <p className="mt-2 text-[12px] font-bold leading-6 text-[#7f6a55]">
+                    سيتم حذف المحادثة وجميع رسائلها نهائيًا. لا يمكن التراجع عن
+                    هذا الإجراء.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={actionLoading}
+                  className="h-10 flex-1 rounded-full border border-[#d8c9b8] text-[12px] font-black text-[#7f6a55] hover:bg-[#f5ebd9] cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteConversation(deleteTarget.id)}
+                  disabled={actionLoading}
+                  className="h-10 flex-1 rounded-full border border-[#8f3c35]/35 bg-gradient-to-br from-[#8f3c35] to-[#6f2d29] text-[12px] font-black text-white shadow-[0_10px_22px_-12px_rgba(111,45,41,0.9)] transition-[transform,filter] duration-150 hover:brightness-110 active:scale-[0.97] disabled:opacity-50 cursor-pointer"
+                >
+                  {actionLoading ? "جارٍ الحذف..." : "حذف نهائي"}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── MAIN CHAT AREA ── */}
+      <AnimatePresence>
+        {storageError && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            className="fixed bottom-6 left-5 right-5 z-[120] mx-auto max-w-[360px] rounded-[20px] border border-white/45 bg-[#ece7de]/55 px-4 py-3 text-center text-[11px] font-black text-[#2b1a10] shadow-[0_18px_42px_rgba(43,26,16,0.24)] backdrop-blur-2xl"
+          >
+            {storageError}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MAIN CHAT AREA / EMPTY STATE ── */}
       <div className="flex-1 flex flex-col justify-between relative z-10 overflow-hidden">
-        {/* Active Chat Thread */}
-        <div
-          ref={chatContainerRef}
-          className="flex-1 overflow-y-auto px-4 pt-4 pb-32 space-y-4 custom-scroll"
-        >
-          {messages.map((m, idx) => {
-            const isUser = m.role === "user";
-            const isEditingThisMessage = isUser && editingMessageId === m.id;
-            const canEditThisMessage =
-              isUser &&
-              m.id === lastUserMessageId &&
-              !isLoading &&
-              !hasStreamingAssistantMessage;
-            const hasEditedContent =
-              isEditingThisMessage && editingContent !== m.content;
-            const isEditingLongMessage =
-              isEditingThisMessage &&
-              (longMsgs.has(m.id) ||
-                editingContent.length > 110 ||
-                editingContent.split("\n").length > 3);
-            const isLastAI =
-              !isUser &&
-              idx === lastAssistantMessageIndex &&
-              m.isNew !== true &&
-              m.isStreaming !== true;
+        {messages.length === 0 ? (
+          <div className="flex-1 overflow-hidden pt-24 pb-28">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={welcomeLineIndex}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                className="flex h-full flex-col items-center justify-center px-4 text-center"
+              >
+                <p className="text-[13px] font-bold text-[#8a6a3d]">
+                  أهلًا بكِ، {userName}
+                </p>
+                <h1 className="mt-3 max-w-[330px] font-display text-[29px] font-black leading-[1.25] text-[#2b1a10]">
+                  {welcomeLines[welcomeLineIndex].title}
+                </h1>
+                <p className="mt-3 max-w-[285px] text-[13px] font-bold leading-7 text-[#7f6a55]">
+                  {welcomeLines[welcomeLineIndex].subtitle}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        ) : (
+          /* Active Chat Thread */
+          <div
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto px-1 pt-24 pb-36 space-y-4 scrollbar-thin hide-scrollbar"
+          >
+            {messages.map((m, idx) => {
+              const isUser = m.role === "user";
+              const isEditingThisMessage = isUser && editingMessageId === m.id;
+              const canEditThisMessage =
+                isUser &&
+                m.id === lastUserMessageId &&
+                !isLoading &&
+                !hasStreamingAssistantMessage;
+              const hasEditedContent =
+                isEditingThisMessage && editingContent !== m.content;
+              const isEditingLongMessage =
+                isEditingThisMessage &&
+                (longMsgs.has(m.id) ||
+                  editingContent.length > 110 ||
+                  editingContent.split("\n").length > 3);
+              const isLastAI =
+                !isUser &&
+                idx === lastAssistantMessageIndex &&
+                m.isNew !== true &&
+                m.isStreaming !== true;
 
-            return (
-              <div key={m.id} className="w-full">
-                <div className={isUser ? "mr-auto max-w-[85%]" : "w-full"}>
-                  {!isUser && (
-                    <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-xbold text-[#b88a4f] select-none">
-                      <Feather size={12} />
-                      <span>المحرر الأدبي</span>
-                    </div>
-                  )}
-
-                  {isUser ? (
-                    <>
-                      <div className="relative text-right bg-gradient-to-br from-[#2b1a10] to-[#3f281a] text-[#fff9f1] border border-[#2b1a10]/20 rounded-[24px] rounded-tl-sm shadow-md transition-all duration-300 overflow-hidden">
-                        {isEditingThisMessage ? (
-                          <textarea
-                            autoFocus
-                            rows={isEditingLongMessage ? 7 : 3}
-                            value={editingContent}
-                            onChange={(event) =>
-                              setEditingContent(event.target.value)
-                            }
-                            aria-label="تعديل الرسالة"
-                            className={`w-full resize-none bg-transparent p-3.5 text-right text-[13px] font-zain-bold leading-relaxed text-[#fff9f1] outline-none placeholder:text-white/50 ${
-                              isEditingLongMessage
-                                ? "min-h-[150px] max-h-[180px] overflow-y-auto"
-                                : "min-h-[90px] max-h-[130px] overflow-y-auto"
-                            }`}
-                          />
-                        ) : (
-                          <>
-                            <div
-                              className={`p-3.5 transition-all duration-300 ease-in-out ${
-                                longMsgs.has(m.id) && !expandedMsgs.has(m.id)
-                                  ? "max-h-[105px] overflow-hidden relative"
-                                  : "max-h-none"
-                              }`}
-                            >
-                              <p className="font-zain-bold text-[13px] leading-relaxed whitespace-pre-wrap break-words">
-                                {m.content}
-                              </p>
-                              {longMsgs.has(m.id) &&
-                                !expandedMsgs.has(m.id) && (
-                                  <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#2b1a10] to-transparent pointer-events-none rounded-b-[24px]" />
-                                )}
-                            </div>
-                            {longMsgs.has(m.id) && (
-                              <div
-                                className={`flex items-center justify-start ${!expandedMsgs.has(m.id) ? "absolute bottom-2 left-2 z-10" : "px-3.5 pb-2.5 pt-0"}`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExpand(m.id)}
-                                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white cursor-pointer transition-all active:scale-90 shadow-xs"
-                                  title={
-                                    expandedMsgs.has(m.id)
-                                      ? "طي النص"
-                                      : "توسيع النص"
-                                  }
-                                >
-                                  {expandedMsgs.has(m.id) ? (
-                                    <ChevronUp size={13} />
-                                  ) : (
-                                    <ChevronDown size={13} />
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </>
-                        )}
+              return (
+                <div key={m.id} className="w-full">
+                  <div className={isUser ? "mr-auto max-w-[85%]" : "w-full"}>
+                    {!isUser && (
+                      <div className="flex items-center gap-1.5 mb-2 text-[11px] font-display font-black text-[#b88a4f] select-none">
+                        <span>دار الحكايات AI</span>
                       </div>
+                    )}
 
-                      {isEditingThisMessage ? (
-                        <div
-                          dir="ltr"
-                          className="mt-2 flex items-center justify-start gap-3 px-1 text-[11px] font-zain-bold"
-                        >
-                          <button
-                            type="button"
-                            disabled={
-                              !hasEditedContent || !editingContent.trim()
-                            }
-                            onClick={confirmEditingUserMessage}
-                            className={`inline-flex h-6 items-center justify-center rounded-full px-3 text-[11px] font-zain-bold transition-all ${
-                              hasEditedContent && editingContent.trim()
-                                ? "bg-[#b88a4f] text-[#fff9f1] shadow-xs hover:bg-[#a0753e] active:scale-95 cursor-pointer"
-                                : "bg-[#e6dccf]/60 text-[#7f6a55]/40 cursor-not-allowed"
-                            }`}
-                          >
-                            تعديل
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEditingUserMessage}
-                            className="text-[#7f6a55] transition-colors hover:text-[#2b1a10] cursor-pointer"
-                          >
-                            إلغاء
-                          </button>
+                    {isUser ? (
+                      <>
+                        <div className="relative text-right bg-gradient-to-br from-[#2b1a10] to-[#3f281a] text-[#fff9f1] border border-[#2b1a10]/20 rounded-[28px] shadow-md transition-all duration-300 overflow-hidden">
+                          {isEditingThisMessage ? (
+                            <textarea
+                              autoFocus
+                              rows={isEditingLongMessage ? 7 : 3}
+                              value={editingContent}
+                              onChange={(event) =>
+                                setEditingContent(event.target.value)
+                              }
+                              aria-label="تعديل رسالة المستخدم"
+                              className={`w-full resize-none bg-transparent p-4 text-right text-[14px] font-sans font-bold leading-relaxed text-[#fff9f1] outline-none placeholder:text-white/50 ${
+                                isEditingLongMessage
+                                  ? "min-h-[156px] max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth"
+                                  : "min-h-[92px] max-h-[130px] overflow-y-auto"
+                              }`}
+                            />
+                          ) : (
+                            <>
+                              <div
+                                className={`p-4 transition-all duration-300 ease-in-out ${
+                                  longMsgs.has(m.id) && !expandedMsgs.has(m.id)
+                                    ? "max-h-[105px] overflow-hidden relative"
+                                    : "max-h-none"
+                                }`}
+                              >
+                                <p className="font-sans text-[14px] leading-relaxed font-bold whitespace-pre-wrap break-words">
+                                  {m.content}
+                                </p>
+                                {longMsgs.has(m.id) &&
+                                  !expandedMsgs.has(m.id) && (
+                                    <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#2b1a10] via-[#2b1a10]/85 to-transparent pointer-events-none rounded-b-[28px]" />
+                                  )}
+                              </div>
+                              {longMsgs.has(m.id) && (
+                                <div
+                                  className={`flex items-center justify-start ${
+                                    !expandedMsgs.has(m.id)
+                                      ? "absolute bottom-2.5 left-2.5 z-10"
+                                      : "px-4 pb-3 pt-0"
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpand(m.id)}
+                                    className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 border border-white/25 flex items-center justify-center text-white cursor-pointer transition-all active:scale-90 shadow-md backdrop-blur-xs"
+                                    title={
+                                      expandedMsgs.has(m.id)
+                                        ? "طي النص"
+                                        : "توسيع النص"
+                                    }
+                                  >
+                                    {expandedMsgs.has(m.id) ? (
+                                      <ChevronUp size={15} />
+                                    ) : (
+                                      <ChevronDown size={15} />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                      ) : (
-                        <div
-                          dir="ltr"
-                          className="mt-1.5 flex items-center justify-start gap-1"
-                        >
-                          {canEditThisMessage && (
+
+                        {isEditingThisMessage ? (
+                          <div
+                            dir="ltr"
+                            className="mt-2 flex items-center justify-start gap-3 px-1 text-[12px] font-bold"
+                          >
                             <button
                               type="button"
-                              onClick={() => startEditingUserMessage(m)}
-                              className="inline-flex h-6 w-6 items-center justify-center text-[#7f6a55] dark:text-[#a09580] transition-colors hover:text-[#b88a4f] active:scale-90 cursor-pointer"
-                              title="تعديل الرسالة"
+                              disabled={
+                                !hasEditedContent || !editingContent.trim()
+                              }
+                              onClick={confirmEditingUserMessage}
+                              className={`inline-flex h-7 items-center justify-center rounded-full px-3 text-[12px] font-bold transition-all ${
+                                hasEditedContent && editingContent.trim()
+                                  ? "bg-[#b88a4f] text-[#fff9f1] shadow-sm hover:bg-[#a0753e] active:scale-95 cursor-pointer"
+                                  : "bg-[#e6dccf]/60 text-[#7f6a55]/40 cursor-not-allowed"
+                              }`}
                             >
-                              <Pencil size={12} />
+                              تعديل
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleCopyMsgContent(m.id, m.content)
-                            }
-                            className={`inline-flex h-6 w-6 items-center justify-center text-[#7f6a55] dark:text-[#a09580] transition-colors hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
-                              copiedResponseId === m.id
-                                ? "text-emerald-600"
-                                : ""
-                            }`}
-                            title="نسخ الرسالة"
-                          >
-                            {copiedResponseId === m.id ? (
-                              <Check size={12} />
-                            ) : (
-                              <Copy size={12} />
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="w-full text-right bg-[#fdfcfb]/80 dark:bg-[#182122]/80 border border-[#e6dccf] dark:border-[#2e3c3e] rounded-[24px] rounded-tr-sm p-4 shadow-xs text-[#2b1a10] dark:text-[#f4f1ea]">
-                      <div>
-                        {m.content.trim() === "" && m.isStreaming ? (
-                          <div className="flex items-center gap-1.5 py-2 justify-start">
-                            <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce [animation-delay:-0.3s]"></span>
-                            <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce [animation-delay:-0.15s]"></span>
-                            <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce"></span>
+                            <button
+                              type="button"
+                              onClick={cancelEditingUserMessage}
+                              className="text-[#7f6a55] transition-colors hover:text-[#2b1a10] cursor-pointer"
+                            >
+                              إلغاء
+                            </button>
                           </div>
                         ) : (
-                          <MarkdownRenderer
-                            content={m.content}
-                            animate={m.isNew && !m.isStreaming}
-                            onComplete={() => {
-                              setMessages((prev) =>
-                                prev.map((msg) =>
-                                  msg.id === m.id
-                                    ? { ...msg, isNew: false }
-                                    : msg
-                                )
-                              );
-                            }}
-                          />
+                          <div
+                            dir="ltr"
+                            className="mt-2 flex items-center justify-start gap-1"
+                          >
+                            {canEditThisMessage && (
+                              <button
+                                type="button"
+                                onClick={() => startEditingUserMessage(m)}
+                                className="inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-colors hover:text-[#b88a4f] active:scale-90 cursor-pointer"
+                                title="تعديل الرسالة"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCopyMsgContent(m.id, m.content)
+                              }
+                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-colors hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
+                                copiedResponseId === m.id
+                                  ? "text-emerald-600"
+                                  : ""
+                              }`}
+                              title="نسخ الرسالة"
+                            >
+                              {copiedResponseId === m.id ? (
+                                <Check size={13} />
+                              ) : (
+                                <Copy size={13} />
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="w-full text-right bg-transparent border-none shadow-none px-0 py-2 text-[#2b1a10]">
+                        <div>
+                          {m.content.trim() === "" && m.isStreaming ? (
+                            <div className="flex items-center gap-1.5 py-3 justify-start">
+                              <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce [animation-delay:-0.3s]"></span>
+                              <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce [animation-delay:-0.15s]"></span>
+                              <span className="w-2 h-2 rounded-full bg-[#b88a4f] animate-bounce"></span>
+                            </div>
+                          ) : (
+                            <MarkdownRenderer
+                              content={m.content}
+                              animate={m.isNew && !m.isStreaming}
+                              onComplete={() => {
+                                setMessages((prev) =>
+                                  prev.map((msg) =>
+                                    msg.id === m.id
+                                      ? { ...msg, isNew: false }
+                                      : msg
+                                  )
+                                );
+                              }}
+                            />
+                          )}
+                        </div>
+                        {isLastAI && (
+                          <div
+                            dir="ltr"
+                            className="mt-4 flex w-full items-center justify-end gap-2 border-t border-[#e6dccf]/40 pt-3 text-[#7f6a55] select-none"
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFeedback((prev) => ({
+                                  ...prev,
+                                  [m.id]:
+                                    prev[m.id] === "dislike"
+                                      ? undefined
+                                      : "dislike",
+                                }))
+                              }
+                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-all hover:text-red-500 active:scale-90 cursor-pointer ${
+                                feedback[m.id] === "dislike"
+                                  ? "text-red-600"
+                                  : ""
+                              }`}
+                              title="لم يعجبني"
+                            >
+                              <ThumbsDown
+                                size={14}
+                                fill={
+                                  feedback[m.id] === "dislike"
+                                    ? "currentColor"
+                                    : "none"
+                                }
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFeedback((prev) => ({
+                                  ...prev,
+                                  [m.id]:
+                                    prev[m.id] === "like" ? undefined : "like",
+                                }))
+                              }
+                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-all hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
+                                feedback[m.id] === "like"
+                                  ? "text-[#b88a4f]"
+                                  : ""
+                              }`}
+                              title="أعجبني"
+                            >
+                              <ThumbsUp
+                                size={14}
+                                fill={
+                                  feedback[m.id] === "like"
+                                    ? "currentColor"
+                                    : "none"
+                                }
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCopyMsgContent(m.id, m.content)
+                              }
+                              className={`inline-flex h-7 w-7 items-center justify-center text-[#7f6a55] transition-all hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
+                                copiedResponseId === m.id
+                                  ? "text-emerald-600"
+                                  : ""
+                              }`}
+                              title="نسخ الإجابة"
+                            >
+                              {copiedResponseId === m.id ? (
+                                <Check size={14} className="text-emerald-600" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </button>
+                          </div>
                         )}
                       </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
 
-                      {/* Action buttons for assistant response */}
-                      {isLastAI && (
-                        <div
-                          dir="ltr"
-                          className="mt-3 flex w-full items-center justify-end gap-1.5 border-t border-[#e6dccf]/60 dark:border-[#334446] pt-2 text-[#7f6a55] dark:text-[#a09580] select-none"
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFeedback((prev) => ({
-                                ...prev,
-                                [m.id]:
-                                  prev[m.id] === "dislike"
-                                    ? undefined
-                                    : "dislike",
-                              }))
-                            }
-                            className={`inline-flex h-6 w-6 items-center justify-center text-[#7f6a55] dark:text-[#a09580] transition-all hover:text-red-500 active:scale-90 cursor-pointer ${
-                              feedback[m.id] === "dislike"
-                                ? "text-red-600"
-                                : ""
-                            }`}
-                            title="لم يعجبني"
-                          >
-                            <ThumbsDown
-                              size={13}
-                              fill={
-                                feedback[m.id] === "dislike"
-                                  ? "currentColor"
-                                  : "none"
-                              }
-                            />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFeedback((prev) => ({
-                                ...prev,
-                                [m.id]:
-                                  prev[m.id] === "like" ? undefined : "like",
-                              }))
-                            }
-                            className={`inline-flex h-6 w-6 items-center justify-center text-[#7f6a55] dark:text-[#a09580] transition-all hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
-                              feedback[m.id] === "like"
-                                ? "text-[#b88a4f]"
-                                : ""
-                            }`}
-                            title="أعجبني"
-                          >
-                            <ThumbsUp
-                              size={13}
-                              fill={
-                                feedback[m.id] === "like"
-                                  ? "currentColor"
-                                  : "none"
-                              }
-                            />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleCopyMsgContent(m.id, m.content)
-                            }
-                            className={`inline-flex h-6 w-6 items-center justify-center text-[#7f6a55] dark:text-[#a09580] transition-all hover:text-[#b88a4f] active:scale-90 cursor-pointer ${
-                              copiedResponseId === m.id
-                                ? "text-emerald-600"
-                                : ""
-                            }`}
-                            title="نسخ الإجابة"
-                          >
-                            {copiedResponseId === m.id ? (
-                              <Check size={13} className="text-emerald-600" />
-                            ) : (
-                              <Copy size={13} />
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            {isLoading && (
+              <div className="flex justify-start w-full pr-1 py-2 pl-12">
+                <div className="relative inline-flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[#b88a4f]/20 border border-[#b88a4f]/40 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-[#b88a4f] animate-pulse" />
+                  </div>
+                  <span
+                    dir="ltr"
+                    className="text-[14px] font-display font-bold select-none thinking-shimmer"
+                  >
+                    Thinking
+                  </span>
                 </div>
               </div>
-            );
-          })}
-
-          {isLoading && (
-            <div className="flex justify-start w-full pr-1 py-2">
-              <div className="relative inline-flex items-center gap-2 text-xs font-zain-bold text-[#b88a4f]">
-                <Feather size={16} className="animate-spin" />
-                <span>يتأمّل النص ويصيغ الرأي الأدبي...</span>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
 
         {/* ── BACKGROUND UNDER INPUT BAR ── */}
-        <div className="absolute inset-x-0 bottom-0 z-10 pointer-events-none h-24 bg-gradient-to-t from-[#ece7de] dark:from-[#121819] via-[#ece7de]/80 dark:via-[#121819]/80 to-transparent" />
+        <div
+          className={`fixed inset-x-0 bottom-0 z-10 pointer-events-none h-28 ${
+            messages.length === 0
+              ? "bg-gradient-to-t from-[#d8b27b]/55 via-[#d8b27b]/20 to-transparent"
+              : "bg-gradient-to-t from-[#ece7de] via-[#ece7de]/80 to-transparent"
+          }`}
+        />
 
-        {/* ── FLOATING INPUT FIELD BAR (Strictly NO religious text below as requested) ── */}
-        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-4 pb-3">
-          <div className="w-full pointer-events-auto">
+        {/* ── FLOATING INPUT FIELD BAR ── */}
+        <div className="fixed inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-4 pb-4">
+          <div className="w-full max-w-[390px] pointer-events-auto">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSendMessage(inputValue);
               }}
-              className="flex items-end gap-2 p-1.5 transition-shadow duration-300"
+              className="flex items-end gap-2 p-2 transition-shadow duration-300"
               style={{
-                borderRadius: isMultiline ? "20px" : "9999px",
+                borderRadius: isMultiline ? "22px" : "9999px",
                 overflow: "hidden",
                 background:
-                  "linear-gradient(180deg, rgba(253,252,251,0.85) 0%, rgba(244,240,234,0.75) 100%)",
-                backdropFilter: "blur(24px)",
-                WebkitBackdropFilter: "blur(24px)",
-                border: "1px solid rgba(184,138,79,0.25)",
-                boxShadow: "0 12px 28px -8px rgba(43,26,16,0.12)",
+                  "linear-gradient(180deg, rgba(253,252,251,0.75) 0%, rgba(244,240,234,0.60) 100%)",
+                backdropFilter:
+                  "blur(26px) saturate(210%) contrast(99%) brightness(102%)",
+                WebkitBackdropFilter:
+                  "blur(26px) saturate(210%) contrast(99%) brightness(102%)",
+                border: "1px solid rgba(43,26,16,0.09)",
+                boxShadow:
+                  "0 16px 36px -12px rgba(43,26,16,0.14), 0 4px 10px -2px rgba(43,26,16,0.06), inset 0 1px 0 0 rgba(255,255,255,0.90), inset 0 -1px 0 0 rgba(43,26,16,0.05)",
                 transition: "border-radius 0.3s ease",
               }}
             >
@@ -881,44 +1538,37 @@ export const DarAlHikayatAIAssistant: React.FC<DarAlHikayatAIAssistantProps> = (
                 ref={textareaRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="اكتبي استفساركِ أو طلبكِ الأدبي هنا..."
-                disabled={
-                  isLoading ||
-                  isInitializingSession ||
-                  editingMessageId !== null
-                }
+                placeholder="اسأل المساعد الأدبي عن أي فكرة أو صياغة أو حبكة..."
+                disabled={isLoading || editingMessageId !== null}
                 rows={1}
-                className="flex-1 min-h-[38px] text-right bg-transparent border-none outline-none px-3 py-2 text-[13px] font-zain-bold text-[#2b1a10] placeholder-[#7f6a55]/60 disabled:opacity-50 resize-none max-h-[130px] overflow-y-auto leading-relaxed break-words"
+                className="flex-1 min-h-[38px] text-right bg-transparent border-none outline-none px-3 py-2 text-[13.5px] font-sans font-bold text-[#2b1a10] placeholder-[#7f6a55]/60 disabled:opacity-50 resize-none max-h-[130px] overflow-y-auto leading-relaxed break-words"
               />
 
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 type="submit"
                 disabled={
-                  !inputValue.trim() ||
-                  isLoading ||
-                  isInitializingSession ||
-                  editingMessageId !== null
+                  !inputValue.trim() || isLoading || editingMessageId !== null
                 }
-                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${
-                  inputValue.trim() &&
-                  !isLoading &&
-                  !isInitializingSession &&
-                  editingMessageId === null
-                    ? "bg-[#b88a4f] text-[#fff9f1] shadow-xs hover:bg-[#a0753e] active:scale-90 cursor-pointer"
+                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  inputValue.trim() && !isLoading && editingMessageId === null
+                    ? "bg-[#b88a4f] text-[#fff9f1] shadow-md hover:bg-[#a0753e] active:scale-90 cursor-pointer"
                     : "bg-[#e8dfd4]/60 text-[#7f6a55]/40 cursor-not-allowed"
                 }`}
-                aria-label="إرسال"
-                title="إرسال"
+                aria-label="إرسال السؤال"
               >
                 <ArrowUp size={15} strokeWidth={2.5} />
               </motion.button>
             </form>
+            <div className="text-center mt-1.5 flex items-center justify-center gap-1 text-[10px] font-sans text-[#7f6a55]/80 font-bold">
+              <Sparkles size={10} className="text-[#b88a4f]" />
+              <span>المساعد الأدبي الذكي • دار الحكايات</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
+});
 
 export default DarAlHikayatAIAssistant;

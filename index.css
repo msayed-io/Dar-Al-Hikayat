@@ -102,3 +102,42 @@
   scrollbar-width: none;
 }
 
+/* ── أنماط الكريستال المصقول (Cut Crystal Glass) لواجهة دار الحكايات AI ── */
+.cut-crystal-capsule {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(245, 235, 217, 0.48) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 8px 24px -6px rgba(43, 26, 16, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.cut-crystal-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.85) 0%, rgba(247, 242, 234, 0.72) 100%);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 20px 50px -15px rgba(43, 26, 16, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.cut-crystal-input {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(184, 138, 79, 0.25);
+  transition: all 0.2s ease;
+}
+.cut-crystal-input:focus {
+  border-color: #b88a4f;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+@keyframes thinkingShimmer {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+.thinking-shimmer {
+  animation: thinkingShimmer 1.8s ease-in-out infinite;
+  color: #b88a4f;
+}
+
