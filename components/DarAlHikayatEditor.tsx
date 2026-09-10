@@ -514,6 +514,15 @@ const DarAlHikayatMaster: React.FC = () => {
 
   const [showAIAssistant, setShowAIAssistant] = useState(false);
 
+  useEffect(() => {
+    if (showAIAssistant && !isWideScreen) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [showAIAssistant, isWideScreen]);
+
   const handleToggleAIAssistant = () => {
     setShowAIAssistant((prev) => !prev);
   };
@@ -1677,7 +1686,11 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Zikr Toast */}
       <div
-        className={`fixed top-20 left-1/2 -translate-x-1/2 z-40 transition-all duration-700 ${isZikrVisible ? "opacity-100" : "opacity-0 -translate-y-10 scale-90 pointer-events-none"}`}
+        className={`fixed top-20 z-40 transition-all duration-700 ${isZikrVisible ? "opacity-100" : "opacity-0 -translate-y-10 scale-90 pointer-events-none"}`}
+        style={{
+          left: showAIAssistant && isWideScreen ? "calc((100vw - 420px) / 2)" : "50%",
+          transform: "translateX(-50%)",
+        }}
       >
         <div
           className="backdrop-blur-md rounded-full px-5 py-1.5 border shadow-xl"
@@ -1992,10 +2005,12 @@ const DarAlHikayatMaster: React.FC = () => {
       <header
         ref={headerRef}
         className={`fixed top-4 z-50 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
-          showAIAssistant && isWideScreen
-            ? "right-[420px] xl:right-[460px] left-0"
-            : "left-0 right-0"
-        } ${showUI ? "translate-y-0 opacity-100" : "-translate-y-16 opacity-0"}`}
+          showUI ? "translate-y-0 opacity-100" : "-translate-y-16 opacity-0"
+        }`}
+        style={{
+          left: 0,
+          right: showAIAssistant && isWideScreen ? "420px" : 0,
+        }}
       >
         <div
           className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all"
@@ -2371,7 +2386,12 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Session Report */}
       {isSavedMode && showSessionReport && (
-        <div className="session-card fixed top-20 right-4 z-50 w-80 animate-in slide-in-from-top-4 fade-in">
+        <div
+          className="session-card fixed top-20 z-50 w-80 animate-in slide-in-from-top-4 fade-in"
+          style={{
+            right: showAIAssistant && isWideScreen ? "calc(420px + 1rem)" : "1rem",
+          }}
+        >
           <div
             className="backdrop-blur-xl border p-5 rounded-2xl shadow-2xl"
             style={{
@@ -2451,23 +2471,36 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
-      <div className="w-full min-h-screen flex flex-row relative overflow-x-hidden">
-        {/* AI Assistant Studio Pane: Fixed stable width split screen */}
+      <div className="w-full min-h-screen relative flex flex-row overflow-x-hidden" dir="rtl">
+        {/* AI Assistant Studio Pane: Completely docked to the right in RTL */}
         {showAIAssistant && isWideScreen && (
-          <div
-            className="w-[420px] xl:w-[460px] flex-shrink-0 flex-grow-0 h-screen max-h-screen sticky top-0 border-l z-40 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
-            style={{ backgroundColor: currentTheme.bg, borderColor: currentTheme.border }}
+          <aside
+            aria-label="المساعد الأدبي الذكي"
+            className="w-[420px] flex-shrink-0 h-screen sticky top-0 z-40 border-l flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ease-in-out"
+            style={{
+              width: "420px",
+              minWidth: "420px",
+              maxWidth: "420px",
+              backgroundColor: currentTheme.bg,
+              borderColor: currentTheme.border,
+            }}
           >
             <DarAlHikayatAIAssistant
               onClose={() => setShowAIAssistant(false)}
               storyContext={currentStoryContext}
               theme={currentTheme}
             />
-          </div>
+          </aside>
         )}
 
-        {/* Editor Area: Responsive flex filling remaining space when assistant is active, 100% when closed */}
-        <div className={`transition-all duration-300 ease-in-out ${showAIAssistant && isWideScreen ? "flex-1 min-w-0" : "w-full"}`}>
+        {/* Editor Area: Fills 100% of remaining space smoothly */}
+        <div
+          className="flex-1 min-w-0 min-h-screen relative flex flex-col transition-all duration-300 ease-in-out"
+          style={{
+            flex: "1 1 0%",
+            minWidth: 0,
+          }}
+        >
           <main id="story-content" className="w-full relative z-0 pb-36">
             {!isNovelMode ? (
               <div
@@ -2476,7 +2509,7 @@ const DarAlHikayatMaster: React.FC = () => {
                 onInput={(e) => handleContentChange(e.currentTarget.innerHTML)}
                 onPaste={handlePaste}
                 data-placeholder="اكتب حكايتك هنا..."
-                className={`w-full bg-transparent border-none outline-none px-6 leading-loose pt-28 min-h-[60vh] editor-container ${
+                className={`w-full bg-transparent border-none outline-none px-6 md:px-10 leading-loose pt-28 min-h-[60vh] editor-container ${
                   !content || content === "<br>" ? "is-empty" : ""
                 }`}
                 style={{
@@ -2492,8 +2525,7 @@ const DarAlHikayatMaster: React.FC = () => {
                 spellCheck={false}
               />
             ) : (
-              // CRITICAL FIX: Removed dynamic padding. Uses fixed padding now to prevent layout thrashing.
-              <div className="w-full px-4 md:px-6 pt-28">
+              <div className="w-full px-6 md:px-10 pt-28">
                 {chapters.map((chapter, index) => (
                   <ChapterItem
                     key={chapter.id}
@@ -2535,7 +2567,13 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {isSavedMode && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div
+          className="fixed bottom-6 z-50 pointer-events-none text-center"
+          style={{
+            left: showAIAssistant && isWideScreen ? "calc((100vw - 420px) / 2)" : "50%",
+            transform: "translateX(-50%)",
+          }}
+        >
           <span
             className="text-xs animate-pulse font-zain-reg"
             style={{ color: currentTheme.secondary }}
@@ -2549,10 +2587,12 @@ const DarAlHikayatMaster: React.FC = () => {
       {!isSavedMode && (
         <footer
           className={`fixed bottom-4 z-40 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
-            showAIAssistant && isWideScreen
-              ? "right-[420px] xl:right-[460px] left-0"
-              : "left-0 right-0"
-          } ${showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}
+            showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"
+          }`}
+          style={{
+            left: 0,
+            right: showAIAssistant && isWideScreen ? "420px" : 0,
+          }}
         >
           <div
             className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-2 transition-all"
@@ -2765,8 +2805,11 @@ const DarAlHikayatMaster: React.FC = () => {
       {/* Settings Panel */}
       {!isSavedMode && (
         <div
-          className={`fixed bottom-28 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-96 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
+          className={`fixed bottom-28 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
           style={{
+            left: showAIAssistant && isWideScreen ? "calc((100vw - 420px) / 2)" : "50%",
+            transform: "translateX(-50%)",
+            width: "min(384px, calc(100vw - 32px))",
             backgroundColor: currentTheme.glass,
             borderColor: currentTheme.border,
             boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,

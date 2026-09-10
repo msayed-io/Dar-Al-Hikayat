@@ -1505,7 +1505,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           /* Active Chat Thread */
           <div
             ref={chatContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto px-4 pt-20 pb-32 space-y-4 scrollbar-thin hide-scrollbar"
+            className="flex-1 min-h-0 overflow-y-auto px-4 pt-20 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
           >
             {messages.map((m, idx) => {
               const isUser = m.role === "user";
