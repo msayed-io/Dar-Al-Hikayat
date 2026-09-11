@@ -245,7 +245,7 @@ const markdownComponents = {
     const theme = React.useContext(MarkdownThemeContext);
     return (
       <p
-        className="text-[13.5px] font-zain-bold leading-relaxed mb-2 text-right break-words whitespace-pre-wrap"
+        className="text-[15.5px] font-zain-reg leading-[1.65] mb-2.5 text-right break-words whitespace-pre-wrap"
         dir="auto"
         style={{ unicodeBidi: "plaintext", color: theme?.text }}
       >
@@ -300,7 +300,7 @@ const markdownComponents = {
     if (ordered) {
       return (
         <li
-          className="block w-full text-[13.5px] font-zain-bold leading-relaxed text-right"
+          className="block w-full text-[15.5px] font-zain-reg leading-[1.65] text-right"
           dir="auto"
           style={{ unicodeBidi: "plaintext", color: theme?.text }}
         >
@@ -310,7 +310,7 @@ const markdownComponents = {
     }
     return (
       <li
-        className="flex items-start gap-2 text-[13.5px] font-zain-bold leading-relaxed"
+        className="flex items-start gap-2 text-[15.5px] font-zain-reg leading-[1.65]"
         dir="auto"
         style={{ unicodeBidi: "plaintext", color: theme?.text }}
       >
@@ -332,7 +332,7 @@ const markdownComponents = {
     }
     return (
       <code
-        className="border rounded-md px-1.5 py-0.5 mx-0.5 font-mono text-[11.5px]"
+        className="border rounded-md px-1.5 py-0.5 mx-0.5 font-mono text-[12px]"
         style={{
           backgroundColor: theme?.isDark
             ? "rgba(255,255,255,0.06)"
@@ -349,7 +349,7 @@ const markdownComponents = {
     const theme = React.useContext(MarkdownThemeContext);
     return (
       <blockquote
-        className="border-r-4 pr-3 my-2.5 italic text-right py-1 rounded-l-md font-zain-bold text-xs"
+        className="border-r-4 pr-3 my-2.5 italic text-right py-1 rounded-l-md font-zain-reg text-[14.5px] leading-relaxed"
         style={{
           borderColor: theme?.accent,
           backgroundColor: theme?.isDark
