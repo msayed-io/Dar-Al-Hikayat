@@ -481,22 +481,39 @@ export const checkIsTabletOrWideScreen = (): ScreenClassification => {
   const h = window.innerHeight;
   const minDim = Math.min(w, h);
   const maxDim = Math.max(w, h);
-  const isLandscape = w > h;
 
-  // Tablet classification (Samsung Galaxy Tab A7 has minDim ~600dp, maxDim ~960-1000dp):
-  // - Smallest Width (minDim) >= 500dp (standard tablets have sw >= 530-600dp; phones are 360-430dp)
-  // - Longest side (maxDim) >= 720dp
-  // This holds true for hardware identification in both orientations.
-  const isTablet = minDim >= 500 && maxDim >= 720;
+  // Read hardware physical screen dimensions (these do NOT change when virtual keyboard opens)
+  const sw = window.screen ? window.screen.width : 0;
+  const sh = window.screen ? window.screen.height : 0;
+  const screenMinDim = sw && sh ? Math.min(sw, sh) : minDim;
+  const screenMaxDim = sw && sh ? Math.max(sw, sh) : maxDim;
 
-  // Desktop or wide laptop browser window (width >= 768 && height >= 500)
-  const isDesktop = w >= 768 && h >= 500;
+  // Tablet classification (Samsung Galaxy Tab A7 has physical screenMinDim ~600dp, screenMaxDim ~960-1000dp):
+  // - Smallest Width (screenMinDim) >= 500dp (standard tablets have sw >= 530-600dp; phones are 360-430dp)
+  // - Longest side (screenMaxDim) >= 720dp
+  // By checking physical screen dimensions, this remains 100% stable even when on-screen virtual keyboard shrinks window.innerHeight!
+  const isTablet = (screenMinDim >= 500 && screenMaxDim >= 720) || (minDim >= 500 && maxDim >= 720);
+
+  // Desktop or wide laptop browser window (width >= 768)
+  const isDesktop = (w >= 768 && (h >= 500 || screenMinDim >= 600)) || (screenMaxDim >= 1024 && w >= 768);
 
   const isDeviceWideCapable = isTablet || isDesktop;
   const isMobilePhone = !isTablet && !isDesktop;
 
+  // Accurate orientation detection:
+  // Virtual keyboard opening reduces window.innerHeight, but DOES NOT change device orientation.
+  // We use window.matchMedia("(orientation: landscape)") and screen orientation properties
+  // which stay strictly in Landscape even when the keyboard is open.
+  const isLandscape =
+    typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(orientation: landscape)").matches ||
+        (Boolean(window.screen?.orientation) && window.screen.orientation.type.includes("landscape")) ||
+        (sw > 0 && sh > 0 ? (sw > sh && w >= 600) : w > h)
+      : w > h;
+
   // Strict Rule: Assistant full split-screen studio ONLY opens when device is qualified AND currently in Landscape!
-  // If a tablet is in Portrait (w < h), canOpenAssistant is FALSE.
+  // If a tablet is in Portrait, canOpenAssistant is FALSE.
+  // In Landscape (even with keyboard active), canOpenAssistant remains TRUE.
   const canOpenAssistant = isDeviceWideCapable && isLandscape;
 
   return {
