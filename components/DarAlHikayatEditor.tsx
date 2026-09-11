@@ -513,17 +513,66 @@ const DarAlHikayatMaster: React.FC = () => {
   }, []);
 
   const [showAIAssistant, setShowAIAssistant] = useState(false);
+  // Popover / Tooltip state for Literary Assistant on mobile screens (< 768dp)
+  const [showMobileTooltip, setShowMobileTooltip] = useState(false);
+  const mobileTooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileTooltipRef = useRef<HTMLDivElement | null>(null);
 
+  // Clean up mobile tooltip timer on unmount
   useEffect(() => {
-    if (showAIAssistant && !isWideScreen) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
-  }, [showAIAssistant, isWideScreen]);
+    return () => {
+      if (mobileTooltipTimeoutRef.current) {
+        clearTimeout(mobileTooltipTimeoutRef.current);
+      }
+    };
+  }, []);
 
-  const handleToggleAIAssistant = () => {
+  // Dismiss mobile tooltip immediately when tapping anywhere outside
+  useEffect(() => {
+    if (!showMobileTooltip) return;
+
+    const handleDocumentClick = (e: MouseEvent | TouchEvent) => {
+      if (
+        mobileTooltipRef.current &&
+        !mobileTooltipRef.current.contains(e.target as Node)
+      ) {
+        setShowMobileTooltip(false);
+        if (mobileTooltipTimeoutRef.current) {
+          clearTimeout(mobileTooltipTimeoutRef.current);
+          mobileTooltipTimeoutRef.current = null;
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    document.addEventListener("touchstart", handleDocumentClick);
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+      document.removeEventListener("touchstart", handleDocumentClick);
+    };
+  }, [showMobileTooltip]);
+
+  const handleToggleAIAssistant = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const currentIsWide =
+      typeof window !== "undefined" ? window.innerWidth >= 768 : isWideScreen;
+    if (!currentIsWide) {
+      // Mobile screen (< 768dp): NEVER open assistant, NEVER call API, NEVER navigate.
+      // Show elegant popover tooltip directly above the button.
+      setShowMobileTooltip(true);
+      if (mobileTooltipTimeoutRef.current) {
+        clearTimeout(mobileTooltipTimeoutRef.current);
+      }
+      mobileTooltipTimeoutRef.current = setTimeout(() => {
+        setShowMobileTooltip(false);
+        mobileTooltipTimeoutRef.current = null;
+      }, 2500);
+      return;
+    }
+
+    // Wide screen (>= 768dp): toggle assistant pane
     setShowAIAssistant((prev) => !prev);
   };
 
@@ -1617,12 +1666,24 @@ const DarAlHikayatMaster: React.FC = () => {
             : curr.content.trim().split(/\s+/).length),
         0,
       )
-    : content.trim() === ""
+    : content.trim() === "" || content === "<br>"
       ? 0
       : content.trim().split(/\s+/).length;
   const charCount = isNovelMode
     ? chapters.reduce((acc, curr) => acc + curr.content.length, 0)
     : content.length;
+
+  // Auto-close assistant and hide tooltip if word count drops below the 350-word threshold
+  useEffect(() => {
+    if (wordCount < 350) {
+      if (showAIAssistant) {
+        setShowAIAssistant(false);
+      }
+      if (showMobileTooltip) {
+        setShowMobileTooltip(false);
+      }
+    }
+  }, [wordCount, showAIAssistant, showMobileTooltip]);
 
   // --- Professional Stats Calculation ---
   const readingTime = Math.ceil(wordCount / 200); // Average silent reading speed
@@ -2555,20 +2616,6 @@ const DarAlHikayatMaster: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile AI Assistant Full-Screen Sheet */}
-      {showAIAssistant && !isWideScreen && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col h-full w-full overflow-hidden"
-          style={{ backgroundColor: currentTheme.bg }}
-        >
-          <DarAlHikayatAIAssistant
-            onClose={() => setShowAIAssistant(false)}
-            storyContext={currentStoryContext}
-            theme={currentTheme}
-          />
-        </div>
-      )}
-
       {isSavedMode && (
         <div
           className="fixed bottom-6 z-50 pointer-events-none text-center"
@@ -2617,23 +2664,70 @@ const DarAlHikayatMaster: React.FC = () => {
                   <Plus className="w-4 h-4" />
                 </button>
               )}
-              {/* AI Assistant Button - Always available */}
-              <button
-                id="dar-alhikayat-ai-toggle-btn"
-                onClick={handleToggleAIAssistant}
-                className={`h-9 px-3 rounded-full flex items-center gap-1.5 transition-all duration-300 active:scale-95 cursor-pointer border ${
-                  showAIAssistant ? "shadow-inner" : "hover:scale-105"
-                }`}
-                style={{
-                  backgroundColor: showAIAssistant ? `${currentTheme.accent}25` : `${currentTheme.accent}12`,
-                  borderColor: `${currentTheme.accent}45`,
-                  color: currentTheme.accent,
-                }}
-                title="المساعد الأدبي"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span className="font-zain-bold text-xs pt-0.5 whitespace-nowrap">المساعد الأدبي</span>
-              </button>
+              {/* AI Assistant Button - Strictly rendered ONLY when wordCount >= 350 */}
+              {wordCount >= 350 && (
+                <div className="relative flex items-center">
+                  <button
+                    id="dar-alhikayat-ai-toggle-btn"
+                    onClick={handleToggleAIAssistant}
+                    className={`h-9 px-3 rounded-full flex items-center gap-1.5 transition-all duration-300 active:scale-95 cursor-pointer border ${
+                      showAIAssistant ? "shadow-inner" : "hover:scale-105"
+                    }`}
+                    style={{
+                      backgroundColor: showAIAssistant
+                        ? `${currentTheme.accent}25`
+                        : `${currentTheme.accent}12`,
+                      borderColor: `${currentTheme.accent}45`,
+                      color: currentTheme.accent,
+                    }}
+                    title="المساعد الأدبي"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="font-zain-bold text-xs pt-0.5 whitespace-nowrap">
+                      المساعد الأدبي
+                    </span>
+                  </button>
+
+                  {/* Popover / Tooltip when tapped on mobile screens (< 768dp) */}
+                  {showMobileTooltip && (
+                    <div
+                      ref={mobileTooltipRef}
+                      id="ai-screen-size-tooltip"
+                      role="tooltip"
+                      className="absolute bottom-full right-0 mb-3 px-3 py-1.5 rounded-xl border shadow-2xl z-50 flex items-center gap-2 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200 pointer-events-auto select-none"
+                      style={{
+                        backgroundColor: currentTheme.isDark
+                          ? "#121A1B"
+                          : "#1A2223",
+                        borderColor: `${currentTheme.accent}55`,
+                        boxShadow: `0 12px 28px -4px rgba(0,0,0,0.5), 0 0 0 1px ${currentTheme.accent}25`,
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: currentTheme.accent }}
+                      />
+                      <span
+                        className="font-zain-bold text-xs tracking-wide leading-none"
+                        style={{ color: "#F4F1EA" }}
+                      >
+                        تحتاج مساحة عرض أكبر
+                      </span>
+                      {/* Tooltip beak arrow pointing down towards the button */}
+                      <div
+                        className="absolute -bottom-1 right-6 w-2.5 h-2.5 rotate-45 border-r border-b"
+                        style={{
+                          backgroundColor: currentTheme.isDark
+                            ? "#121A1B"
+                            : "#1A2223",
+                          borderColor: `${currentTheme.accent}55`,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Center Button */}

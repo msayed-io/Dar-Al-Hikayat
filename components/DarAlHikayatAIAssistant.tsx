@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowUp,
@@ -500,6 +500,100 @@ const MarkdownRenderer = ({
 
 const CONVERSATIONS_STORAGE_KEY = "dar_alhikayat_ai_saved_conversations";
 
+interface UserMessageBubbleProps {
+  message: Message;
+  currentTheme: any;
+  isEditingThisMessage: boolean;
+  isEditingLongMessage: boolean;
+  editingContent: string;
+  setEditingContent: (val: string) => void;
+}
+
+function UserMessageBubble({
+  message,
+  currentTheme,
+  isEditingThisMessage,
+  isEditingLongMessage,
+  editingContent,
+  setEditingContent,
+}: UserMessageBubbleProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Deterministic calculation: message exceeds 2 lines if > 70 characters or contains > 2 lines
+  const isOverTwoLines = useMemo(() => {
+    const text = message.content || "";
+    return text.length > 70 || text.split("\n").length > 2;
+  }, [message.content]);
+
+  const borderRadiusClass = isOverTwoLines
+    ? "rounded-[22px] rounded-tl-sm"
+    : "rounded-[24px] rounded-tl-sm";
+
+  return (
+    <div
+      className={`w-fit max-w-[85%] text-right border shadow-sm transition-all duration-300 overflow-hidden relative ${borderRadiusClass}`}
+      style={{
+        backgroundColor: currentTheme.accent,
+        borderColor: currentTheme.accent,
+        color: "#ffffff",
+      }}
+    >
+      {isEditingThisMessage ? (
+        <textarea
+          autoFocus
+          rows={isEditingLongMessage ? 7 : 3}
+          value={editingContent}
+          onChange={(event) => setEditingContent(event.target.value)}
+          aria-label="تعديل رسالة المستخدم"
+          className="w-full min-w-[240px] resize-none bg-transparent px-5 py-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none text-white placeholder:text-white/60"
+        />
+      ) : (
+        <div className={`px-5 py-3.5 relative ${isOverTwoLines ? "pb-9" : ""}`}>
+          <p
+            className="text-[14px] font-zain-bold leading-[23px] whitespace-pre-wrap break-words transition-all duration-300"
+            style={{
+              display: isOverTwoLines && !isExpanded ? "-webkit-box" : "block",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: isOverTwoLines && !isExpanded ? 3 : "none",
+              overflow: isOverTwoLines && !isExpanded ? "hidden" : "visible",
+            }}
+          >
+            {message.content}
+          </p>
+
+          {/* Fade gradient overlay when collapsed */}
+          {isOverTwoLines && !isExpanded && (
+            <div
+              className="absolute inset-x-0 bottom-0 h-10 pointer-events-none rounded-b-[20px]"
+              style={{
+                background: `linear-gradient(to top, ${currentTheme.accent} 85%, transparent 100%)`,
+              }}
+            />
+          )}
+
+          {/* Floating toggle button inside bubble - Positioned on the right side */}
+          {isOverTwoLines && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="absolute bottom-2 flex h-7.5 w-11 items-center justify-center rounded-full bg-black/30 hover:bg-black/50 text-white backdrop-blur-md transition-all active:scale-90 cursor-pointer z-10 border border-white/10 shadow-xs"
+              style={{ left: "12px", right: "auto" }}
+              aria-label={isExpanded ? "طي النص" : "توسيع النص"}
+              title={isExpanded ? "طي النص" : "توسيع النص"}
+            >
+              {isExpanded ? (
+                <ChevronUp size={15} className="text-white" />
+              ) : (
+                <ChevronDown size={15} className="text-white" />
+              )}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssistant({
   onClose,
   storyContext,
@@ -607,11 +701,19 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const adjustTextareaHeight = useCallback(() => {
     if (!textareaRef.current) return;
     const el = textareaRef.current;
+    
+    // If input value is empty, force a clean, single-line height of 24px and non-multiline state
+    if (!inputValue) {
+      el.style.height = "24px";
+      setIsMultiline(false);
+      return;
+    }
+
     el.style.height = "auto";
     const scrollH = el.scrollHeight;
-    const newH = Math.max(38, Math.min(scrollH, 130));
+    const newH = Math.max(24, Math.min(scrollH, 96));
     el.style.height = `${newH}px`;
-    setIsMultiline(scrollH > 38 || inputValue.includes("\n"));
+    setIsMultiline(scrollH > 28 || inputValue.includes("\n"));
   }, [inputValue]);
 
   useEffect(() => {
@@ -624,7 +726,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     messages.forEach((m) => {
       if (
         m.role === "user" &&
-        (m.content.length > 180 || m.content.split("\n").length > 4)
+        (m.content.length > 80 || m.content.split("\n").length > 2)
       ) {
         newLongMsgs.add(m.id);
       }
@@ -635,8 +737,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const toggleExpand = useCallback((msgId: string) => {
     setExpandedMsgs((prev) => {
       const next = new Set(prev);
-      if (next.has(msgId)) next.delete(msgId);
-      else next.add(msgId);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
       return next;
     });
   }, []);
@@ -929,7 +1034,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       />
 
       {/* ── FLOATING TOP HEADER CAPSULES: ABSOLUTE OVERLAY (ZERO BACKGROUND BAR) ── */}
-      <header className="absolute top-4 inset-x-0 z-40 flex items-center justify-between pointer-events-none px-4 select-none">
+      <header
+        className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none select-none"
+        style={{ left: "16px", right: "16px" }}
+      >
         {/* Right Capsule: Dar Al Hikayat AI Title Only */}
         <div
           className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
@@ -972,10 +1080,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               aria-label="محادثة جديدة"
               title="محادثة جديدة"
             >
-              <Plus
-                className="w-4 h-4 transition-transform duration-200"
+              <MessageCirclePlus
+                className="w-4.5 h-4.5 transition-transform duration-200"
                 style={{ color: currentTheme.accent }}
-                strokeWidth={2.5}
+                strokeWidth={2.2}
               />
             </button>
           )}
@@ -996,8 +1104,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             aria-label="إغلاق"
             title="إغلاق"
           >
-            <X
-              className="w-4 h-4 transition-transform duration-200"
+            <ChevronRight
+              className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5"
               style={{ color: currentTheme.accent }}
               strokeWidth={2.5}
             />
@@ -1561,112 +1669,23 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     )}
 
                     {isUser ? (
-                      <div className="w-full flex flex-col items-start">
-                        {/* 1. The Bubble itself */}
-                        <div
-                          className="w-fit max-w-[85%] text-right border rounded-[20px] shadow-sm transition-all duration-300 overflow-hidden"
-                          style={{
-                            backgroundColor: currentTheme.isDark
-                              ? "rgba(255, 255, 255, 0.08)"
-                              : `${currentTheme.accent}14`,
-                            borderColor: currentTheme.isDark
-                              ? "rgba(255, 255, 255, 0.18)"
-                              : `${currentTheme.accent}35`,
-                            color: currentTheme.text,
-                          }}
-                        >
-                          {isEditingThisMessage ? (
-                            <textarea
-                              autoFocus
-                              rows={isEditingLongMessage ? 7 : 3}
-                              value={editingContent}
-                              onChange={(event) =>
-                                setEditingContent(event.target.value)
-                              }
-                              aria-label="تعديل رسالة المستخدم"
-                              className="w-full min-w-[240px] resize-none bg-transparent p-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none"
-                              style={{ color: currentTheme.text }}
-                            />
-                          ) : (
-                            <div
-                              className={`p-3.5 transition-all duration-300 ease-in-out ${
-                                longMsgs.has(m.id) && !expandedMsgs.has(m.id)
-                                  ? "max-h-[110px] overflow-hidden relative"
-                                  : "max-h-none"
-                              }`}
-                            >
-                              <p
-                                className="text-xs font-zain-bold leading-relaxed whitespace-pre-wrap break-words"
-                                style={{ color: currentTheme.text }}
-                              >
-                                {m.content}
-                              </p>
-                              {longMsgs.has(m.id) &&
-                                !expandedMsgs.has(m.id) && (
-                                  <div
-                                    className="absolute inset-x-0 bottom-0 h-10 pointer-events-none rounded-b-[20px]"
-                                    style={{
-                                      background: `linear-gradient(to top, ${
-                                        currentTheme.isDark
-                                          ? "rgba(35, 35, 35, 0.95)"
-                                          : "rgba(245, 238, 226, 0.98)"
-                                      } 0%, transparent 100%)`,
-                                    }}
-                                  />
-                                )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 2. Expand / Collapse Toggle for Long User Messages */}
-                        {longMsgs.has(m.id) && !isEditingThisMessage && (
-                          <div className="mt-1.5 flex items-center justify-start">
-                            <button
-                              type="button"
-                              onClick={() => toggleExpand(m.id)}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-zain-bold border transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
-                              style={{
-                                backgroundColor: currentTheme.glass,
-                                borderColor: currentTheme.border,
-                                color: currentTheme.accent,
-                              }}
-                              title={
-                                expandedMsgs.has(m.id)
-                                  ? "طي النص"
-                                  : "توسيع النص"
-                              }
-                            >
-                              <span>
-                                {expandedMsgs.has(m.id)
-                                  ? "عرض أقل"
-                                  : "عرض المزيد"}
-                              </span>
-                              {expandedMsgs.has(m.id) ? (
-                                <ChevronUp size={12} />
-                              ) : (
-                                <ChevronDown size={12} />
-                              )}
-                            </button>
-                          </div>
-                        )}
+                      <div className="w-full flex flex-col items-end">
+                        {/* 1. The Bubble itself (measured dynamically via UserMessageBubble) */}
+                        <UserMessageBubble
+                          message={m}
+                          currentTheme={currentTheme}
+                          isEditingThisMessage={isEditingThisMessage}
+                          isEditingLongMessage={isEditingLongMessage}
+                          editingContent={editingContent}
+                          setEditingContent={setEditingContent}
+                        />
 
                         {/* 3. Action Buttons Row (outside bubble to prevent stretching it) */}
                         {isEditingThisMessage ? (
                           <div
                             dir="rtl"
-                            className="mt-2 flex items-center justify-start gap-2.5 px-1 text-xs font-zain-bold animate-fade-in"
+                            className="mt-2 flex items-center justify-end gap-2.5 px-1 text-xs font-zain-bold animate-fade-in w-full"
                           >
-                            <button
-                              type="button"
-                              disabled={
-                                !hasEditedContent || !editingContent.trim()
-                              }
-                              onClick={confirmEditingUserMessage}
-                              className="inline-flex h-7 items-center justify-center rounded-full px-3 text-xs font-zain-bold transition-all disabled:opacity-50 text-white cursor-pointer"
-                              style={{ backgroundColor: currentTheme.accent }}
-                            >
-                              تعديل
-                            </button>
                             <button
                               type="button"
                               onClick={cancelEditingUserMessage}
@@ -1675,23 +1694,25 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             >
                               إلغاء
                             </button>
+                            <button
+                              type="button"
+                              disabled={!hasEditedContent || !editingContent.trim()}
+                              onClick={confirmEditingUserMessage}
+                              className={`inline-flex h-6 items-center justify-center rounded-full px-3.5 text-[11px] font-zain-bold transition-all text-white cursor-pointer ${
+                                (!hasEditedContent || !editingContent.trim()) ? "opacity-40" : "hover:opacity-90"
+                              }`}
+                              style={{ 
+                                backgroundColor: currentTheme.accent
+                              }}
+                            >
+                               تعديل
+                            </button>
                           </div>
                         ) : (
                           <div
                             dir="rtl"
-                            className="mt-1 flex items-center justify-start gap-1 px-1"
+                            className="mt-1.5 flex items-center justify-end gap-1.5 px-1 w-full opacity-70 hover:opacity-100 transition-opacity"
                           >
-                            {canEditThisMessage && (
-                              <button
-                                type="button"
-                                onClick={() => startEditingUserMessage(m)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors active:scale-90 cursor-pointer"
-                                style={{ color: currentTheme.secondary }}
-                                title="تعديل الرسالة"
-                              >
-                                <Pencil size={13} />
-                              </button>
-                            )}
                             <button
                               type="button"
                               onClick={() =>
@@ -1712,6 +1733,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 <Copy size={13} />
                               )}
                             </button>
+                            {canEditThisMessage && (
+                              <button
+                                type="button"
+                                onClick={() => startEditingUserMessage(m)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors active:scale-90 cursor-pointer"
+                                style={{ color: currentTheme.secondary }}
+                                title="تعديل الرسالة"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1873,15 +1905,22 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         )}
 
         {/* ── FLOATING INPUT FIELD BAR: EXACT MATCH WITH DAR AL HIKAYAT BOTTOM FLOATING CAPSULE ── */}
-        <footer className="absolute bottom-4 inset-x-0 z-40 flex flex-col items-center pointer-events-none px-4">
+        <footer 
+          className="absolute bottom-4 z-40 flex flex-col items-center pointer-events-none w-full"
+          style={{ left: 0, padding: "0 16px" }}
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage(inputValue);
             }}
-            className="pointer-events-auto w-full min-h-[48px] p-1.5 rounded-full backdrop-blur-2xl border flex items-center gap-1.5 transition-all duration-300"
+            className={`pointer-events-auto w-full max-w-3xl min-h-[44px] p-1 rounded-full backdrop-blur-2xl border grid transition-all duration-300 ${
+              isMultiline ? "items-end" : "items-center"
+            }`}
             style={{
-              borderRadius: isMultiline ? "24px" : "9999px",
+              gridTemplateColumns: "1fr 36px",
+              gap: "4px",
+              borderRadius: isMultiline ? "22px" : "9999px",
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
               boxShadow: currentTheme.isDark
@@ -1889,19 +1928,24 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 : "0 12px 32px -4px rgba(0,0,0,0.08)",
             }}
           >
+            {/* 1. المنتصف: حقل الإدخال يبدأ من الجانب الأيمن */}
             <textarea
               ref={textareaRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="اسأل المساعد الأدبي عن أي فكرة أو صياغة..."
+              placeholder="اسأل المساعد الأدبي..."
               disabled={isLoading || editingMessageId !== null}
               rows={1}
-              className="flex-1 bg-transparent border-none outline-none px-3 py-1.5 text-xs font-zain-bold disabled:opacity-50 resize-none max-h-24 overflow-y-auto leading-relaxed text-right break-words placeholder:font-zain-reg"
+              className={`w-full min-w-0 bg-transparent border-none outline-none px-4 py-1 text-sm font-zain-bold disabled:opacity-50 resize-none max-h-24 text-start break-words placeholder:font-zain-reg leading-normal ${
+                isMultiline ? "overflow-y-auto" : "overflow-hidden"
+              }`}
               style={{
                 color: currentTheme.text,
+                height: !inputValue ? "24px" : undefined,
               }}
             />
 
+            {/* 3. الجانب الأيسر: زر الإرسال مقاس 36px */}
             <motion.button
               whileTap={{ scale: 0.92 }}
               type="submit"
@@ -1913,11 +1957,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     ? currentTheme.accent
                     : currentTheme.isDark
                     ? "rgba(255,255,255,0.06)"
-                    : `${currentTheme.accent}25`,
+                    : `${currentTheme.accent}18`,
                 color:
                   inputValue.trim() && !isLoading && editingMessageId === null
                     ? "#ffffff"
-                    : currentTheme.secondary,
+                    : currentTheme.text,
+                opacity:
+                  inputValue.trim() && !isLoading && editingMessageId === null
+                    ? 1
+                    : 0.65,
               }}
               aria-label="إرسال"
               title="إرسال"

@@ -13,6 +13,13 @@ import {
   Check,
   Lock,
   Unlock,
+  KeyRound,
+  Plus,
+  Trash2,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Wifi,
 } from "lucide-react";
 import { CITIES, type CityData } from "../lib/prayer-cities";
 import {
@@ -23,6 +30,16 @@ import {
 } from "../lib/prayer-alarms";
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
+import {
+  loadManagedKeysAsync,
+  addManagedKey,
+  deleteManagedKey,
+  updateManagedKey,
+  maskApiKey,
+  subscribeToKeyChanges,
+  testKeyConnection,
+  type ManagedApiKey,
+} from "../lib/api-key-repository";
 
 const SettingsPage: React.FC = () => {
   const {
@@ -44,6 +61,145 @@ const SettingsPage: React.FC = () => {
   const [testFeedback, setTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── مفاتيح الاتصال بالمساعد الأدبي (Multi-Key Rotation) ───
+  const [managedKeys, setManagedKeys] = useState<ManagedApiKey[]>([]);
+  const [showAddKeyDialog, setShowAddKeyDialog] = useState(false);
+  const [newKeyInput, setNewKeyInput] = useState("");
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [addKeyError, setAddKeyError] = useState<string | null>(null);
+  const [keyToDelete, setKeyToDelete] = useState<ManagedApiKey | null>(null);
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [testingKeyId, setTestingKeyId] = useState<string | null>(null);
+  const [keyFeedback, setKeyFeedback] = useState<{
+    id: string;
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [isTestingNewKey, setIsTestingNewKey] = useState(false);
+  const [newKeyTestFeedback, setNewKeyTestFeedback] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
+  useEffect(() => {
+    loadManagedKeysAsync().then((loaded) => {
+      setManagedKeys(loaded);
+    });
+
+    const unsubscribe = subscribeToKeyChanges(() => {
+      loadManagedKeysAsync().then((loaded) => {
+        setManagedKeys(loaded);
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleTestKey = async (item: ManagedApiKey) => {
+    setTestingKeyId(item.id);
+    setKeyFeedback(null);
+    try {
+      const res = await testKeyConnection(item.key);
+      if (res.success) {
+        if (item.status !== "active") {
+          await updateManagedKey(item.id, {
+            status: "active",
+            rateLimitedAt: undefined,
+            disabledReason: undefined,
+          });
+        }
+        setKeyFeedback({
+          id: item.id,
+          success: true,
+          message: "المفتاح متصل ويعمل بنجاح ✓",
+        });
+      } else {
+        setKeyFeedback({
+          id: item.id,
+          success: false,
+          message: res.message,
+        });
+      }
+    } catch (e: any) {
+      setKeyFeedback({
+        id: item.id,
+        success: false,
+        message: e?.message || "تعذر فحص الاتصال",
+      });
+    } finally {
+      setTestingKeyId(null);
+    }
+  };
+
+  const handleTestNewKeyInDialog = async () => {
+    const trimmed = newKeyInput.trim();
+    if (!trimmed) {
+      setAddKeyError("يرجى إدخال قيمة المفتاح أولاً لفحصه");
+      return;
+    }
+    setIsTestingNewKey(true);
+    setAddKeyError(null);
+    setNewKeyTestFeedback(null);
+    try {
+      const res = await testKeyConnection(trimmed);
+      setNewKeyTestFeedback(res);
+      if (!res.success) {
+        setAddKeyError(res.message);
+      }
+    } catch (e: any) {
+      setNewKeyTestFeedback({
+        success: false,
+        message: e?.message || "تعذر فحص الاتصال",
+      });
+    } finally {
+      setIsTestingNewKey(false);
+    }
+  };
+
+  const handleSaveNewKey = async () => {
+    const trimmedKey = newKeyInput.trim();
+    if (!trimmedKey) {
+      setAddKeyError("يرجى إدخال قيمة مفتاح API");
+      return;
+    }
+    setIsSavingKey(true);
+    setAddKeyError(null);
+    try {
+      await addManagedKey(trimmedKey, newKeyLabel.trim() || undefined);
+      setShowAddKeyDialog(false);
+      setNewKeyInput("");
+      setNewKeyLabel("");
+      setNewKeyTestFeedback(null);
+      const updated = await loadManagedKeysAsync();
+      setManagedKeys(updated);
+    } catch (err: any) {
+      setAddKeyError(err.message || "حدث خطأ أثناء حفظ المفتاح");
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
+
+  const handleConfirmDeleteKey = async () => {
+    if (!keyToDelete) return;
+    try {
+      await deleteManagedKey(keyToDelete.id);
+      setKeyToDelete(null);
+      const updated = await loadManagedKeysAsync();
+      setManagedKeys(updated);
+    } catch (err) {
+      console.error("Failed to delete key:", err);
+    }
+  };
+
+  const handleReactivateKey = async (id: string) => {
+    await updateManagedKey(id, {
+      status: "active",
+      rateLimitedAt: undefined,
+    });
+    const updated = await loadManagedKeysAsync();
+    setManagedKeys(updated);
+  };
 
   // إحصائيات الدار
   const totalNotesCount = notes.length;
@@ -562,6 +718,284 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* ─── قسم مفاتيح الاتصال بالمساعد الأدبي (Multi-Key Rotation System) ─── */}
+        <div
+          className="border shadow-sm transition-all flex flex-col gap-3"
+          style={{
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            borderRadius: "20px",
+            padding: "14px 16px",
+            boxShadow: `0 4px 16px -2px ${currentTheme.shadow}`,
+          }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-8 h-8 flex items-center justify-center border flex-shrink-0"
+                style={{
+                  backgroundColor: `${currentTheme.accent}15`,
+                  borderColor: `${currentTheme.accent}30`,
+                  borderRadius: "50%",
+                }}
+              >
+                <KeyRound
+                  className="w-3.5 h-3.5"
+                  style={{ color: currentTheme.accent }}
+                />
+              </div>
+              <div className="flex flex-col text-right min-w-0">
+                <span
+                  className="font-zain-bold text-xs leading-tight whitespace-nowrap"
+                  style={{ color: currentTheme.text }}
+                >
+                  مفاتيح الاتصال بالمساعد الأدبي
+                </span>
+                <span
+                  className="font-zain-reg text-[10.5px] opacity-60 mt-0.5 leading-tight whitespace-nowrap"
+                  style={{ color: currentTheme.text }}
+                >
+                  تبديل تلقائي عند انتهاء الحصة
+                </span>
+              </div>
+            </div>
+
+            {/* Key count badge (only when keys exist) */}
+            {managedKeys.length > 0 && (
+              <div
+                className="h-5 px-2 rounded-full border text-[10px] font-zain-bold flex items-center justify-center flex-shrink-0"
+                style={{
+                  backgroundColor: `${currentTheme.bg}80`,
+                  borderColor: currentTheme.border,
+                  color: currentTheme.accent,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {`${managedKeys.length} ${
+                  managedKeys.length === 1
+                    ? "مفتاح"
+                    : managedKeys.length === 2
+                    ? "مفتاحان"
+                    : "مفاتيح"
+                }`}
+              </div>
+            )}
+          </div>
+
+          {/* List of Collapsed Key Cards / Empty State */}
+          {managedKeys.length === 0 ? (
+            <div
+              className="py-3 px-3 text-center border rounded-2xl flex items-center justify-center gap-2"
+              style={{
+                backgroundColor: `${currentTheme.bg}40`,
+                borderColor: currentTheme.border,
+              }}
+            >
+              <KeyRound
+                className="w-3.5 h-3.5 opacity-40 flex-shrink-0"
+                style={{ color: currentTheme.text }}
+              />
+              <span
+                className="font-zain-reg text-xs opacity-60 leading-normal"
+                style={{ color: currentTheme.text }}
+              >
+                لم تُضف أي مفاتيح بعد
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {managedKeys.map((item, index) => {
+                const isRateLimited = item.status === "rate_limited";
+                const isDisabled = item.status === "disabled";
+                const isActive = item.status === "active";
+
+                const isTesting = testingKeyId === item.id;
+                const feedback = keyFeedback?.id === item.id ? keyFeedback : null;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-col p-2.5 border rounded-2xl transition-all gap-1.5"
+                    style={{
+                      backgroundColor: `${currentTheme.bg}70`,
+                      borderColor: currentTheme.border,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      {/* Key Details & Status */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-7 h-7 flex items-center justify-center border flex-shrink-0"
+                          style={{
+                            backgroundColor: `${currentTheme.accent}10`,
+                            borderColor: `${currentTheme.accent}25`,
+                            borderRadius: "50%",
+                          }}
+                        >
+                          <KeyRound
+                            className="w-3.5 h-3.5"
+                            style={{ color: currentTheme.accent }}
+                          />
+                        </div>
+                        <div className="flex flex-col text-right min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className="font-zain-bold text-xs leading-tight"
+                              style={{ color: currentTheme.text }}
+                            >
+                              {item.label || `مفتاح ${index + 1}`}
+                            </span>
+                            {/* Status Badge */}
+                            {isActive && (
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[10px] font-zain-bold border"
+                                style={{
+                                  backgroundColor: `${currentTheme.accent}15`,
+                                  borderColor: `${currentTheme.accent}30`,
+                                  color: currentTheme.accent,
+                                }}
+                              >
+                                نشط
+                              </span>
+                            )}
+                            {isRateLimited && (
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[10px] font-zain-bold border"
+                                style={{
+                                  backgroundColor: "rgba(245, 158, 11, 0.12)",
+                                  borderColor: "rgba(245, 158, 11, 0.35)",
+                                  color: "#d97706",
+                                }}
+                              >
+                                متوقف مؤقتاً (حد الحصة)
+                              </span>
+                            )}
+                            {isDisabled && (
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[10px] font-zain-bold border"
+                                style={{
+                                  backgroundColor: `${currentTheme.border}`,
+                                  borderColor: currentTheme.border,
+                                  color: currentTheme.secondary,
+                                }}
+                              >
+                                معطَّل
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className="font-mono text-[11px] opacity-60 mt-0.5 tracking-wider"
+                            dir="ltr"
+                            style={{ color: currentTheme.text }}
+                          >
+                            {maskApiKey(item.key)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* Test Connection Button */}
+                        <button
+                          onClick={() => handleTestKey(item)}
+                          disabled={isTesting}
+                          title="فحص اتصال المفتاح الآن"
+                          className="h-7 px-2 flex items-center justify-center gap-1 rounded-full border opacity-80 hover:opacity-100 transition-all cursor-pointer active:scale-95 text-[10px] font-zain-bold"
+                          style={{
+                            backgroundColor: `${currentTheme.accent}10`,
+                            borderColor: `${currentTheme.accent}30`,
+                            color: currentTheme.accent,
+                          }}
+                        >
+                          {isTesting ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Wifi className="w-3 h-3" />
+                          )}
+                          <span>{isTesting ? "جارٍ الفحص..." : "فحص"}</span>
+                        </button>
+
+                        {isRateLimited && (
+                          <button
+                            onClick={() => handleReactivateKey(item.id)}
+                            title="إعادة التنشيط يدوياً"
+                            className="w-7 h-7 flex items-center justify-center rounded-full border opacity-70 hover:opacity-100 transition-all cursor-pointer active:scale-90"
+                            style={{
+                              backgroundColor: `${currentTheme.bg}90`,
+                              borderColor: currentTheme.border,
+                              color: currentTheme.accent,
+                            }}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setKeyToDelete(item)}
+                          title="حذف المفتاح"
+                          className="w-7 h-7 flex items-center justify-center rounded-full border opacity-60 hover:opacity-100 hover:text-red-600 transition-all cursor-pointer active:scale-90"
+                          style={{
+                            backgroundColor: `${currentTheme.bg}90`,
+                            borderColor: currentTheme.border,
+                            color: currentTheme.secondary,
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Test result feedback banner */}
+                    {feedback && (
+                      <div
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-zain-bold border animate-in fade-in"
+                        style={{
+                          backgroundColor: feedback.success
+                            ? "rgba(16, 185, 129, 0.1)"
+                            : "rgba(239, 68, 68, 0.1)",
+                          borderColor: feedback.success
+                            ? "rgba(16, 185, 129, 0.3)"
+                            : "rgba(239, 68, 68, 0.3)",
+                          color: feedback.success ? "#059669" : "#dc2626",
+                        }}
+                      >
+                        {feedback.success ? (
+                          <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        )}
+                        <span className="leading-tight">{feedback.message}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Single prominent button: إضافة مفتاح جديد */}
+          <div className="pt-1">
+            <button
+              onClick={() => {
+                setAddKeyError(null);
+                setNewKeyInput("");
+                setNewKeyLabel("");
+                setShowAddKeyDialog(true);
+              }}
+              className="w-full h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer shadow-2xs gap-1.5"
+              style={{
+                backgroundColor: `${currentTheme.accent}15`,
+                borderColor: `${currentTheme.accent}30`,
+                color: currentTheme.accent,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>إضافة مفتاح جديد</span>
+            </button>
+          </div>
+        </div>
+
         {/* ─── قسم أرشيف الحكايات والنسخ الاحتياطي (تصميم متناسق ومدمج) ─── */}
         <div
           className="border shadow-sm transition-all flex flex-col gap-3"
@@ -737,6 +1171,256 @@ const SettingsPage: React.FC = () => {
                   لم يتم العثور على مدينة
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── نافذة منبثقة لإضافة مفتاح جديد (Add API Key Dialog) ─── */}
+      {showAddKeyDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="border flex flex-col items-center animate-in zoom-in-95 duration-200"
+            style={{
+              width: "300px",
+              maxWidth: "calc(100vw - 32px)",
+              borderRadius: "28px",
+              padding: "24px 20px",
+              backgroundColor: currentTheme.bg,
+              borderColor: currentTheme.border,
+              boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
+            }}
+          >
+            {/* Top Icon matching Story Lock Dialog */}
+            <div className="flex justify-center mb-3">
+              <KeyRound
+                className="w-7 h-7"
+                style={{ color: currentTheme.accent }}
+                strokeWidth={2}
+              />
+            </div>
+
+            {/* Dialog Title */}
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              إضافة مفتاح جديد
+            </h2>
+
+            {/* Description */}
+            <p
+              className="text-xs font-zain-reg mb-4 opacity-70 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              أدخلي مفتاح Gemini API للمساعد الأدبي لضمان استمرار الاتصال والتبديل التلقائي.
+            </p>
+
+            {/* Input 1: API Key */}
+            <div className="mb-4 w-full flex flex-col">
+              <input
+                type="text"
+                placeholder="قيمة مفتاح API (مثال: AIzaSy...)"
+                value={newKeyInput}
+                onChange={(e) => {
+                  setNewKeyInput(e.target.value);
+                  if (addKeyError) setAddKeyError(null);
+                }}
+                autoFocus
+                dir="ltr"
+                className="w-full text-center font-mono text-xs outline-none border transition-all"
+                style={{
+                  height: "42px",
+                  borderRadius: "9999px",
+                  backgroundColor: `${currentTheme.accent}0a`,
+                  borderColor: `${currentTheme.accent}40`,
+                  color: currentTheme.text,
+                  padding: "0 16px",
+                }}
+              />
+            </div>
+
+            {/* Input 2: Optional Label */}
+            <div className="mb-3.5 w-full flex flex-col">
+              <input
+                type="text"
+                placeholder="تسمية المفتاح (اختياري، مثلاً: مفتاح 1)"
+                value={newKeyLabel}
+                onChange={(e) => setNewKeyLabel(e.target.value)}
+                className="w-full text-center font-zain-bold text-xs outline-none border transition-all"
+                style={{
+                  height: "42px",
+                  borderRadius: "9999px",
+                  backgroundColor: `${currentTheme.accent}0a`,
+                  borderColor: `${currentTheme.accent}40`,
+                  color: currentTheme.text,
+                  padding: "0 16px",
+                }}
+              />
+            </div>
+
+            {/* Testing feedback */}
+            {newKeyTestFeedback && (
+              <div
+                className="mb-3 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-zain-bold border animate-in fade-in"
+                style={{
+                  backgroundColor: newKeyTestFeedback.success
+                    ? "rgba(16, 185, 129, 0.1)"
+                    : "rgba(239, 68, 68, 0.1)",
+                  borderColor: newKeyTestFeedback.success
+                    ? "rgba(16, 185, 129, 0.3)"
+                    : "rgba(239, 68, 68, 0.3)",
+                  color: newKeyTestFeedback.success ? "#059669" : "#dc2626",
+                }}
+              >
+                {newKeyTestFeedback.success ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                )}
+                <span className="leading-tight text-center">{newKeyTestFeedback.message}</span>
+              </div>
+            )}
+
+            {addKeyError && !newKeyTestFeedback && (
+              <div className="mb-3 text-[11px] font-zain-bold text-red-500 text-center leading-tight">
+                {addKeyError}
+              </div>
+            )}
+
+            {/* Action Buttons - Capsule Pill Buttons matching Story Lock Dialog */}
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleTestNewKeyInDialog}
+                disabled={isTestingNewKey || isSavingKey || !newKeyInput.trim()}
+                className="font-zain-bold text-xs border active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-40 gap-1"
+                style={{
+                  height: "34px",
+                  padding: "0 14px",
+                  borderRadius: "9999px",
+                  backgroundColor: `${currentTheme.accent}12`,
+                  borderColor: `${currentTheme.accent}30`,
+                  color: currentTheme.accent,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isTestingNewKey ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Wifi className="w-3 h-3" />
+                )}
+                <span>{isTestingNewKey ? "جارٍ الفحص..." : "فحص الاتصال"}</span>
+              </button>
+
+              <button
+                onClick={handleSaveNewKey}
+                disabled={isSavingKey}
+                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                style={{
+                  height: "34px",
+                  padding: "0 20px",
+                  borderRadius: "9999px",
+                  backgroundColor: currentTheme.accent,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isSavingKey ? "جارٍ الحفظ..." : "حفظ"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowAddKeyDialog(false);
+                  setNewKeyInput("");
+                  setNewKeyLabel("");
+                  setAddKeyError(null);
+                  setNewKeyTestFeedback(null);
+                }}
+                disabled={isSavingKey}
+                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
+                style={{
+                  height: "34px",
+                  padding: "0 14px",
+                  borderRadius: "9999px",
+                  color: currentTheme.secondary,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── نافذة تأكيد حذف مفتاح (Delete Confirmation Dialog) ─── */}
+      {keyToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="border flex flex-col items-center animate-in zoom-in-95 duration-200"
+            style={{
+              width: "280px",
+              maxWidth: "calc(100vw - 32px)",
+              borderRadius: "28px",
+              padding: "24px 20px",
+              backgroundColor: currentTheme.bg,
+              borderColor: currentTheme.border,
+              boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
+            }}
+          >
+            {/* Top Icon */}
+            <div className="flex justify-center mb-3">
+              <Trash2
+                className="w-7 h-7"
+                style={{ color: "#dc2626" }}
+                strokeWidth={2}
+              />
+            </div>
+
+            {/* Dialog Title */}
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              حذف مفتاح الاتصال
+            </h2>
+
+            {/* Description */}
+            <p
+              className="text-xs font-zain-reg mb-4 opacity-70 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              هل ترغبين في حذف {keyToDelete.label ? `"${keyToDelete.label}"` : "هذا المفتاح"} نهائياً من قائمة مفاتيح المساعد الأدبي؟
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={handleConfirmDeleteKey}
+                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                style={{
+                  height: "34px",
+                  padding: "0 22px",
+                  borderRadius: "9999px",
+                  backgroundColor: "#dc2626",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                حذف
+              </button>
+              <button
+                onClick={() => setKeyToDelete(null)}
+                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
+                style={{
+                  height: "34px",
+                  padding: "0 16px",
+                  borderRadius: "9999px",
+                  color: currentTheme.secondary,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                إلغاء
+              </button>
             </div>
           </div>
         </div>
