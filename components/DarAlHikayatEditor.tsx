@@ -415,6 +415,104 @@ const ChapterItem = React.memo(
   },
 );
 
+// --- Helpers for Accurate Word and Character Count ---
+export const getCleanWordCount = (htmlText: string): number => {
+  if (!htmlText) return 0;
+  // Replace HTML tags, scripts, non-breaking spaces with standard space
+  // so paragraph blocks don't concatenate adjacent words into a single word
+  const text = htmlText
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&[a-z0-9#]+;/gi, " ")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\r\n\t]+/g, " ")
+    .trim();
+  if (!text) return 0;
+  return text.split(/\s+/).filter(Boolean).length;
+};
+
+export const getCleanCharCount = (htmlText: string): number => {
+  if (!htmlText) return 0;
+  const text = htmlText
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&[a-z0-9#]+;/gi, " ")
+    .replace(/\u00A0/g, " ");
+  return text.length;
+};
+
+// --- Comprehensive Screen & Device Classification ---
+// Differentiates actual tablets (like Samsung Galaxy Tab A7, iPad, etc.) from mobile phones,
+// and enforces that the Literary Assistant split-screen mode is STRICTLY available ONLY in Landscape orientation.
+export interface ScreenClassification {
+  isDeviceWideCapable: boolean; // Physical tablet (Smallest Width >= 500dp, Longest side >= 720dp) OR desktop browser
+  isLandscape: boolean;         // Current viewport width > height
+  canOpenAssistant: boolean;    // Strict combined requirement: isDeviceWideCapable && isLandscape
+  isTablet: boolean;
+  isDesktop: boolean;
+  isMobilePhone: boolean;
+  width: number;
+  height: number;
+  minDim: number;
+  maxDim: number;
+}
+
+export const checkIsTabletOrWideScreen = (): ScreenClassification => {
+  if (typeof window === "undefined") {
+    return {
+      isDeviceWideCapable: false,
+      isLandscape: false,
+      canOpenAssistant: false,
+      isTablet: false,
+      isDesktop: false,
+      isMobilePhone: true,
+      width: 0,
+      height: 0,
+      minDim: 0,
+      maxDim: 0,
+    };
+  }
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const minDim = Math.min(w, h);
+  const maxDim = Math.max(w, h);
+  const isLandscape = w > h;
+
+  // Tablet classification (Samsung Galaxy Tab A7 has minDim ~600dp, maxDim ~960-1000dp):
+  // - Smallest Width (minDim) >= 500dp (standard tablets have sw >= 530-600dp; phones are 360-430dp)
+  // - Longest side (maxDim) >= 720dp
+  // This holds true for hardware identification in both orientations.
+  const isTablet = minDim >= 500 && maxDim >= 720;
+
+  // Desktop or wide laptop browser window (width >= 768 && height >= 500)
+  const isDesktop = w >= 768 && h >= 500;
+
+  const isDeviceWideCapable = isTablet || isDesktop;
+  const isMobilePhone = !isTablet && !isDesktop;
+
+  // Strict Rule: Assistant full split-screen studio ONLY opens when device is qualified AND currently in Landscape!
+  // If a tablet is in Portrait (w < h), canOpenAssistant is FALSE.
+  const canOpenAssistant = isDeviceWideCapable && isLandscape;
+
+  return {
+    isDeviceWideCapable,
+    isLandscape,
+    canOpenAssistant,
+    isTablet,
+    isDesktop,
+    isMobilePhone,
+    width: w,
+    height: h,
+    minDim,
+    maxDim,
+  };
+};
+
 const DarAlHikayatMaster: React.FC = () => {
   const { selectedNote, backToHome, saveNote, currentTheme, toggleTheme } =
     useApp();
@@ -491,29 +589,43 @@ const DarAlHikayatMaster: React.FC = () => {
   const [exportFormat, setExportFormat] = useState<"pdf" | "docx">("pdf");
   const [isExporting, setIsExporting] = useState(false);
 
-  // --- Screen Breakpoint & AI Assistant State ---
-  // STRICT RULE 1: Any screen width < 768dp is logically classified as mobile
-  const [isWideScreen, setIsWideScreen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth >= 768;
-    }
-    return false;
-  });
+  // --- Device & Screen Classification for Literary Assistant ---
+  // A device is eligible for the split-screen Literary Assistant ONLY if:
+  // 1. Hardware qualification:
+  //    - Physical tablet: Smallest Width (minDim) >= 500dp AND Longest Side (maxDim) >= 720dp (e.g. Galaxy Tab A7 has minDim ~600dp, maxDim ~960dp).
+  //    - OR Desktop browser: width >= 768px and height >= 500px.
+  // 2. Strict Orientation condition:
+  //    - Must be currently in Landscape (width > height).
+  //    - If a tablet is currently in Portrait (or any mobile phone in any orientation), the Assistant split-pane CANNOT open.
+  //    - Instead, clicking the button displays the elegant popover tooltip ("تحتاج مساحة عرض أكبر").
+  //    - As soon as the user rotates the tablet to Landscape, the Assistant becomes available to open in full split-screen.
+  const [screenInfo, setScreenInfo] = useState(() => checkIsTabletOrWideScreen());
 
   useEffect(() => {
     const handleResize = () => {
-      const wide = window.innerWidth >= 768;
-      setIsWideScreen(wide);
-      if (!wide) {
+      const info = checkIsTabletOrWideScreen();
+      setScreenInfo(info);
+      // Auto-close assistant immediately if device leaves landscape or becomes unqualified
+      if (!info.canOpenAssistant) {
         setShowAIAssistant(false);
       }
     };
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
   }, []);
 
+  // Assistant is available strictly in landscape mode on qualified tablets / wide displays
+  const isWideScreen = screenInfo.canOpenAssistant;
+  // In qualified Landscape orientation (width >= 720dp), a standard comfortable 420px split studio pane is used
+  const paneWidthPx = isWideScreen ? 420 : 0;
+  const paneWidthCss = `${paneWidthPx}px`;
+
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  // Popover / Tooltip state for Literary Assistant on mobile screens (< 768dp)
+  // Popover / Tooltip state for Literary Assistant on unqualified screens / Portrait orientations
   const [showMobileTooltip, setShowMobileTooltip] = useState(false);
   const mobileTooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mobileTooltipRef = useRef<HTMLDivElement | null>(null);
@@ -556,10 +668,10 @@ const DarAlHikayatMaster: React.FC = () => {
     if (e) {
       e.stopPropagation();
     }
-    const currentIsWide =
-      typeof window !== "undefined" ? window.innerWidth >= 768 : isWideScreen;
-    if (!currentIsWide) {
-      // Mobile screen (< 768dp): NEVER open assistant, NEVER call API, NEVER navigate.
+    const currentInfo = checkIsTabletOrWideScreen();
+    if (!currentInfo.canOpenAssistant) {
+      // Unqualified screen OR Tablet in Portrait mode:
+      // NEVER open assistant, NEVER call API, NEVER navigate.
       // Show elegant popover tooltip directly above the button.
       setShowMobileTooltip(true);
       if (mobileTooltipTimeoutRef.current) {
@@ -572,7 +684,7 @@ const DarAlHikayatMaster: React.FC = () => {
       return;
     }
 
-    // Wide screen (>= 768dp): toggle assistant pane
+    // Qualified Tablet or Desktop in Landscape orientation: toggle dual pane assistant
     setShowAIAssistant((prev) => !prev);
   };
 
@@ -1658,20 +1770,11 @@ const DarAlHikayatMaster: React.FC = () => {
   };
 
   const wordCount = isNovelMode
-    ? chapters.reduce(
-        (acc, curr) =>
-          acc +
-          (curr.content.trim() === ""
-            ? 0
-            : curr.content.trim().split(/\s+/).length),
-        0,
-      )
-    : content.trim() === "" || content === "<br>"
-      ? 0
-      : content.trim().split(/\s+/).length;
+    ? chapters.reduce((acc, curr) => acc + getCleanWordCount(curr.content), 0)
+    : getCleanWordCount(content);
   const charCount = isNovelMode
-    ? chapters.reduce((acc, curr) => acc + curr.content.length, 0)
-    : content.length;
+    ? chapters.reduce((acc, curr) => acc + getCleanCharCount(curr.content), 0)
+    : getCleanCharCount(content);
 
   // Auto-close assistant and hide tooltip if word count drops below the 350-word threshold
   useEffect(() => {
@@ -1749,7 +1852,7 @@ const DarAlHikayatMaster: React.FC = () => {
       <div
         className={`fixed top-20 z-40 transition-all duration-700 ${isZikrVisible ? "opacity-100" : "opacity-0 -translate-y-10 scale-90 pointer-events-none"}`}
         style={{
-          left: showAIAssistant && isWideScreen ? "calc((100vw - 420px) / 2)" : "50%",
+          left: showAIAssistant && isWideScreen ? `calc((100vw - ${paneWidthCss}) / 2)` : "50%",
           transform: "translateX(-50%)",
         }}
       >
@@ -2070,7 +2173,7 @@ const DarAlHikayatMaster: React.FC = () => {
         }`}
         style={{
           left: 0,
-          right: showAIAssistant && isWideScreen ? "420px" : 0,
+          right: showAIAssistant && isWideScreen ? paneWidthCss : 0,
         }}
       >
         <div
@@ -2450,7 +2553,7 @@ const DarAlHikayatMaster: React.FC = () => {
         <div
           className="session-card fixed top-20 z-50 w-80 animate-in slide-in-from-top-4 fade-in"
           style={{
-            right: showAIAssistant && isWideScreen ? "calc(420px + 1rem)" : "1rem",
+            right: showAIAssistant && isWideScreen ? `calc(${paneWidthCss} + 1rem)` : "1rem",
           }}
         >
           <div
@@ -2537,11 +2640,11 @@ const DarAlHikayatMaster: React.FC = () => {
         {showAIAssistant && isWideScreen && (
           <aside
             aria-label="المساعد الأدبي الذكي"
-            className="fixed top-0 bottom-0 right-0 w-[420px] h-screen max-h-screen z-40 border-l flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ease-in-out overscroll-contain"
+            className="fixed top-0 bottom-0 right-0 h-screen max-h-screen z-40 border-l flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ease-in-out overscroll-contain"
             style={{
-              width: "420px",
-              minWidth: "420px",
-              maxWidth: "420px",
+              width: paneWidthCss,
+              minWidth: paneWidthCss,
+              maxWidth: paneWidthCss,
               height: "100vh",
               maxHeight: "100vh",
               backgroundColor: currentTheme.bg,
@@ -2556,12 +2659,12 @@ const DarAlHikayatMaster: React.FC = () => {
           </aside>
         )}
 
-        {/* Editor Area: Offset by exactly 420px on the right when assistant is open, fills 100% smoothly */}
+        {/* Editor Area: Offset by paneWidthCss on the right when assistant is open, fills 100% smoothly */}
         <div
           className="min-w-0 min-h-screen relative flex flex-col transition-all duration-300 ease-in-out"
           style={{
-            marginRight: showAIAssistant && isWideScreen ? "420px" : "0",
-            width: showAIAssistant && isWideScreen ? "calc(100% - 420px)" : "100%",
+            marginRight: showAIAssistant && isWideScreen ? paneWidthCss : "0",
+            width: showAIAssistant && isWideScreen ? `calc(100% - ${paneWidthCss})` : "100%",
             minWidth: 0,
           }}
         >
@@ -2620,7 +2723,7 @@ const DarAlHikayatMaster: React.FC = () => {
         <div
           className="fixed bottom-6 z-50 pointer-events-none text-center"
           style={{
-            left: showAIAssistant && isWideScreen ? "calc((100vw - 420px) / 2)" : "50%",
+            left: showAIAssistant && isWideScreen ? `calc((100vw - ${paneWidthCss}) / 2)` : "50%",
             transform: "translateX(-50%)",
           }}
         >
@@ -2641,7 +2744,7 @@ const DarAlHikayatMaster: React.FC = () => {
           }`}
           style={{
             left: 0,
-            right: showAIAssistant && isWideScreen ? "420px" : 0,
+            right: showAIAssistant && isWideScreen ? paneWidthCss : 0,
           }}
         >
           <div
@@ -2688,7 +2791,7 @@ const DarAlHikayatMaster: React.FC = () => {
                     </span>
                   </button>
 
-                  {/* Popover / Tooltip when tapped on mobile screens (< 768dp) */}
+                  {/* Popover / Tooltip when tapped on unqualified screens or tablet in Portrait mode */}
                   {showMobileTooltip && (
                     <div
                       ref={mobileTooltipRef}
@@ -2904,7 +3007,7 @@ const DarAlHikayatMaster: React.FC = () => {
         <div
           className={`fixed bottom-28 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
           style={{
-            left: showAIAssistant && isWideScreen ? "calc((100vw - 420px) / 2)" : "50%",
+            left: showAIAssistant && isWideScreen ? `calc((100vw - ${paneWidthCss}) / 2)` : "50%",
             transform: "translateX(-50%)",
             width: "min(384px, calc(100vw - 32px))",
             backgroundColor: currentTheme.glass,
