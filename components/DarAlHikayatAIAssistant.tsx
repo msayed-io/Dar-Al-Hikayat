@@ -525,13 +525,12 @@ function UserMessageBubble({
     return text.length > 70 || text.split("\n").length > 2;
   }, [message.content]);
 
-  const borderRadiusClass = isOverTwoLines
-    ? "rounded-[22px] rounded-tl-sm"
-    : "rounded-[24px] rounded-tl-sm";
+  // Consistent rounded rectangle border radius matching edit mode exactly
+  const borderRadiusClass = "rounded-[22px] rounded-tl-sm";
 
   return (
     <div
-      className={`w-fit max-w-[85%] text-right border shadow-sm transition-all duration-300 overflow-hidden relative ${borderRadiusClass}`}
+      className={`w-fit min-w-[240px] max-w-[85%] text-right border shadow-sm transition-all duration-300 overflow-hidden relative ${borderRadiusClass}`}
       style={{
         backgroundColor: currentTheme.accent,
         borderColor: currentTheme.accent,
@@ -548,7 +547,7 @@ function UserMessageBubble({
           className="w-full min-w-[240px] resize-none bg-transparent px-5 py-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none text-white placeholder:text-white/60"
         />
       ) : (
-        <div className={`px-5 py-3.5 relative ${isOverTwoLines ? "pb-9" : ""}`}>
+        <div className={`w-full px-5 py-3.5 relative ${isOverTwoLines ? "pb-9" : ""}`}>
           <p
             className="text-[14px] font-zain-bold leading-[23px] whitespace-pre-wrap break-words transition-all duration-300"
             style={{
