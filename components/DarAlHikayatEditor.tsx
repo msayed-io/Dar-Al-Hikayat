@@ -76,8 +76,10 @@ import {
   globalAuditLog,
   globalBatchManager,
   buildNormalizedTextWithMap,
+  resolveSelectionToMention,
   type BlockOperationResult,
   type PlannedOperation,
+  type AttachedMention,
 } from "../lib/editor-block-system";
 
 // --- 20 Premium Ink Colors ---
@@ -753,6 +755,7 @@ const DarAlHikayatMaster: React.FC = () => {
     bg: "#FFE600",
     text: "#000000",
   });
+  const [attachedMentions, setAttachedMentions] = useState<AttachedMention[]>([]);
 
   // Sync content state to standard editor div (for Undo/Redo/external updates)
   useEffect(() => {
@@ -946,6 +949,7 @@ const DarAlHikayatMaster: React.FC = () => {
           );
         },
         buildNormalizedTextWithMap,
+        resolveSelectionToMention,
       };
     }
   }, [content, chapters, isNovelMode, history, historyIndex]);
@@ -1692,6 +1696,40 @@ const DarAlHikayatMaster: React.FC = () => {
     clearHighlightFromSelection(selection, range);
     selection.removeAllRanges();
     triggerEditorUpdates(targetChapterId);
+  };
+
+  const handleMentionCapture = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+
+    const rootEl = isNovelMode
+      ? (document.querySelector("#story-content") as HTMLElement | null)
+      : editorRef.current;
+
+    const mention = resolveSelectionToMention(range, rootEl);
+    if (mention) {
+      setAttachedMentions((prev) => {
+        const exists = prev.some(
+          (m) => m.blockId === mention.blockId && m.selectedText === mention.selectedText
+        );
+        if (exists) return prev;
+        return [...prev, mention];
+      });
+
+      if (screenInfo.canOpenAssistant) {
+        setShowAIAssistant(true);
+      }
+      setToolbarVisible(false);
+    }
+  };
+
+  const handleRemoveMention = (mentionId: string) => {
+    setAttachedMentions((prev) => prev.filter((m) => m.id !== mentionId));
+  };
+
+  const handleClearMentions = () => {
+    setAttachedMentions([]);
   };
 
   useEffect(() => {
@@ -2885,6 +2923,14 @@ const DarAlHikayatMaster: React.FC = () => {
             <DarAlHikayatAIAssistant
               onClose={() => setShowAIAssistant(false)}
               storyContext={currentStoryContext}
+              attachedMentions={attachedMentions}
+              onRemoveMention={handleRemoveMention}
+              onClearMentions={handleClearMentions}
+              editorRootElement={
+                isNovelMode
+                  ? (document.querySelector("#story-content") as HTMLElement | null)
+                  : editorRef.current
+              }
               theme={currentTheme}
             />
           </aside>
@@ -3577,6 +3623,29 @@ const DarAlHikayatMaster: React.FC = () => {
               إزالة التظليل
             </span>
           </button>
+
+          {/* @ Mention Capsule Button (Active when Assistant is available) */}
+          {screenInfo.canOpenAssistant && wordCount >= 300 && (
+            <>
+              <div
+                className="w-px h-3.5 self-center mx-0.5"
+                style={{ backgroundColor: currentTheme.border }}
+              />
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleMentionCapture();
+                }}
+                className="group relative flex items-center justify-center p-1.5 rounded-full hover:bg-stone-200/50 dark:hover:bg-zinc-800/50 transition-colors"
+                style={{ color: currentTheme.accent }}
+              >
+                <span className="font-zain-xbold text-xs leading-none">@</span>
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center justify-center bg-zinc-900 text-white text-[10px] py-0.5 px-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+                  توجيه للمساعد (@)
+                </span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

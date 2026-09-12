@@ -28,6 +28,11 @@ import {
   streamLiteraryAssistantResponse,
   type StoryContext,
 } from "../lib/ai-assistant-service";
+import {
+  AttachedMention,
+  validateAndHealMentions,
+  formatMentionsForPrompt,
+} from "../lib/editor-block-system";
 
 export type Message = {
   id: string;
@@ -49,6 +54,10 @@ export type StoredConversation = {
 type DarAlHikayatAIAssistantProps = {
   onClose: () => void;
   storyContext: StoryContext;
+  attachedMentions?: AttachedMention[];
+  onRemoveMention?: (id: string) => void;
+  onClearMentions?: () => void;
+  editorRootElement?: HTMLElement | null;
   theme?: {
     bg: string;
     text: string;
@@ -596,6 +605,10 @@ function UserMessageBubble({
 export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssistant({
   onClose,
   storyContext,
+  attachedMentions = [],
+  onRemoveMention,
+  onClearMentions,
+  editorRootElement,
   theme: propTheme,
 }: DarAlHikayatAIAssistantProps) {
   const { currentTheme: appContextTheme } = useApp();
@@ -933,6 +946,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     setMessages((prev) => [...prev, aiMsg]);
     setIsLoading(false);
 
+    // Process and validate attached mentions for prompt context
+    let mentionsContext = "";
+    if (attachedMentions && attachedMentions.length > 0) {
+      const valResult = validateAndHealMentions(attachedMentions, editorRootElement);
+      const activeMentions = [...valResult.valid, ...valResult.healed];
+      if (activeMentions.length > 0) {
+        mentionsContext = formatMentionsForPrompt(activeMentions);
+      }
+      onClearMentions?.();
+    }
+
     try {
       let accumulated = "";
       await streamLiteraryAssistantResponse(
@@ -953,7 +977,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 : msg
             )
           );
-        }
+        },
+        mentionsContext
       );
 
       setMessages((prev) =>
@@ -1908,6 +1933,52 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           className="absolute bottom-4 z-40 flex flex-col items-center pointer-events-none w-full"
           style={{ left: 0, padding: "0 16px" }}
         >
+          {/* Attached Mention Chips Row */}
+          {attachedMentions && attachedMentions.length > 0 && (
+            <div
+              className="w-full max-w-3xl mb-2 flex items-center gap-1.5 overflow-x-auto custom-scroll px-1 py-0.5 pointer-events-auto select-none"
+              dir="rtl"
+            >
+              <div className="flex items-center gap-1.5 flex-nowrap">
+                {attachedMentions.map((mention) => (
+                  <div
+                    key={mention.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-zain-bold border shadow-xs select-none shrink-0 transition-all animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                      backgroundColor: currentTheme.isDark
+                        ? "rgba(184, 138, 79, 0.18)"
+                        : `${currentTheme.accent}15`,
+                      borderColor: `${currentTheme.accent}45`,
+                      color: currentTheme.text,
+                    }}
+                  >
+                    <span
+                      className="font-zain-xbold text-xs leading-none"
+                      style={{ color: currentTheme.accent }}
+                    >
+                      @
+                    </span>
+                    <span
+                      className="truncate max-w-[130px] inline-block pt-0.5 leading-tight"
+                      title={mention.selectedText}
+                    >
+                      {mention.selectedText}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveMention?.(mention.id)}
+                      className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 active:scale-90 cursor-pointer transition-colors"
+                      style={{ color: currentTheme.secondary }}
+                      title="إزالة الفقرة المستهدفة"
+                    >
+                      <X size={11} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();

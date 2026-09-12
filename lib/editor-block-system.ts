@@ -213,6 +213,10 @@ export function cleanBlockRawText(htmlOrText: string): string {
 export function normalizeTextForMatching(text: string): string {
   if (!text) return "";
   return text
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "") // إزالة التشكيل والتطويل
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[ة]/g, "ه")
+    .replace(/[ى]/g, "ي")
     .replace(/[\u00A0\s]+/g, " ")
     .replace(/[«»“”"']/g, '"')
     .replace(/[،,]/g, "،")
@@ -240,6 +244,12 @@ export function buildNormalizedTextWithMap(rawText: string): NormalizedIndexMapp
   let i = 0;
   while (i < rawText.length) {
     const ch = rawText[i];
+
+    // إزالة التشكيل والتطويل الكشيدة
+    if (/[\u064B-\u065F\u0670\u0640]/.test(ch)) {
+      i++;
+      continue;
+    }
 
     // فراغات أو مسافات غير منقسمة
     if (/\s|\u00A0/.test(ch)) {
@@ -275,6 +285,30 @@ export function buildNormalizedTextWithMap(rawText: string): NormalizedIndexMapp
     // الفواصل المنقوطة
     if (/[؛;]/.test(ch)) {
       normalizedText += "؛";
+      normToRawMap.push(i);
+      i++;
+      continue;
+    }
+
+    // الألف بتنويعاتها
+    if (/[أإآٱ]/.test(ch)) {
+      normalizedText += "ا";
+      normToRawMap.push(i);
+      i++;
+      continue;
+    }
+
+    // التاء المربوطة
+    if (ch === "ة") {
+      normalizedText += "ه";
+      normToRawMap.push(i);
+      i++;
+      continue;
+    }
+
+    // الألف المقصورة
+    if (ch === "ى") {
+      normalizedText += "ي";
       normToRawMap.push(i);
       i++;
       continue;
@@ -1630,3 +1664,361 @@ export class BlockBatchManager {
 }
 
 export const globalBatchManager = new BlockBatchManager();
+
+// ==========================================================================
+// 🔍 Manual Mention System Infrastructure (نظام الاستهداف اليدوي التدقيق)
+// ==========================================================================
+
+export interface TextMatchItem {
+  blockId: string;
+  startOffset: number;
+  endOffset: number;
+  text: string;
+  matchType: "EXACT" | "NORMALIZED";
+}
+
+export interface FindTextResult {
+  status: "UNIQUE_MATCH" | "MULTI_MATCH" | "NO_MATCH";
+  occurrences: number;
+  match?: TextMatchItem;
+  matches: TextMatchItem[];
+}
+
+export interface AttachedMention {
+  id: string;
+  blockId: string;
+  selectedText: string;
+  startOffset: number;
+  endOffset: number;
+  chapterId?: string;
+  status?: "VALID" | "HEALED" | "DROPPED";
+}
+
+export interface MentionValidationResult {
+  valid: AttachedMention[];
+  healed: AttachedMention[];
+  dropped: AttachedMention[];
+}
+
+/**
+ * دالة البحث بالمحتوى المستقلة (findTextInContent)
+ * تبحث عن نص مستهدف عبر جميع فقرات المحرر.
+ * تدعم المطابقة التامة أولاً (Exact Match)، ثم المطابقة المرنة (Normalized Match).
+ * دالة قراءة صرفة (Read-Only): لا تُعدل DOM، لا تحجز أقفالاً، لا تؤثر على سجل التراجع.
+ */
+export function findTextInContent(
+  targetText: string,
+  rootElement?: HTMLElement | null
+): FindTextResult {
+  if (!targetText || !targetText.trim()) {
+    return { status: "NO_MATCH", occurrences: 0, matches: [] };
+  }
+
+  // 1. جمع كافة الفقرات الحاملة لـ data-block-id
+  let blocks: HTMLElement[] = [];
+  if (rootElement) {
+    if (rootElement.hasAttribute && rootElement.hasAttribute("data-block-id")) {
+      blocks = [rootElement];
+    } else if (typeof rootElement.querySelectorAll === "function") {
+      const queryBlocks = Array.from(rootElement.querySelectorAll<HTMLElement>("[data-block-id]"));
+      if (queryBlocks.length > 0) {
+        blocks = queryBlocks;
+      } else {
+        // إذا كان rootElement نفسه هو الحاوية ولم تُرقّم بعد
+        blocks = [rootElement];
+      }
+    } else {
+      blocks = [rootElement];
+    }
+  } else if (typeof document !== "undefined") {
+    blocks = Array.from(document.querySelectorAll<HTMLElement>("[data-block-id]"));
+    if (blocks.length === 0) {
+      const mainEditor = document.querySelector<HTMLElement>(".editor-container");
+      if (mainEditor) blocks = [mainEditor];
+    }
+  }
+
+  if (blocks.length === 0) {
+    return { status: "NO_MATCH", occurrences: 0, matches: [] };
+  }
+
+  const exactMatches: TextMatchItem[] = [];
+
+  // 2. البحث بالمطابقة التامة (Exact Match)
+  for (const block of blocks) {
+    const blockId = (block.getAttribute && block.getAttribute("data-block-id")) || "block-root";
+    const rawText = block.textContent || "";
+    if (!rawText) continue;
+
+    let searchIdx = 0;
+    while (searchIdx <= rawText.length - targetText.length) {
+      const foundIdx = rawText.indexOf(targetText, searchIdx);
+      if (foundIdx === -1) break;
+
+      exactMatches.push({
+        blockId,
+        startOffset: foundIdx,
+        endOffset: foundIdx + targetText.length,
+        text: targetText,
+        matchType: "EXACT",
+      });
+
+      searchIdx = foundIdx + Math.max(1, targetText.length);
+    }
+  }
+
+  if (exactMatches.length === 1) {
+    return {
+      status: "UNIQUE_MATCH",
+      occurrences: 1,
+      match: exactMatches[0],
+      matches: exactMatches,
+    };
+  }
+
+  if (exactMatches.length > 1) {
+    return {
+      status: "MULTI_MATCH",
+      occurrences: exactMatches.length,
+      matches: exactMatches,
+    };
+  }
+
+  // 3. البحث بالمطابقة المرنة (Normalized Match)
+  const normalizedMatches: TextMatchItem[] = [];
+  const { normalizedText: normTarget } = buildNormalizedTextWithMap(targetText);
+
+  if (!normTarget) {
+    return { status: "NO_MATCH", occurrences: 0, matches: [] };
+  }
+
+  for (const block of blocks) {
+    const blockId = (block.getAttribute && block.getAttribute("data-block-id")) || "block-root";
+    const rawText = block.textContent || "";
+    if (!rawText) continue;
+
+    const { normalizedText: normBlockText, normToRawMap } = buildNormalizedTextWithMap(rawText);
+    if (!normBlockText) continue;
+
+    let searchIdx = 0;
+    while (searchIdx <= normBlockText.length - normTarget.length) {
+      const foundNormIdx = normBlockText.indexOf(normTarget, searchIdx);
+      if (foundNormIdx === -1) break;
+
+      const normEndIdx = foundNormIdx + normTarget.length;
+      const rawStart = normToRawMap[foundNormIdx] ?? 0;
+      const rawEndCharIdx = normToRawMap[normEndIdx - 1];
+      const rawEnd = rawEndCharIdx !== undefined ? rawEndCharIdx + 1 : rawText.length;
+
+      const matchedSlice = rawText.slice(rawStart, rawEnd);
+
+      normalizedMatches.push({
+        blockId,
+        startOffset: rawStart,
+        endOffset: rawEnd,
+        text: matchedSlice,
+        matchType: "NORMALIZED",
+      });
+
+      searchIdx = foundNormIdx + Math.max(1, normTarget.length);
+    }
+  }
+
+  if (normalizedMatches.length === 1) {
+    return {
+      status: "UNIQUE_MATCH",
+      occurrences: 1,
+      match: normalizedMatches[0],
+      matches: normalizedMatches,
+    };
+  }
+
+  if (normalizedMatches.length > 1) {
+    return {
+      status: "MULTI_MATCH",
+      occurrences: normalizedMatches.length,
+      matches: normalizedMatches,
+    };
+  }
+
+  return { status: "NO_MATCH", occurrences: 0, matches: [] };
+}
+
+/**
+ * حساب الإزاحات الدقيقة للنص المحدد داخل الفقرة
+ */
+function getCharacterOffsetWithin(rootNode: Node, targetNode: Node, targetOffset: number): number {
+  let totalLength = 0;
+  let found = false;
+
+  function traverse(current: Node) {
+    if (found) return;
+    if (current === targetNode) {
+      if (current.nodeType === 3 /* TEXT_NODE */) {
+        totalLength += targetOffset;
+      }
+      found = true;
+      return;
+    }
+
+    if (current.nodeType === 3 /* TEXT_NODE */) {
+      totalLength += current.nodeValue?.length || 0;
+    } else {
+      for (let i = 0; i < current.childNodes.length; i++) {
+        traverse(current.childNodes[i]);
+        if (found) return;
+      }
+    }
+  }
+
+  traverse(rootNode);
+  return found ? totalLength : 0;
+}
+
+/**
+ * تحويل كائن Range إلى منشن معرّف بدقة (resolveSelectionToMention)
+ */
+export function resolveSelectionToMention(
+  range: Range,
+  rootElement?: HTMLElement | null
+): AttachedMention | null {
+  const selectedText = range.toString().trim();
+  if (!selectedText) return null;
+
+  // البحث عن أقرب عنصر فقرة يحمل data-block-id
+  let current: Node | null = range.startContainer;
+  let blockEl: HTMLElement | null = null;
+
+  while (current && current !== rootElement) {
+    if (current instanceof HTMLElement && current.hasAttribute("data-block-id")) {
+      blockEl = current;
+      break;
+    }
+    current = current.parentNode;
+  }
+
+  if (!blockEl) {
+    // محاولة البحث عبر endContainer أو commonAncestorContainer
+    let fallback: Node | null = range.commonAncestorContainer;
+    while (fallback && fallback !== rootElement) {
+      if (fallback instanceof HTMLElement && fallback.hasAttribute("data-block-id")) {
+        blockEl = fallback;
+        break;
+      }
+      fallback = fallback.parentNode;
+    }
+  }
+
+  let blockId = blockEl ? blockEl.getAttribute("data-block-id") || "block-root" : "block-root";
+  let startOffset = 0;
+  let endOffset = selectedText.length;
+
+  if (blockEl) {
+    startOffset = getCharacterOffsetWithin(blockEl, range.startContainer, range.startOffset);
+    endOffset = getCharacterOffsetWithin(blockEl, range.endContainer, range.endOffset);
+    if (endOffset <= startOffset) {
+      endOffset = startOffset + selectedText.length;
+    }
+  }
+
+  // البحث عن معرف الفصل إن وُجد
+  let chapterId: string | undefined = undefined;
+  let chapNode: Node | null = blockEl || range.startContainer;
+  while (chapNode && chapNode !== rootElement) {
+    if (chapNode instanceof HTMLElement && chapNode.hasAttribute("data-chapter-id")) {
+      chapterId = chapNode.getAttribute("data-chapter-id") || undefined;
+      break;
+    }
+    chapNode = chapNode.parentNode;
+  }
+
+  return {
+    id: "mention-" + generateBlockId(),
+    blockId,
+    selectedText,
+    startOffset,
+    endOffset,
+    chapterId,
+    status: "VALID",
+  };
+}
+
+/**
+ * التحقق والشفاء الذاتي للمنشنات عند الإرسال (validateAndHealMentions)
+ * تطبق سياسة الشفاء الذاتي:
+ * 1. إذا كان النص متطابقاً بالإحداثيات -> صالح (VALID)
+ * 2. إذا تغير الموضع ولكن النص فريد في نفس الفقرة أو أي فقرة -> يُشفى تلقائياً (HEALED)
+ * 3. إذا حُذف النص أو أصبح غامضاً -> يُسقط بهدوء (DROPPED)
+ */
+export function validateAndHealMentions(
+  mentions: AttachedMention[],
+  rootElement?: HTMLElement | null
+): MentionValidationResult {
+  const result: MentionValidationResult = {
+    valid: [],
+    healed: [],
+    dropped: [],
+  };
+
+  if (!mentions || mentions.length === 0) {
+    return result;
+  }
+
+  for (const mention of mentions) {
+    let blockEl: HTMLElement | null = null;
+    if (rootElement && typeof rootElement.querySelector === "function") {
+      blockEl = rootElement.querySelector(`[data-block-id="${mention.blockId}"]`);
+    } else if (typeof document !== "undefined") {
+      blockEl = document.querySelector(`[data-block-id="${mention.blockId}"]`);
+    }
+
+    if (blockEl) {
+      const rawText = blockEl.textContent || "";
+      const exactSubstr = rawText.slice(mention.startOffset, mention.endOffset);
+
+      if (exactSubstr === mention.selectedText) {
+        result.valid.push({ ...mention, status: "VALID" });
+        continue;
+      }
+
+      // البحث داخل نفس الفقرة أولاً
+      const searchInBlock = findTextInContent(mention.selectedText, blockEl);
+      if (searchInBlock.status === "UNIQUE_MATCH" && searchInBlock.match) {
+        result.healed.push({
+          ...mention,
+          startOffset: searchInBlock.match.startOffset,
+          endOffset: searchInBlock.match.endOffset,
+          status: "HEALED",
+        });
+        continue;
+      }
+    }
+
+    // البحث عبر كامل المحرر للشفاء الذاتي
+    const searchAll = findTextInContent(mention.selectedText, rootElement);
+    if (searchAll.status === "UNIQUE_MATCH" && searchAll.match) {
+      result.healed.push({
+        ...mention,
+        blockId: searchAll.match.blockId,
+        startOffset: searchAll.match.startOffset,
+        endOffset: searchAll.match.endOffset,
+        status: "HEALED",
+      });
+    } else {
+      result.dropped.push({ ...mention, status: "DROPPED" });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * توليد كتلة الاستهداف بالمنشن لضمها إلى سياق المحادثة الأدبية
+ */
+export function formatMentionsForPrompt(mentions: AttachedMention[]): string {
+  if (!mentions || mentions.length === 0) return "";
+  const lines = mentions.map((m, idx) => {
+    return `[استهداف فقرة ${idx + 1}]:\n- معرّف الفقرة: ${m.blockId}\n- النص المحدد بدقة: "${m.selectedText.trim()}"\n- الإحداثيات: من الحرف ${m.startOffset} إلى ${m.endOffset}`;
+  });
+  return `\n\n[الفقرات المستهدفة بالمنشن (@) في هذه الرسالة]:\n${lines.join("\n\n")}\n[تنبيه استشاري: ركّز تحليلك وصياغتك على هذه الفقرات المستهدفة أعلاه دون تعديل مباشر على المحرر].`;
+}

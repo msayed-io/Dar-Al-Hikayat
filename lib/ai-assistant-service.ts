@@ -181,10 +181,11 @@ export async function streamLiteraryAssistantResponse(
   history: AIMessage[],
   userPrompt: string,
   storyContext: StoryContext,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  mentionsContext?: string
 ): Promise<string> {
   const contextBlock = formatStoryContextForAI(storyContext);
-  const fullSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}`;
+  const fullSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}${mentionsContext ? `\n\n${mentionsContext}` : ""}`;
 
   // Build full contents payload with conversation history
   const contents = history
