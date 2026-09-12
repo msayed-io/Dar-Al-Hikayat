@@ -77,6 +77,7 @@ import {
   globalBatchManager,
   buildNormalizedTextWithMap,
   resolveSelectionToMention,
+  resolveSelectionToMentions,
   type BlockOperationResult,
   type PlannedOperation,
   type AttachedMention,
@@ -748,6 +749,7 @@ const DarAlHikayatMaster: React.FC = () => {
   const [newPassword, setNewPassword] = useState("");
 
   const editorRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
   const [selectedHighlightColor, setSelectedHighlightColor] = useState<{ name: string; bg: string; text: string }>({
@@ -950,6 +952,7 @@ const DarAlHikayatMaster: React.FC = () => {
         },
         buildNormalizedTextWithMap,
         resolveSelectionToMention,
+        resolveSelectionToMentions,
       };
     }
   }, [content, chapters, isNovelMode, history, historyIndex]);
@@ -1707,14 +1710,19 @@ const DarAlHikayatMaster: React.FC = () => {
       ? (document.querySelector("#story-content") as HTMLElement | null)
       : editorRef.current;
 
-    const mention = resolveSelectionToMention(range, rootEl);
-    if (mention) {
+    const newMentions = resolveSelectionToMentions(range, rootEl);
+    if (newMentions.length > 0) {
       setAttachedMentions((prev) => {
-        const exists = prev.some(
-          (m) => m.blockId === mention.blockId && m.selectedText === mention.selectedText
-        );
-        if (exists) return prev;
-        return [...prev, mention];
+        const next = [...prev];
+        for (const nm of newMentions) {
+          const exists = next.some(
+            (m) => m.blockId === nm.blockId && m.selectedText === nm.selectedText
+          );
+          if (!exists) {
+            next.push(nm);
+          }
+        }
+        return next;
       });
 
       if (screenInfo.canOpenAssistant) {
@@ -3547,6 +3555,7 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {toolbarVisible && (
         <div
+          ref={toolbarRef}
           className="fixed z-50 flex items-center gap-1 p-0.5 px-1.5 rounded-full shadow-2xl backdrop-blur-md transition-all duration-200 ease-out border"
           style={{
             top: `${toolbarPosition.top - window.scrollY}px`,
@@ -3623,30 +3632,42 @@ const DarAlHikayatMaster: React.FC = () => {
               إزالة التظليل
             </span>
           </button>
-
-          {/* @ Mention Capsule Button (Active when Assistant is available) */}
-          {screenInfo.canOpenAssistant && wordCount >= 300 && (
-            <>
-              <div
-                className="w-px h-3.5 self-center mx-0.5"
-                style={{ backgroundColor: currentTheme.border }}
-              />
-              <button
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleMentionCapture();
-                }}
-                className="group relative flex items-center justify-center p-1.5 rounded-full hover:bg-stone-200/50 dark:hover:bg-zinc-800/50 transition-colors"
-                style={{ color: currentTheme.accent }}
-              >
-                <span className="font-zain-xbold text-xs leading-none">@</span>
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center justify-center bg-zinc-900 text-white text-[10px] py-0.5 px-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
-                  توجيه للمساعد (@)
-                </span>
-              </button>
-            </>
-          )}
         </div>
+      )}
+
+      {/* Separate Adjacent @ Mention Capsule Button */}
+      {toolbarVisible && screenInfo.canOpenAssistant && wordCount >= 300 && (
+        <button
+          onMouseDown={(e) => {
+            e.preventDefault();
+            handleMentionCapture();
+          }}
+          className="fixed z-50 w-8 h-8 rounded-full shadow-2xl backdrop-blur-md transition-all duration-200 ease-out border flex items-center justify-center cursor-pointer group active:scale-95"
+          style={{
+            top: `${toolbarPosition.top - window.scrollY}px`,
+            left: `${
+              (() => {
+                const tbWidth = toolbarRef.current?.offsetWidth || 180;
+                const rightEdgePos = toolbarPosition.left + tbWidth / 2 + 8;
+                const winWidth = typeof window !== "undefined" ? window.innerWidth : 1000;
+                return rightEdgePos + 36 <= winWidth
+                  ? rightEdgePos
+                  : toolbarPosition.left - tbWidth / 2 - 8 - 32;
+              })()
+            }px`,
+            transform: "translate(0, -100%)",
+            backgroundColor: currentTheme.isDark ? "rgba(20, 20, 22, 0.92)" : "rgba(255, 255, 255, 0.92)",
+            borderColor: currentTheme.border,
+            boxShadow: `0 8px 20px -6px rgba(0,0,0,0.12), 0 0 0 1px ${currentTheme.border}`,
+            color: currentTheme.accent,
+          }}
+          aria-label="إرفاق للمساعد الأدبي"
+        >
+          <span className="font-zain-xbold text-sm leading-none select-none">@</span>
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex items-center justify-center bg-zinc-900 text-white text-[10px] py-0.5 px-2 rounded-md shadow-lg whitespace-nowrap pointer-events-none">
+            إرفاق للمساعد الأدبي (@)
+          </span>
+        </button>
       )}
     </div>
   );

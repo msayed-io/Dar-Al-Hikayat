@@ -74,10 +74,14 @@ export interface AuditLogEntry {
     | "BATCH_COMMIT"
     | "BATCH_ROLLBACK"
     | "LOCK_ACQUIRED"
-    | "LOCK_RELEASED";
+    | "LOCK_RELEASED"
+    | "MENTION_CAPTURED"
+    | "MENTION_VALIDATED"
+    | "MENTION_HEALED"
+    | "MENTION_DROPPED";
   blockId: string;
   details: Record<string, any>;
-  status: BlockOperationStatus | "OK";
+  status: BlockOperationStatus | "OK" | "VALID" | "HEALED" | "DROPPED";
   error?: string;
 }
 
@@ -1856,6 +1860,10 @@ function getCharacterOffsetWithin(rootNode: Node, targetNode: Node, targetOffset
     if (current === targetNode) {
       if (current.nodeType === 3 /* TEXT_NODE */) {
         totalLength += targetOffset;
+      } else {
+        for (let i = 0; i < targetOffset && i < current.childNodes.length; i++) {
+          totalLength += current.childNodes[i].textContent?.length || 0;
+        }
       }
       found = true;
       return;
@@ -1876,79 +1884,164 @@ function getCharacterOffsetWithin(rootNode: Node, targetNode: Node, targetOffset
 }
 
 /**
- * تحويل كائن Range إلى منشن معرّف بدقة (resolveSelectionToMention)
+ * تحويل كائن Range إلى مصفوفة منشنات معرّفة بدقة مع التفكيك العابر للفقرات (resolveSelectionToMentions)
+ * - الثابت المقدس: blockRawText.slice(startOffset, endOffset) === selectedText دائماً بالإنشاء
+ * - تقليص الإزاحات من الطرفين لتجاوز المسافات البيضاء والرموز غير المنقسمة
+ * - تفكيك النطاق العابر لعدة فقرات إلى شريحة مستقلة لكل فقرة
+ */
+export function resolveSelectionToMentions(
+  range: Range,
+  rootElement?: HTMLElement | null
+): AttachedMention[] {
+  if (!range || range.collapsed) return [];
+
+  // 1. تحديد جميع الفقرات المتقاطعة مع النطاق
+  let searchRoot: HTMLElement | null = rootElement || null;
+  if (!searchRoot && typeof document !== "undefined") {
+    searchRoot = (range.commonAncestorContainer instanceof HTMLElement
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement) || document.body;
+  }
+
+  // جمع كافة العناصر التي تحمل data-block-id
+  let allBlocks: HTMLElement[] = [];
+  if (searchRoot) {
+    if (searchRoot.hasAttribute && searchRoot.hasAttribute("data-block-id")) {
+      allBlocks = [searchRoot];
+    } else if (typeof searchRoot.querySelectorAll === "function") {
+      allBlocks = Array.from(searchRoot.querySelectorAll<HTMLElement>("[data-block-id]"));
+    }
+  }
+
+  // إذا لم نجد عناصر block-id، ابحث صعوداً من startContainer / endContainer
+  if (allBlocks.length === 0) {
+    const startEl = range.startContainer instanceof HTMLElement
+      ? range.startContainer
+      : range.startContainer.parentElement;
+    const b = startEl?.closest<HTMLElement>("[data-block-id]");
+    if (b) {
+      allBlocks = [b];
+    } else if (searchRoot) {
+      allBlocks = [searchRoot];
+    }
+  }
+
+  // تصفية الفقرات المتقاطعة مع range فعلياً
+  const intersectingBlocks = allBlocks.filter((block) => {
+    try {
+      if (typeof range.intersectsNode === "function") {
+        return range.intersectsNode(block);
+      }
+    } catch {}
+    return block.contains(range.startContainer) || block.contains(range.endContainer);
+  });
+
+  // إذا لم تتقاطع أي فقرة صراحة، حاول استخدام الحاوية لنقطة البداية
+  if (intersectingBlocks.length === 0 && allBlocks.length > 0) {
+    for (const block of allBlocks) {
+      if (block.contains(range.startContainer) || block.contains(range.endContainer)) {
+        intersectingBlocks.push(block);
+        break;
+      }
+    }
+    if (intersectingBlocks.length === 0) {
+      intersectingBlocks.push(allBlocks[0]);
+    }
+  }
+
+  const mentions: AttachedMention[] = [];
+
+  for (const blockEl of intersectingBlocks) {
+    const blockRawText = blockEl.textContent || "";
+    if (!blockRawText) continue;
+
+    let rawStart = 0;
+    let rawEnd = blockRawText.length;
+
+    if (blockEl.contains(range.startContainer)) {
+      rawStart = getCharacterOffsetWithin(blockEl, range.startContainer, range.startOffset);
+    }
+    if (blockEl.contains(range.endContainer)) {
+      rawEnd = getCharacterOffsetWithin(blockEl, range.endContainer, range.endOffset);
+    }
+
+    // تقييد الحدود ضمن طول النص الخام للفقرة
+    rawStart = Math.max(0, Math.min(rawStart, blockRawText.length));
+    rawEnd = Math.max(rawStart, Math.min(rawEnd, blockRawText.length));
+
+    // تقليص الإزاحات من الطرفين متجاوزة أي مسافة بيضاء أو \u00A0
+    const isWhitespaceChar = (ch: string) => /\s|\u00A0/.test(ch);
+    while (rawStart < rawEnd && isWhitespaceChar(blockRawText[rawStart])) {
+      rawStart++;
+    }
+    while (rawEnd > rawStart && isWhitespaceChar(blockRawText[rawEnd - 1])) {
+      rawEnd--;
+    }
+
+    // إذا أصبح المدى فارغاً بعد التقليص (تحديد مسافات فقط) -> إسقاط
+    if (rawStart >= rawEnd) {
+      continue;
+    }
+
+    const selectedText = blockRawText.slice(rawStart, rawEnd);
+
+    // فحص التأكيد الداخلي (The Sacred Invariant Assert)
+    if (!selectedText || blockRawText.slice(rawStart, rawEnd) !== selectedText) {
+      continue;
+    }
+
+    const blockId = blockEl.getAttribute("data-block-id") || "block-root";
+    const chapterId =
+      blockEl.getAttribute("data-chapter-id") ||
+      blockEl.closest("[data-chapter-id]")?.getAttribute("data-chapter-id") ||
+      undefined;
+
+    const mention: AttachedMention = {
+      id: "mention-" + generateBlockId(),
+      blockId,
+      selectedText,
+      startOffset: rawStart,
+      endOffset: rawEnd,
+      chapterId,
+      status: "VALID",
+    };
+
+    globalAuditLog.record({
+      type: "MENTION_CAPTURED",
+      blockId,
+      details: {
+        mentionId: mention.id,
+        selectedText,
+        startOffset: rawStart,
+        endOffset: rawEnd,
+        chapterId,
+      },
+      status: "OK",
+    });
+
+    mentions.push(mention);
+  }
+
+  return mentions;
+}
+
+/**
+ * دالة متوافقة للالتقاط المفرد (resolveSelectionToMention)
  */
 export function resolveSelectionToMention(
   range: Range,
   rootElement?: HTMLElement | null
 ): AttachedMention | null {
-  const selectedText = range.toString().trim();
-  if (!selectedText) return null;
-
-  // البحث عن أقرب عنصر فقرة يحمل data-block-id
-  let current: Node | null = range.startContainer;
-  let blockEl: HTMLElement | null = null;
-
-  while (current && current !== rootElement) {
-    if (current instanceof HTMLElement && current.hasAttribute("data-block-id")) {
-      blockEl = current;
-      break;
-    }
-    current = current.parentNode;
-  }
-
-  if (!blockEl) {
-    // محاولة البحث عبر endContainer أو commonAncestorContainer
-    let fallback: Node | null = range.commonAncestorContainer;
-    while (fallback && fallback !== rootElement) {
-      if (fallback instanceof HTMLElement && fallback.hasAttribute("data-block-id")) {
-        blockEl = fallback;
-        break;
-      }
-      fallback = fallback.parentNode;
-    }
-  }
-
-  let blockId = blockEl ? blockEl.getAttribute("data-block-id") || "block-root" : "block-root";
-  let startOffset = 0;
-  let endOffset = selectedText.length;
-
-  if (blockEl) {
-    startOffset = getCharacterOffsetWithin(blockEl, range.startContainer, range.startOffset);
-    endOffset = getCharacterOffsetWithin(blockEl, range.endContainer, range.endOffset);
-    if (endOffset <= startOffset) {
-      endOffset = startOffset + selectedText.length;
-    }
-  }
-
-  // البحث عن معرف الفصل إن وُجد
-  let chapterId: string | undefined = undefined;
-  let chapNode: Node | null = blockEl || range.startContainer;
-  while (chapNode && chapNode !== rootElement) {
-    if (chapNode instanceof HTMLElement && chapNode.hasAttribute("data-chapter-id")) {
-      chapterId = chapNode.getAttribute("data-chapter-id") || undefined;
-      break;
-    }
-    chapNode = chapNode.parentNode;
-  }
-
-  return {
-    id: "mention-" + generateBlockId(),
-    blockId,
-    selectedText,
-    startOffset,
-    endOffset,
-    chapterId,
-    status: "VALID",
-  };
+  const list = resolveSelectionToMentions(range, rootElement);
+  return list.length > 0 ? list[0] : null;
 }
 
 /**
  * التحقق والشفاء الذاتي للمنشنات عند الإرسال (validateAndHealMentions)
- * تطبق سياسة الشفاء الذاتي:
- * 1. إذا كان النص متطابقاً بالإحداثيات -> صالح (VALID)
- * 2. إذا تغير الموضع ولكن النص فريد في نفس الفقرة أو أي فقرة -> يُشفى تلقائياً (HEALED)
- * 3. إذا حُذف النص أو أصبح غامضاً -> يُسقط بهدوء (DROPPED)
+ * تطبق سياسة الشفاء الذاتي والتوثيق بسجل التدقيق (Audit Log):
+ * 1. إذا كان النص متطابقاً بالإحداثيات -> صالح (VALID) + تسجيل MENTION_VALIDATED
+ * 2. إذا تغير الموضع ولكن النص فريد في نفس الفقرة أو أي فقرة -> يُشفى تلقائياً (HEALED) + تسجيل MENTION_HEALED
+ * 3. إذا حُذف النص أو أصبح غامضاً -> يُسقط (DROPPED) + تسجيل MENTION_DROPPED
  */
 export function validateAndHealMentions(
   mentions: AttachedMention[],
@@ -1977,18 +2070,45 @@ export function validateAndHealMentions(
       const exactSubstr = rawText.slice(mention.startOffset, mention.endOffset);
 
       if (exactSubstr === mention.selectedText) {
-        result.valid.push({ ...mention, status: "VALID" });
+        const validItem: AttachedMention = { ...mention, status: "VALID" };
+        result.valid.push(validItem);
+        globalAuditLog.record({
+          type: "MENTION_VALIDATED",
+          blockId: mention.blockId,
+          details: {
+            mentionId: mention.id,
+            selectedText: mention.selectedText,
+            startOffset: mention.startOffset,
+            endOffset: mention.endOffset,
+          },
+          status: "OK",
+        });
         continue;
       }
 
-      // البحث داخل نفس الفقرة أولاً
+      // البحث داخل نفس الفقرة أولاً للشفاء الموضعي
       const searchInBlock = findTextInContent(mention.selectedText, blockEl);
       if (searchInBlock.status === "UNIQUE_MATCH" && searchInBlock.match) {
-        result.healed.push({
+        const healedItem: AttachedMention = {
           ...mention,
           startOffset: searchInBlock.match.startOffset,
           endOffset: searchInBlock.match.endOffset,
           status: "HEALED",
+        };
+        result.healed.push(healedItem);
+        globalAuditLog.record({
+          type: "MENTION_HEALED",
+          blockId: mention.blockId,
+          details: {
+            mentionId: mention.id,
+            selectedText: mention.selectedText,
+            oldOffsets: [mention.startOffset, mention.endOffset],
+            newOffsets: [searchInBlock.match.startOffset, searchInBlock.match.endOffset],
+            oldBlockId: mention.blockId,
+            newBlockId: mention.blockId,
+            scope: "SAME_BLOCK",
+          },
+          status: "OK",
         });
         continue;
       }
@@ -1997,15 +2117,50 @@ export function validateAndHealMentions(
     // البحث عبر كامل المحرر للشفاء الذاتي
     const searchAll = findTextInContent(mention.selectedText, rootElement);
     if (searchAll.status === "UNIQUE_MATCH" && searchAll.match) {
-      result.healed.push({
+      const healedItem: AttachedMention = {
         ...mention,
         blockId: searchAll.match.blockId,
         startOffset: searchAll.match.startOffset,
         endOffset: searchAll.match.endOffset,
         status: "HEALED",
+      };
+      result.healed.push(healedItem);
+      globalAuditLog.record({
+        type: "MENTION_HEALED",
+        blockId: searchAll.match.blockId,
+        details: {
+          mentionId: mention.id,
+          selectedText: mention.selectedText,
+          oldOffsets: [mention.startOffset, mention.endOffset],
+          newOffsets: [searchAll.match.startOffset, searchAll.match.endOffset],
+          oldBlockId: mention.blockId,
+          newBlockId: searchAll.match.blockId,
+          scope: "CROSS_BLOCK",
+        },
+        status: "OK",
       });
     } else {
-      result.dropped.push({ ...mention, status: "DROPPED" });
+      const reason = !blockEl
+        ? "BLOCK_GONE"
+        : searchAll.status === "MULTI_MATCH"
+        ? "MULTI_MATCH"
+        : "TEXT_CHANGED";
+
+      const droppedItem: AttachedMention = { ...mention, status: "DROPPED" };
+      result.dropped.push(droppedItem);
+      globalAuditLog.record({
+        type: "MENTION_DROPPED",
+        blockId: mention.blockId,
+        details: {
+          mentionId: mention.id,
+          selectedText: mention.selectedText,
+          startOffset: mention.startOffset,
+          endOffset: mention.endOffset,
+          reason,
+        },
+        status: "OK",
+        error: `Drop reason: ${reason}`,
+      });
     }
   }
 

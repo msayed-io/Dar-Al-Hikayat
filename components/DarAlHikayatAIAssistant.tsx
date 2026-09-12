@@ -36,11 +36,13 @@ import {
 
 export type Message = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system_ephemeral";
   content: string;
   timestamp: Date;
   isNew?: boolean;
   isStreaming?: boolean;
+  mentions?: AttachedMention[];
+  ephemeral?: boolean;
 };
 
 export type StoredConversation = {
@@ -516,6 +518,7 @@ interface UserMessageBubbleProps {
   isEditingLongMessage: boolean;
   editingContent: string;
   setEditingContent: (val: string) => void;
+  onOpenFullText?: (mention: AttachedMention) => void;
 }
 
 function UserMessageBubble({
@@ -525,6 +528,7 @@ function UserMessageBubble({
   isEditingLongMessage,
   editingContent,
   setEditingContent,
+  onOpenFullText,
 }: UserMessageBubbleProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -557,6 +561,30 @@ function UserMessageBubble({
         />
       ) : (
         <div className={`w-full px-5 py-3.5 relative ${isOverTwoLines ? "pb-9" : ""}`}>
+          {/* Mention Chips Attached to this Message */}
+          {message.mentions && message.mentions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2.5 pb-2 border-b border-white/20" dir="rtl">
+              {message.mentions.map((mention) => {
+                const raw = (mention.selectedText || "").trim();
+                const words = raw.split(/\s+/).filter(Boolean);
+                const displayText = words.length <= 2 ? raw : `${words[0]} ${words[1]}...`;
+
+                return (
+                  <button
+                    key={mention.id}
+                    type="button"
+                    onClick={() => onOpenFullText?.(mention)}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-zain-bold bg-white/20 hover:bg-white/30 border border-white/30 text-white transition-all select-none cursor-pointer flex-nowrap whitespace-nowrap"
+                    title="عرض النص المقتبس كاملاً"
+                  >
+                    <span className="opacity-80 text-[10px]">@</span>
+                    <span className="truncate max-w-[140px]">{displayText}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <p
             className="text-[14px] font-zain-bold leading-[23px] whitespace-pre-wrap break-words transition-all duration-300"
             style={{
@@ -629,6 +657,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const [welcomeLineIndex] = useState(getInitialWelcomeLineIndex);
   const [conversations, setConversations] = useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeFullTextMention, setActiveFullTextMention] = useState<AttachedMention | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isConversationsLoading, setIsConversationsLoading] = useState(true);
   const [storageError, setStorageError] = useState<string | null>(null);
@@ -695,10 +724,13 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           const title = firstUserMsg
             ? firstUserMsg.content.slice(0, 48)
             : c.title;
+          const cleanMessages = messages.filter(
+            (m) => !m.ephemeral && m.role !== "system_ephemeral"
+          );
           return {
             ...c,
             title: title || c.title,
-            messages,
+            messages: cleanMessages,
             lastMessageAt: new Date(),
           };
         }
@@ -894,11 +926,41 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
     if (replaceUserMessageId && replaceIndex === -1) return;
 
+    // Process and validate attached mentions for prompt context
+    let mentionsContext = "";
+    let activeMentions: AttachedMention[] = [];
+    let droppedNoticeMsg: Message | null = null;
+
+    if (attachedMentions && attachedMentions.length > 0) {
+      const valResult = validateAndHealMentions(attachedMentions, editorRootElement);
+      activeMentions = [...valResult.valid, ...valResult.healed];
+      if (activeMentions.length > 0) {
+        mentionsContext = formatMentionsForPrompt(activeMentions);
+      }
+
+      if (valResult.dropped.length > 0) {
+        const count = valResult.dropped.length;
+        droppedNoticeMsg = {
+          id: "ephemeral-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+          role: "system_ephemeral",
+          content:
+            count === 1
+              ? "تعذّر إرفاق مقطع واحد نظراً لتعديل النص الأصلي بعد تحديده."
+              : `تعذّر إرفاق ${count} مقاطع نظراً لتعديل النص الأصلي بعد تحديدها.`,
+          timestamp: new Date(),
+          ephemeral: true,
+        };
+      }
+
+      onClearMentions?.();
+    }
+
     const userMsg: Message = {
       id: replaceUserMessageId || Date.now().toString(),
       role: "user",
       content: trimmed,
       timestamp: new Date(),
+      mentions: activeMentions.length > 0 ? activeMentions : undefined,
     };
 
     const historyMessages = replaceUserMessageId
@@ -906,13 +968,21 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       : [...messages, userMsg];
 
     setMessages((prev) => {
-      if (!replaceUserMessageId) return [...prev, userMsg];
-      const currentIndex = prev.findIndex(
-        (m) => m.id === replaceUserMessageId && m.role === "user"
-      );
-      return currentIndex === -1
-        ? prev
-        : [...prev.slice(0, currentIndex), userMsg];
+      const base = replaceUserMessageId
+        ? (() => {
+            const currentIndex = prev.findIndex(
+              (m) => m.id === replaceUserMessageId && m.role === "user"
+            );
+            return currentIndex === -1
+              ? prev
+              : [...prev.slice(0, currentIndex), userMsg];
+          })()
+        : [...prev, userMsg];
+
+      if (droppedNoticeMsg) {
+        return [...base, droppedNoticeMsg];
+      }
+      return base;
     });
 
     setInputValue("");
@@ -946,26 +1016,19 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     setMessages((prev) => [...prev, aiMsg]);
     setIsLoading(false);
 
-    // Process and validate attached mentions for prompt context
-    let mentionsContext = "";
-    if (attachedMentions && attachedMentions.length > 0) {
-      const valResult = validateAndHealMentions(attachedMentions, editorRootElement);
-      const activeMentions = [...valResult.valid, ...valResult.healed];
-      if (activeMentions.length > 0) {
-        mentionsContext = formatMentionsForPrompt(activeMentions);
-      }
-      onClearMentions?.();
-    }
-
     try {
       let accumulated = "";
-      await streamLiteraryAssistantResponse(
-        historyMessages.map((m) => ({
+      const apiHistory = historyMessages
+        .filter((m) => !m.ephemeral && (m.role === "user" || m.role === "assistant"))
+        .map((m) => ({
           id: m.id,
-          role: m.role,
+          role: m.role as "user" | "assistant",
           content: m.content,
           timestamp: m.timestamp,
-        })),
+        }));
+
+      await streamLiteraryAssistantResponse(
+        apiHistory,
         trimmed,
         storyContext,
         (chunk) => {
@@ -1656,6 +1719,24 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             className="flex-1 min-h-0 overflow-y-auto px-4 pt-28 pb-32 space-y-4 scrollbar-thin hide-scrollbar overscroll-contain touch-pan-y"
           >
             {messages.map((m, idx) => {
+              if (m.role === "system_ephemeral") {
+                return (
+                  <div key={m.id} className="w-full flex justify-center my-2 select-none animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div
+                      className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-zain-bold border shadow-xs"
+                      style={{
+                        backgroundColor: currentTheme.isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(254, 243, 199, 0.8)",
+                        borderColor: currentTheme.isDark ? "rgba(245, 158, 11, 0.35)" : "rgba(245, 158, 11, 0.4)",
+                        color: currentTheme.isDark ? "#FBBF24" : "#92400E",
+                      }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      <span>{m.content}</span>
+                    </div>
+                  </div>
+                );
+              }
+
               const isUser = m.role === "user";
               const isEditingThisMessage = isUser && editingMessageId === m.id;
               const canEditThisMessage =
@@ -1702,6 +1783,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                           isEditingLongMessage={isEditingLongMessage}
                           editingContent={editingContent}
                           setEditingContent={setEditingContent}
+                          onOpenFullText={setActiveFullTextMention}
                         />
 
                         {/* 3. Action Buttons Row (outside bubble to prevent stretching it) */}
@@ -1940,41 +2022,54 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               dir="rtl"
             >
               <div className="flex items-center gap-1.5 flex-nowrap">
-                {attachedMentions.map((mention) => (
-                  <div
-                    key={mention.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-zain-bold border shadow-xs select-none shrink-0 transition-all animate-in fade-in zoom-in-95 duration-150"
-                    style={{
-                      backgroundColor: currentTheme.isDark
-                        ? "rgba(184, 138, 79, 0.18)"
-                        : `${currentTheme.accent}15`,
-                      borderColor: `${currentTheme.accent}45`,
-                      color: currentTheme.text,
-                    }}
-                  >
-                    <span
-                      className="font-zain-xbold text-xs leading-none"
-                      style={{ color: currentTheme.accent }}
+                {attachedMentions.map((mention) => {
+                  const raw = (mention.selectedText || "").trim();
+                  const words = raw.split(/\s+/).filter(Boolean);
+                  const displayText = words.length <= 2 ? raw : `${words[0]} ${words[1]}...`;
+
+                  return (
+                    <div
+                      key={mention.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-zain-bold border shadow-xs select-none shrink-0 transition-all animate-in fade-in zoom-in-95 duration-150 flex-nowrap whitespace-nowrap"
+                      style={{
+                        backgroundColor: currentTheme.isDark
+                          ? "rgba(184, 138, 79, 0.18)"
+                          : `${currentTheme.accent}15`,
+                        borderColor: `${currentTheme.accent}45`,
+                        color: currentTheme.text,
+                      }}
                     >
-                      @
-                    </span>
-                    <span
-                      className="truncate max-w-[130px] inline-block pt-0.5 leading-tight"
-                      title={mention.selectedText}
-                    >
-                      {mention.selectedText}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveMention?.(mention.id)}
-                      className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 active:scale-90 cursor-pointer transition-colors"
-                      style={{ color: currentTheme.secondary }}
-                      title="إزالة الفقرة المستهدفة"
-                    >
-                      <X size={11} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => setActiveFullTextMention(mention)}
+                        className="flex items-center gap-1 cursor-pointer hover:underline text-right"
+                        title="عرض النص المقتبس كاملاً"
+                      >
+                        <span
+                          className="font-zain-xbold text-xs leading-none"
+                          style={{ color: currentTheme.accent }}
+                        >
+                          @
+                        </span>
+                        <span className="truncate max-w-[130px] inline-block pt-0.5 leading-tight">
+                          {displayText}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveMention?.(mention.id);
+                        }}
+                        className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 active:scale-90 cursor-pointer transition-colors"
+                        style={{ color: currentTheme.secondary }}
+                        title="إزالة الفقرة المستهدفة"
+                      >
+                        <X size={11} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2050,6 +2145,114 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             </span>
           </div>
         </footer>
+
+        {/* ── FULL TEXT MENTION MODAL (Mirroring Lock Dialog Style) ── */}
+        <AnimatePresence>
+          {activeFullTextMention && (
+            <motion.div
+              className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveFullTextMention(null)}
+            >
+              <motion.div
+                className="w-full max-w-lg rounded-2xl border p-5 shadow-2xl relative"
+                style={{
+                  backgroundColor: currentTheme.glass || currentTheme.bg,
+                  borderColor: currentTheme.border,
+                  color: currentTheme.text,
+                }}
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                onClick={(e) => e.stopPropagation()}
+                dir="rtl"
+              >
+                {/* Header */}
+                <div
+                  className="flex items-center justify-between pb-3.5 border-b"
+                  style={{ borderColor: currentTheme.border }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-zain-xbold"
+                      style={{
+                        backgroundColor: currentTheme.isDark
+                          ? "rgba(255,255,255,0.08)"
+                          : "rgba(0,0,0,0.05)",
+                        color: currentTheme.accent,
+                      }}
+                    >
+                      @
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-zain-bold">النص المقتبس بالمنشن</h3>
+                      <p className="text-[11px] font-zain-reg" style={{ color: currentTheme.secondary }}>
+                        المقطع المحدد بدقة من محرر دار الحكايات
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFullTextMention(null)}
+                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                    style={{ color: currentTheme.secondary }}
+                    aria-label="إغلاق"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="py-4 space-y-3">
+                  <div
+                    className="p-4 rounded-xl border text-sm font-zain leading-relaxed max-h-[280px] overflow-y-auto whitespace-pre-wrap select-text custom-scroll"
+                    style={{
+                      backgroundColor: currentTheme.isDark
+                        ? "rgba(0,0,0,0.3)"
+                        : "rgba(0,0,0,0.02)",
+                      borderColor: currentTheme.border,
+                      color: currentTheme.text,
+                    }}
+                  >
+                    {activeFullTextMention.selectedText}
+                  </div>
+
+                  <div
+                    className="flex items-center justify-between text-xs font-zain px-1"
+                    style={{ color: currentTheme.secondary }}
+                  >
+                    <span className="flex items-center gap-1">
+                      <span>الفقرة:</span>
+                      <code className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/5">
+                        {activeFullTextMention.blockId}
+                      </code>
+                    </span>
+                    <span>
+                      الإحداثيات: {activeFullTextMention.startOffset} – {activeFullTextMention.endOffset}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div
+                  className="flex items-center justify-end gap-2 pt-3 border-t"
+                  style={{ borderColor: currentTheme.border }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setActiveFullTextMention(null)}
+                    className="px-5 py-1.5 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 cursor-pointer"
+                    style={{ backgroundColor: currentTheme.accent }}
+                  >
+                    إغلاق
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
