@@ -60,6 +60,18 @@ import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
 import { exportStoryToDocx } from "../lib/docx-export";
 import DarAlHikayatAIAssistant from "./DarAlHikayatAIAssistant";
 import type { StoryContext } from "../lib/ai-assistant-service";
+import {
+  ensureBlockIdsInElement,
+  ensureBlockIdsInHtml,
+  getStructuredContentForAI,
+  replaceTextWithinBlock,
+  insertBlockAfter,
+  insertBlockBefore,
+  deleteBlock,
+  mergeBlocks,
+  globalBatchManager,
+  type BlockOperationResult,
+} from "../lib/editor-block-system";
 
 // --- 20 Premium Ink Colors ---
 const inkColors = [
@@ -300,11 +312,13 @@ const ChapterItem = React.memo(
     useEffect(() => {
       if (divRef.current && divRef.current.innerHTML !== chapter.content) {
         divRef.current.innerHTML = chapter.content;
+        ensureBlockIdsInElement(divRef.current);
       }
     }, [chapter.content]);
 
     const handleInput = () => {
       if (divRef.current) {
+        ensureBlockIdsInElement(divRef.current);
         onUpdate(chapter.id, "content", divRef.current.innerHTML);
       }
     };
@@ -737,8 +751,137 @@ const DarAlHikayatMaster: React.FC = () => {
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== content) {
       editorRef.current.innerHTML = content;
+      ensureBlockIdsInElement(editorRef.current);
     }
   }, [content]);
+
+  // Expose block system utilities on window for developer verification and testing
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const getRootEl = () => {
+        if (isNovelMode) {
+          return document.querySelector("#story-content") as HTMLElement | null;
+        }
+        return editorRef.current;
+      };
+
+      const syncEditorState = (skipHistory: boolean = false) => {
+        if (isNovelMode) {
+          const newChs = chapters.map((c) => {
+            const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+            return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+          });
+          setChapters(newChs);
+          if (!skipHistory && !globalBatchManager.isBatchActive()) {
+            pushHistory(content, newChs, true);
+          }
+        } else {
+          if (editorRef.current) {
+            const val = editorRef.current.innerHTML;
+            setContent(val);
+            if (!skipHistory && !globalBatchManager.isBatchActive()) {
+              pushHistory(val, [], false);
+            }
+          }
+        }
+        setIsDirty(true);
+      };
+
+      (window as any).__darAlHikayatBlockSystem = {
+        ensureBlockIdsInElement,
+        ensureBlockIdsInHtml,
+        getStructuredContentForAI: () => {
+          if (isNovelMode) {
+            return chapters
+              .map((c, i) => `=== الفصل ${i + 1}: ${c.title || "بدون عنوان"} ===\n${getStructuredContentForAI(c.content)}`)
+              .join("\n\n");
+          } else if (editorRef.current) {
+            return getStructuredContentForAI(editorRef.current);
+          }
+          return getStructuredContentForAI(content);
+        },
+        replaceTextWithinBlock: (blockId: string, targetText: string, newText: string) => {
+          const rootEl = getRootEl();
+          const res = replaceTextWithinBlock(blockId, targetText, newText, {
+            rootElement: rootEl,
+            onSuccess: () => syncEditorState(),
+          });
+          return res;
+        },
+        insertBlockAfter: (blockId: string, newText: string) => {
+          const rootEl = getRootEl();
+          const res = insertBlockAfter(blockId, newText, {
+            rootElement: rootEl,
+            onSuccess: () => syncEditorState(),
+          });
+          return res;
+        },
+        insertBlockBefore: (blockId: string, newText: string) => {
+          const rootEl = getRootEl();
+          const res = insertBlockBefore(blockId, newText, {
+            rootElement: rootEl,
+            onSuccess: () => syncEditorState(),
+          });
+          return res;
+        },
+        deleteBlock: (blockId: string) => {
+          const rootEl = getRootEl();
+          const res = deleteBlock(blockId, {
+            rootElement: rootEl,
+            onSuccess: () => syncEditorState(),
+          });
+          return res;
+        },
+        mergeBlocks: (blockIdA: string, blockIdB: string) => {
+          const rootEl = getRootEl();
+          const res = mergeBlocks(blockIdA, blockIdB, {
+            rootElement: rootEl,
+            onSuccess: () => syncEditorState(),
+          });
+          return res;
+        },
+        beginBatch: () => {
+          const rootEl = getRootEl();
+          return globalBatchManager.beginBatch(rootEl, {
+            html: rootEl ? rootEl.innerHTML : content,
+            content,
+            chapters,
+            isNovel: isNovelMode,
+          });
+        },
+        commitBatch: () => {
+          const commitRes = globalBatchManager.commitBatch();
+          if (commitRes.success) {
+            if (isNovelMode) {
+              const newChs = chapters.map((c) => {
+                const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+                return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+              });
+              setChapters(newChs);
+              pushHistory(content, newChs, true);
+            } else {
+              if (editorRef.current) {
+                const val = editorRef.current.innerHTML;
+                setContent(val);
+                pushHistory(val, [], false);
+              }
+            }
+            setIsDirty(true);
+          }
+          return commitRes;
+        },
+        rollbackBatch: () => {
+          return globalBatchManager.rollbackBatch((snap) => {
+            if (snap.isNovel && snap.chapters) {
+              setChapters(snap.chapters);
+            } else if (snap.content !== undefined) {
+              setContent(snap.content);
+            }
+          });
+        },
+      };
+    }
+  }, [content, chapters, isNovelMode, history, historyIndex]);
   const typingTimeoutRef = useRef<any>(null);
   const chapterRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const zikrTimeoutRef = useRef<any>(null);
@@ -1148,6 +1291,10 @@ const DarAlHikayatMaster: React.FC = () => {
 
   const handleContentChange = (newContent: string) => {
     if (isSavedMode || isNovelMode) return;
+    if (editorRef.current) {
+      ensureBlockIdsInElement(editorRef.current);
+      newContent = editorRef.current.innerHTML;
+    }
     setContent(newContent);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
