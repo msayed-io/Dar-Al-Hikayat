@@ -69,8 +69,15 @@ import {
   insertBlockBefore,
   deleteBlock,
   mergeBlocks,
+  validateBatchOperations,
+  acquireAgentEditLock,
+  releaseAgentEditLock,
+  isAgentEditLocked,
+  globalAuditLog,
   globalBatchManager,
+  buildNormalizedTextWithMap,
   type BlockOperationResult,
+  type PlannedOperation,
 } from "../lib/editor-block-system";
 
 // --- 20 Premium Ink Colors ---
@@ -840,6 +847,25 @@ const DarAlHikayatMaster: React.FC = () => {
           });
           return res;
         },
+        validateBatchOperations: (ops: PlannedOperation[]) => {
+          const rootEl = getRootEl();
+          return validateBatchOperations(ops, rootEl);
+        },
+        acquireAgentEditLock: () => {
+          const rootEl = getRootEl();
+          return acquireAgentEditLock(rootEl);
+        },
+        releaseAgentEditLock: () => {
+          const rootEl = getRootEl();
+          return releaseAgentEditLock(rootEl);
+        },
+        isAgentEditLocked,
+        getAuditLog: () => {
+          return globalAuditLog.getEntries();
+        },
+        clearAuditLog: () => {
+          globalAuditLog.clear();
+        },
         beginBatch: () => {
           const rootEl = getRootEl();
           return globalBatchManager.beginBatch(rootEl, {
@@ -879,6 +905,47 @@ const DarAlHikayatMaster: React.FC = () => {
             }
           });
         },
+        runCheckedBatch: async (operations: Array<() => BlockOperationResult | Promise<BlockOperationResult>>) => {
+          const rootEl = getRootEl();
+          return globalBatchManager.runCheckedBatch(
+            rootEl,
+            {
+              html: rootEl ? rootEl.innerHTML : content,
+              content,
+              chapters,
+              isNovel: isNovelMode,
+            },
+            operations,
+            (snap) => {
+              if (snap.isNovel && snap.chapters) {
+                setChapters(snap.chapters);
+              } else if (snap.content !== undefined) {
+                setContent(snap.content);
+              }
+            }
+          );
+        },
+        runAtomicBatch: async (operations: () => Promise<any> | any) => {
+          const rootEl = getRootEl();
+          return globalBatchManager.runAtomicBatch(
+            rootEl,
+            {
+              html: rootEl ? rootEl.innerHTML : content,
+              content,
+              chapters,
+              isNovel: isNovelMode,
+            },
+            operations,
+            (snap) => {
+              if (snap.isNovel && snap.chapters) {
+                setChapters(snap.chapters);
+              } else if (snap.content !== undefined) {
+                setContent(snap.content);
+              }
+            }
+          );
+        },
+        buildNormalizedTextWithMap,
       };
     }
   }, [content, chapters, isNovelMode, history, historyIndex]);
