@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowUp,
@@ -518,7 +519,6 @@ interface UserMessageBubbleProps {
   isEditingLongMessage: boolean;
   editingContent: string;
   setEditingContent: (val: string) => void;
-  onOpenFullText?: (mention: AttachedMention) => void;
 }
 
 function UserMessageBubble({
@@ -528,7 +528,6 @@ function UserMessageBubble({
   isEditingLongMessage,
   editingContent,
   setEditingContent,
-  onOpenFullText,
 }: UserMessageBubbleProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -561,30 +560,6 @@ function UserMessageBubble({
         />
       ) : (
         <div className={`w-full px-5 py-3.5 relative ${isOverTwoLines ? "pb-9" : ""}`}>
-          {/* Mention Chips Attached to this Message */}
-          {message.mentions && message.mentions.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2.5 pb-2 border-b border-white/20" dir="rtl">
-              {message.mentions.map((mention) => {
-                const raw = (mention.selectedText || "").trim();
-                const words = raw.split(/\s+/).filter(Boolean);
-                const displayText = words.length <= 2 ? raw : `${words[0]} ${words[1]}...`;
-
-                return (
-                  <button
-                    key={mention.id}
-                    type="button"
-                    onClick={() => onOpenFullText?.(mention)}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-zain-bold bg-white/20 hover:bg-white/30 border border-white/30 text-white transition-all select-none cursor-pointer flex-nowrap whitespace-nowrap"
-                    title="عرض النص المقتبس كاملاً"
-                  >
-                    <span className="opacity-80 text-[10px]">@</span>
-                    <span className="truncate max-w-[140px]">{displayText}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
           <p
             className="text-[14px] font-zain-bold leading-[23px] whitespace-pre-wrap break-words transition-all duration-300"
             style={{
@@ -1775,6 +1750,48 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
                     {isUser ? (
                       <div className="w-full flex flex-col items-end">
+                        {/* Mention Chips Above User Message Bubble */}
+                        {m.mentions && m.mentions.length > 0 && (
+                          <div
+                            dir="rtl"
+                            className="flex gap-1.5 mb-2"
+                            style={{ flexWrap: "wrap", justifyContent: "flex-end", maxWidth: "85%" }}
+                          >
+                            {m.mentions.map((mention) => {
+                              const raw = (mention.selectedText || "").trim();
+                              const words = raw.split(/\s+/).filter(Boolean);
+                              const displayText = words.length <= 2 ? raw : `${words[0]} ${words[1]}...`;
+
+                              return (
+                                <button
+                                  key={mention.id}
+                                  type="button"
+                                  onClick={() => setActiveFullTextMention(mention)}
+                                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-zain-bold border transition-all cursor-pointer whitespace-nowrap"
+                                  style={{
+                                    backgroundColor: currentTheme.isDark
+                                      ? "rgba(184, 138, 79, 0.18)"
+                                      : `${currentTheme.accent}15`,
+                                    borderColor: `${currentTheme.accent}45`,
+                                    color: currentTheme.text,
+                                  }}
+                                  title="عرض النص المقتبس كاملاً"
+                                >
+                                  <span
+                                    className="text-[10px] leading-none"
+                                    style={{ color: currentTheme.accent }}
+                                  >
+                                    @
+                                  </span>
+                                  <span className="truncate" style={{ maxWidth: 140 }}>
+                                    {displayText}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {/* 1. The Bubble itself (measured dynamically via UserMessageBubble) */}
                         <UserMessageBubble
                           message={m}
@@ -1783,7 +1800,6 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                           isEditingLongMessage={isEditingLongMessage}
                           editingContent={editingContent}
                           setEditingContent={setEditingContent}
-                          onOpenFullText={setActiveFullTextMention}
                         />
 
                         {/* 3. Action Buttons Row (outside bubble to prevent stretching it) */}
@@ -2020,6 +2036,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             <div
               className="w-full max-w-3xl mb-2 flex items-center gap-1.5 overflow-x-auto custom-scroll px-1 py-0.5 pointer-events-auto select-none"
               dir="rtl"
+              style={{ overflowX: "auto" }}
             >
               <div className="flex items-center gap-1.5 flex-nowrap">
                 {attachedMentions.map((mention) => {
@@ -2030,13 +2047,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                   return (
                     <div
                       key={mention.id}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-zain-bold border shadow-xs select-none shrink-0 transition-all animate-in fade-in zoom-in-95 duration-150 flex-nowrap whitespace-nowrap"
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-zain-bold border shadow-sm select-none shrink-0 transition-all animate-in fade-in zoom-in-95 duration-150 flex-nowrap whitespace-nowrap"
                       style={{
                         backgroundColor: currentTheme.isDark
                           ? "rgba(184, 138, 79, 0.18)"
                           : `${currentTheme.accent}15`,
                         borderColor: `${currentTheme.accent}45`,
                         color: currentTheme.text,
+                        flexShrink: 0,
                       }}
                     >
                       <button
@@ -2147,112 +2165,121 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         </footer>
 
         {/* ── FULL TEXT MENTION MODAL (Mirroring Lock Dialog Style) ── */}
-        <AnimatePresence>
-          {activeFullTextMention && (
-            <motion.div
-              className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setActiveFullTextMention(null)}
-            >
-              <motion.div
-                className="w-full max-w-lg rounded-2xl border p-5 shadow-2xl relative"
-                style={{
-                  backgroundColor: currentTheme.glass || currentTheme.bg,
-                  borderColor: currentTheme.border,
-                  color: currentTheme.text,
-                }}
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                onClick={(e) => e.stopPropagation()}
-                dir="rtl"
-              >
-                {/* Header */}
-                <div
-                  className="flex items-center justify-between pb-3.5 border-b"
-                  style={{ borderColor: currentTheme.border }}
+        {typeof document !== "undefined" &&
+          createPortal(
+            <AnimatePresence>
+              {activeFullTextMention && (
+                <motion.div
+                  className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setActiveFullTextMention(null)}
                 >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-zain-xbold"
-                      style={{
-                        backgroundColor: currentTheme.isDark
-                          ? "rgba(255,255,255,0.08)"
-                          : "rgba(0,0,0,0.05)",
-                        color: currentTheme.accent,
-                      }}
-                    >
-                      @
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-zain-bold">النص المقتبس بالمنشن</h3>
-                      <p className="text-[11px] font-zain-reg" style={{ color: currentTheme.secondary }}>
-                        المقطع المحدد بدقة من محرر دار الحكايات
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveFullTextMention(null)}
-                    className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                    style={{ color: currentTheme.secondary }}
-                    aria-label="إغلاق"
-                  >
-                    <X size={15} />
-                  </button>
-                </div>
-
-                {/* Content */}
-                <div className="py-4 space-y-3">
-                  <div
-                    className="p-4 rounded-xl border text-sm font-zain leading-relaxed max-h-[280px] overflow-y-auto whitespace-pre-wrap select-text custom-scroll"
+                  <motion.div
+                    className="w-full max-w-lg rounded-2xl border p-5 shadow-2xl relative"
                     style={{
-                      backgroundColor: currentTheme.isDark
-                        ? "rgba(0,0,0,0.3)"
-                        : "rgba(0,0,0,0.02)",
+                      backgroundColor: currentTheme.glass || currentTheme.bg,
                       borderColor: currentTheme.border,
                       color: currentTheme.text,
                     }}
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    onClick={(e) => e.stopPropagation()}
+                    dir="rtl"
                   >
-                    {activeFullTextMention.selectedText}
-                  </div>
+                    {/* Header */}
+                    <div
+                      className="flex items-center justify-between pb-3.5 border-b"
+                      style={{ borderColor: currentTheme.border, paddingBottom: 14 }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-zain-xbold"
+                          style={{
+                            backgroundColor: currentTheme.isDark
+                              ? "rgba(255,255,255,0.08)"
+                              : "rgba(0,0,0,0.05)",
+                            color: currentTheme.accent,
+                          }}
+                        >
+                          @
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-zain-bold">النص المقتبس بالمنشن</h3>
+                          <p className="text-[11px] font-zain-reg" style={{ color: currentTheme.secondary }}>
+                            المقطع المحدد بدقة من محرر دار الحكايات
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveFullTextMention(null)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                        style={{ color: currentTheme.secondary }}
+                        aria-label="إغلاق"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
 
-                  <div
-                    className="flex items-center justify-between text-xs font-zain px-1"
-                    style={{ color: currentTheme.secondary }}
-                  >
-                    <span className="flex items-center gap-1">
-                      <span>الفقرة:</span>
-                      <code className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/5">
-                        {activeFullTextMention.blockId}
-                      </code>
-                    </span>
-                    <span>
-                      الإحداثيات: {activeFullTextMention.startOffset} – {activeFullTextMention.endOffset}
-                    </span>
-                  </div>
-                </div>
+                    {/* Content */}
+                    <div className="py-4 space-y-3" style={{ paddingTop: 16, paddingBottom: 16 }}>
+                      <div
+                        className="p-4 rounded-xl border text-sm font-zain leading-relaxed max-h-[280px] overflow-y-auto whitespace-pre-wrap select-text custom-scroll"
+                        style={{
+                          backgroundColor: currentTheme.isDark
+                            ? "rgba(0,0,0,0.3)"
+                            : "rgba(0,0,0,0.02)",
+                          borderColor: currentTheme.border,
+                          color: currentTheme.text,
+                          maxHeight: 280,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {activeFullTextMention.selectedText}
+                      </div>
 
-                {/* Actions */}
-                <div
-                  className="flex items-center justify-end gap-2 pt-3 border-t"
-                  style={{ borderColor: currentTheme.border }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setActiveFullTextMention(null)}
-                    className="px-5 py-1.5 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 cursor-pointer"
-                    style={{ backgroundColor: currentTheme.accent }}
-                  >
-                    إغلاق
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
+                      <div
+                        className="flex items-center justify-between text-xs font-zain px-1"
+                        style={{ color: currentTheme.secondary }}
+                      >
+                        <span className="flex items-center gap-1">
+                          <span>الفقرة:</span>
+                          <code
+                            className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/5"
+                            style={{ borderRadius: 6, paddingLeft: 6, paddingRight: 6, fontFamily: "monospace" }}
+                          >
+                            {activeFullTextMention.blockId}
+                          </code>
+                        </span>
+                        <span>
+                          الإحداثيات: {activeFullTextMention.startOffset} – {activeFullTextMention.endOffset}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div
+                      className="flex items-center justify-end gap-2 pt-3 border-t"
+                      style={{ borderColor: currentTheme.border }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setActiveFullTextMention(null)}
+                        className="px-5 py-1.5 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 cursor-pointer"
+                        style={{ backgroundColor: currentTheme.accent }}
+                      >
+                        إغلاق
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body
           )}
-        </AnimatePresence>
       </div>
     </div>
   );
