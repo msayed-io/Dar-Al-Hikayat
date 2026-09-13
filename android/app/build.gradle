@@ -25,9 +25,9 @@ android {
                 keyPassword System.getenv("KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD")
             } else if (file("daralhikayat-release.keystore").exists()) {
                 storeFile file("daralhikayat-release.keystore")
-                storePassword System.getenv("RELEASE_STORE_PASSWORD") ?: "DarAlHikayat2026SecureKey"
-                keyAlias System.getenv("RELEASE_KEY_ALIAS") ?: "daralhikayat"
-                keyPassword System.getenv("RELEASE_KEY_PASSWORD") ?: "DarAlHikayat2026SecureKey"
+                storePassword System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
             }
         }
     }

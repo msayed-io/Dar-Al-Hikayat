@@ -43,40 +43,34 @@ jobs:
         run: npx cap sync android
 
       - name: Configure and verify Android Release Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          KEYSTORE_DIR="android/app"
-          KEYSTORE_PATH="${KEYSTORE_DIR}/daralhikayat-release.keystore"
-          
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "==> Using Keystore from GitHub Secrets..."
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
-          else
-            echo "==> Generating production PKCS12 release keystore..."
-            keytool -genkeypair -v \
-              -keystore "$KEYSTORE_PATH" \
-              -alias "daralhikayat" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass "${{ secrets.KEYSTORE_PASSWORD || 'DarAlHikayat2026SecureKey' }}" \
-              -keypass "${{ secrets.KEY_PASSWORD || 'DarAlHikayat2026SecureKey' }}" \
-              -dname "CN=Dar Al-Hikayat, OU=Mobile Development, O=DarAlHikayat, L=Cairo, ST=Cairo, C=EG" \
-              -storetype PKCS12
-          fi
-          
-          echo "Keystore verified at $KEYSTORE_PATH"
-          ls -lh "$KEYSTORE_PATH"
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo 'Missing ANDROID_KEYSTORE_BASE64 secret'; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo 'Missing KEYSTORE_PASSWORD secret'; exit 1; }
+          test -n "$KEY_ALIAS" || { echo 'Missing KEY_ALIAS secret'; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo 'Missing KEY_PASSWORD secret'; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/daralhikayat-release.keystore
+          chmod 600 android/app/daralhikayat-release.keystore
+          keytool -list -keystore android/app/daralhikayat-release.keystore \
+            -storetype PKCS12 -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          echo 'Release keystore verified.'
 
-      - name: Build Android APKs and App Bundle (Release + Debug)
+      - name: Build Android APKs and App Bundle
+        env:
+          KEYSTORE_PATH: app/daralhikayat-release.keystore
+          RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          set -euo pipefail
           chmod +x android/gradlew
           cd android
           ./gradlew --no-daemon assembleRelease bundleRelease assembleDebug
-        env:
-          KEYSTORE_PATH: "daralhikayat-release.keystore"
-          RELEASE_STORE_PASSWORD: "${{ secrets.KEYSTORE_PASSWORD || 'DarAlHikayat2026SecureKey' }}"
-          RELEASE_KEY_ALIAS: "${{ secrets.KEY_ALIAS || 'daralhikayat' }}"
-          RELEASE_KEY_PASSWORD: "${{ secrets.KEY_PASSWORD || 'DarAlHikayat2026SecureKey' }}"
 
       - name: Upload APKs and AAB as workflow artifacts
         uses: actions/upload-artifact@v4
@@ -86,7 +80,6 @@ jobs:
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/apk/debug/*.apk
             android/app/build/outputs/bundle/release/*.aab
-            android/app/daralhikayat-release.keystore
           if-no-files-found: error
           retention-days: 30
 
@@ -96,12 +89,10 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: دار الحكايات - الإصدار الرسمي والتجريبي v1.0.${{ github.run_number }}
           body: |
-            ### 📱 ملفات التطبيق (Dar Al-Hikayat):
-            - **Release APK (النسخة النهائية الموقعة)**: جاهزة للتثبيت المباشر على الهاتف.
-            - **Release AAB (حزمة متجر Google Play)**: جاهزة للرفع على Google Play Console.
-            - **Debug APK (نسخة التطوير والتجربة)**.
-            
-            *تم البناء وتوقيع المفاتيح تلقائيًا بنجاح.*
+            ### ملفات التطبيق
+            - Release APK: النسخة النهائية الموقعة.
+            - Release AAB: حزمة Android الرسمية.
+            - Debug APK: نسخة التجربة.
           prerelease: false
           files: |
             android/app/build/outputs/apk/release/*.apk

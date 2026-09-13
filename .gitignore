@@ -28,3 +28,7 @@ dist-ssr
 !gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.jar
 !android/gradle/wrapper/gradle-wrapper.jar
+
+# Android signing keys must never be committed
+*.keystore
+*.jks
