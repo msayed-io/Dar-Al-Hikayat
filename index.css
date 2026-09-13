@@ -222,3 +222,80 @@
   --tw-gradient-to: #6f2d29 var(--tw-gradient-to-position);
 }
 
+/* ============================================================
+   أدوات التخطيط الناقصة
+   ============================================================ */
+.inline-flex {
+  display: inline-flex !important;
+}
+
+/* ============================================================
+   تأثير اللمعان المعدني السينمائي لخطوات الوكيل الأدبي التنفيذي
+   1. طبقتان خلف النص: طبقة أساسية معدنية ثابتة + طبقة لمعان متحركة
+   2. background-clip: text + -webkit-text-fill-color: transparent
+   3. تحريك background-position بنعومة متزنة وهادئة
+   ============================================================ */
+@keyframes agentShimmerGlance {
+  0% {
+    background-position: 280% 0, 0 0;
+  }
+  60% {
+    background-position: -160% 0, 0 0;
+  }
+  100% {
+    background-position: -160% 0, 0 0;
+  }
+}
+
+.agent-text-shimmer {
+  display: inline-block;
+  background-size: 260% 100%, 100% 100% !important;
+  background-repeat: no-repeat, no-repeat !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+  will-change: background-position;
+  animation: agentShimmerGlance 6.5s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+}
+
+/* ============================================================
+   التبديل عبر Pure CSS لمسار خطوات الوكيل (Checkbox Hack + Grid 0fr → 1fr)
+   ============================================================ */
+.agent-tree-checkbox {
+  position: absolute !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.agent-tree-chevron {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transform: rotate(90deg); /* الحالة المطوية */
+  transform-origin: center;
+}
+
+.agent-tree-checkbox:checked ~ label .agent-tree-chevron {
+  transform: rotate(0deg); /* الحالة المفتوحة */
+}
+
+.agent-tree-toggle {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+  opacity: 0;
+}
+
+.agent-tree-checkbox:checked ~ .agent-tree-toggle {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.agent-tree-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+

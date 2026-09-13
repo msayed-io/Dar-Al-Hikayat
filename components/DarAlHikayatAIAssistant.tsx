@@ -21,12 +21,16 @@ import {
   Sparkles,
   AlertCircle,
   Plus,
+  Zap,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useApp } from "../contexts/AppContext";
 import {
   streamLiteraryAssistantResponse,
+  generateAgentCompletionSummary,
+  generateDefaultAgentIntro,
+  generateDefaultAgentSummary,
   type StoryContext,
 } from "../lib/ai-assistant-service";
 import {
@@ -34,16 +38,33 @@ import {
   validateAndHealMentions,
   formatMentionsForPrompt,
 } from "../lib/editor-block-system";
+import {
+  isExplicitEditIntent,
+  formatExecutiveContextForAI,
+  executeAgentPlan,
+  askExecutiveAgentForDecision,
+  type AgentStepItem,
+  type ExecutiveToolCall,
+  type PendingAgentRequest,
+} from "../lib/literary-agent";
 
 export type Message = {
   id: string;
-  role: "user" | "assistant" | "system_ephemeral";
+  role: "user" | "assistant" | "system_ephemeral" | "agent_steps";
   content: string;
   timestamp: Date;
   isNew?: boolean;
   isStreaming?: boolean;
+  isAgent?: boolean;
   mentions?: AttachedMention[];
   ephemeral?: boolean;
+  steps?: AgentStepItem[];
+  agentResult?: {
+    totalMutations: number;
+    completed: boolean;
+    failed?: boolean;
+    error?: string;
+  };
 };
 
 export type StoredConversation = {
@@ -61,6 +82,9 @@ type DarAlHikayatAIAssistantProps = {
   onRemoveMention?: (id: string) => void;
   onClearMentions?: () => void;
   editorRootElement?: HTMLElement | null;
+  onCommitAgentChanges?: () => void;
+  isNovelMode?: boolean;
+  chapters?: Array<{ id: string; title: string; content: string }>;
   theme?: {
     bg: string;
     text: string;
@@ -605,6 +629,253 @@ function UserMessageBubble({
   );
 }
 
+interface AgentStepsMessageCardProps {
+  message: Message;
+  theme: any;
+}
+
+function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
+  const steps = message.steps || [];
+  const result = message.agentResult;
+  const isExecuting = !result?.completed && !result?.failed;
+  const checkboxId = `agent-tree-toggle-${message.id}`;
+
+  const stepCount = steps.length || 1;
+  const stepCountLabel =
+    stepCount === 1
+      ? "خطوة جراحية واحدة"
+      : stepCount === 2
+      ? "خطوتين جراحيتين"
+      : stepCount <= 10
+      ? `${stepCount} خطوات جراحية`
+      : `${stepCount} خطوة جراحية`;
+
+  const headerLabel = isExecuting
+    ? `جارٍ تنفيذ ${stepCountLabel}...`
+    : result?.completed
+    ? `تم تنفيذ ${stepCountLabel}`
+    : result?.failed
+    ? `تعذر تنفيذ ${stepCountLabel}`
+    : `تنفيذ ${stepCountLabel}`;
+
+  // Two background layers: Moving specular beam + Luxurious metallic base
+  const shimmerBeam =
+    "linear-gradient(110deg, transparent 28%, rgba(255, 255, 255, 0.98) 50%, transparent 72%)";
+  const metallicBase = theme.isDark
+    ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)"
+    : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)";
+
+  const treeStrokeColor = theme.isDark
+    ? "rgba(255, 255, 255, 0.22)"
+    : "rgba(0, 0, 0, 0.22)";
+
+  // Geometry for the curved branch line in RTL
+  const isRtl = true;
+  const stemX = 11;
+  const curveEndX = 2;
+
+  return (
+    <div dir="rtl" className="w-full my-1.5 select-none text-start relative">
+      {/* Pure CSS Hidden Checkbox Controller */}
+      <input
+        type="checkbox"
+        id={checkboxId}
+        defaultChecked={!result?.completed}
+        className="agent-tree-checkbox"
+        aria-label="تبديل عرض مسار الخطوات"
+      />
+
+      {/* 1. Header Trigger Line (Pure CSS label) */}
+      <label
+        htmlFor={checkboxId}
+        className="cursor-pointer py-1 px-1 rounded-md transition-opacity hover:opacity-90 group select-none"
+        title="عرض / طي تفاصيل الخطوات"
+        style={{
+          display: "inline-flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "8px",
+          whiteSpace: "nowrap",
+          width: "auto",
+        }}
+      >
+        <Zap
+          size={14}
+          strokeWidth={1.8}
+          className={`shrink-0 ${
+            isExecuting ? "text-amber-400 animate-pulse" : ""
+          }`}
+          style={{
+            display: "inline-block",
+            color: isExecuting
+              ? theme.accent
+              : theme.isDark
+              ? "#d1d5db"
+              : "#4b5563",
+          }}
+        />
+
+        {/* Shimmering Text with 2 layers (Metallic Base + Moving Specular Beam) */}
+        <span
+          className="agent-text-shimmer text-xs font-zain-bold tracking-wide select-none"
+          style={{
+            display: "inline-block",
+            whiteSpace: "nowrap",
+            backgroundImage: `${shimmerBeam}, ${metallicBase}`,
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            color: "transparent",
+          }}
+        >
+          {headerLabel}
+        </span>
+
+        {/* Pure CSS rotating chevron via .agent-tree-chevron */}
+        <ChevronDown
+          size={13}
+          strokeWidth={2.2}
+          className="shrink-0 agent-tree-chevron"
+          style={{
+            display: "inline-block",
+            color: theme.isDark ? "#9ca3af" : "#6b7280",
+            opacity: 0.75,
+          }}
+        />
+      </label>
+
+      {/* 2. Expanded Tree View (Pure CSS grid-template-rows: 0fr → 1fr) */}
+      <div className="agent-tree-toggle mt-0.5">
+        <div className="agent-tree-inner">
+          <div className="flex flex-col py-0.5">
+              {/* Step items */}
+              {steps.map((step, idx) => {
+                const isStepDone = step.status === "completed";
+                const isStepActive = step.status === "active";
+                const isStepFailed = step.status === "failed";
+
+                return (
+                  <div
+                    key={step.id || idx}
+                    className="flex items-center h-7 relative"
+                  >
+                    {/* SVG Curved Branch Connector (Aligned under the Zap icon) */}
+                    <div className="w-5 h-7 shrink-0 relative flex items-center justify-center">
+                      <svg
+                        className="w-5 h-7 absolute inset-0 pointer-events-none"
+                        viewBox="0 0 20 28"
+                        fill="none"
+                      >
+                        {/* Stem curves into row branch */}
+                        <path
+                          d={`M ${stemX} 0 L ${stemX} 5 Q ${stemX} 14 ${curveEndX} 14`}
+                          stroke={treeStrokeColor}
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        {/* Trunk continues straight down to next item */}
+                        <path
+                          d={`M ${stemX} 5 L ${stemX} 28`}
+                          stroke={treeStrokeColor}
+                          strokeWidth="1.5"
+                        />
+                      </svg>
+                    </div>
+
+                    {/* Step Content: Bullet Dot + Step Note */}
+                    <div className="flex items-center gap-2 pr-1 min-w-0 flex-1">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 transition-transform ${
+                          isStepActive ? "animate-ping" : ""
+                        }`}
+                        style={{
+                          backgroundColor: isStepActive
+                            ? theme.accent
+                            : isStepFailed
+                            ? "#ef4444"
+                            : theme.isDark
+                            ? "rgba(255, 255, 255, 0.5)"
+                            : "rgba(0, 0, 0, 0.45)",
+                        }}
+                      />
+                      <span
+                        className={`text-[12px] font-zain-bold leading-normal truncate ${
+                          isStepDone ? "opacity-75" : ""
+                        }`}
+                        style={{
+                          color: isStepActive
+                            ? theme.accent
+                            : isStepFailed
+                            ? "#ef4444"
+                            : theme.text,
+                        }}
+                        title={step.stepNote}
+                      >
+                        {step.stepNote}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Terminal Row: Terminal Branch (Done / Executing / Failed) */}
+              <div className="flex items-center h-7 relative">
+                {/* Terminal SVG Curve (Stops and does not continue downwards) */}
+                <div className="w-5 h-7 shrink-0 relative flex items-center justify-center">
+                  <svg
+                    className="w-5 h-7 absolute inset-0 pointer-events-none"
+                    viewBox="0 0 20 28"
+                    fill="none"
+                  >
+                    <path
+                      d={`M ${stemX} 0 L ${stemX} 5 Q ${stemX} 14 ${curveEndX} 14`}
+                      stroke={treeStrokeColor}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+
+                {/* Final status indicator */}
+                <div className="flex items-center gap-1.5 pr-1 min-w-0 flex-1">
+                  {result?.completed ? (
+                    <div className="flex items-center gap-1.5 text-[12px] font-zain-bold text-emerald-500">
+                      <Check size={13} strokeWidth={2.5} className="shrink-0" />
+                      <span>مكتمل</span>
+                      <span className="text-[10px] font-sans opacity-60 font-zain-reg">
+                        (Done)
+                      </span>
+                    </div>
+                  ) : result?.failed ? (
+                    <div className="flex items-center gap-1.5 text-[12px] font-zain-bold text-rose-500">
+                      <AlertCircle size={13} strokeWidth={2} className="shrink-0" />
+                      <span>تعذر الإكمال</span>
+                      {result.error && (
+                        <span className="text-[11px] font-zain-reg opacity-80 truncate">
+                          ({result.error})
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center gap-1.5 text-[12px] font-zain-bold"
+                      style={{ color: theme.accent }}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
+                      <span>جارٍ التنفيذ...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+  );
+}
+
 export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssistant({
   onClose,
   storyContext,
@@ -612,11 +883,16 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   onRemoveMention,
   onClearMentions,
   editorRootElement,
+  onCommitAgentChanges,
+  isNovelMode,
+  chapters,
   theme: propTheme,
 }: DarAlHikayatAIAssistantProps) {
   const { currentTheme: appContextTheme } = useApp();
   const currentTheme = propTheme || appContextTheme;
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingAgentRequest, setPendingAgentRequest] = useState<PendingAgentRequest | null>(null);
+  const [isAgentExecuting, setIsAgentExecuting] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, "like" | "dislike">>({});
@@ -887,11 +1163,268 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, isAgentExecuting]);
+
+  const executeExecutiveEditing = useCallback(
+    async (
+      userPromptText: string,
+      mentionsToUse: AttachedMention[],
+      hist: Message[],
+      currentConvId?: string | null
+    ) => {
+      setIsAgentExecuting(true);
+      setIsLoading(true);
+
+      const targetRoot =
+        editorRootElement ||
+        (document.querySelector("#story-content") as HTMLElement | null);
+
+      const structuredDoc = formatExecutiveContextForAI({
+        chapterHtmlOrEl: targetRoot || "",
+        chapterTitle: storyContext?.title || "نص الرواية",
+        chapterIndex: 0,
+        pendingMentions: mentionsToUse,
+        allChaptersSummary: chapters?.map((c, i) => ({ index: i, title: c.title })),
+      });
+
+      const apiHistory = hist
+        .filter((m) => !m.ephemeral && (m.role === "user" || m.role === "assistant"))
+        .map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          timestamp: m.timestamp,
+        }));
+
+      let effectivePrompt = userPromptText;
+      if (pendingAgentRequest) {
+        effectivePrompt = `[سياق توضيحي لسؤال سابق: "${pendingAgentRequest.question}"]\nإجابة الكاتبة وقرارها: ${userPromptText}\nالطلب الأصلي الأساسي: ${pendingAgentRequest.originalMessage}`;
+      }
+
+      const decision = await askExecutiveAgentForDecision({
+        history: apiHistory,
+        userPrompt: effectivePrompt,
+        structuredDocContext: structuredDoc,
+        mentions: mentionsToUse,
+      });
+
+      setIsLoading(false);
+
+      if (decision.error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: `عذراً يا أستاذة رحمة، واجهت مشكلة في معالجة طلب التعديل: ${decision.error}`,
+            timestamp: new Date(),
+            isAgent: true,
+          },
+        ]);
+        setIsAgentExecuting(false);
+        return;
+      }
+
+      // Check for ask_writer tool call
+      const askWriterCall = decision.functionCalls.find(
+        (fc) => fc.name === "ask_writer"
+      );
+      if (askWriterCall) {
+        const q =
+          (askWriterCall.args as any)?.question ||
+          "هل ترغبين في توضيح المقطع المستهدف بدقة؟";
+        const reason = (askWriterCall.args as any)?.reason || "AMBIGUOUS";
+        setPendingAgentRequest({
+          question: q,
+          reason,
+          originalMessage: pendingAgentRequest?.originalMessage || userPromptText,
+          fixedScope: {
+            chapterIndex: 0,
+            blockId: (askWriterCall.args as any)?.block_id,
+          },
+        });
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: q,
+            timestamp: new Date(),
+            isAgent: true,
+          },
+        ]);
+        setIsAgentExecuting(false);
+        return;
+      }
+
+      // If function calls are returned
+      if (decision.functionCalls.length > 0) {
+        setPendingAgentRequest(null);
+
+        // 1. Initial conversational acknowledgment from the Agent (before steps)
+        const introMsgId = (Date.now() + 1).toString();
+        const introContent =
+          decision.text?.trim() ||
+          generateDefaultAgentIntro(
+            userPromptText,
+            decision.functionCalls as any
+          );
+
+        const stepsMsgId = (Date.now() + 2).toString();
+        const initialSteps: AgentStepItem[] = decision.functionCalls.map(
+          (fc, idx) => ({
+            id: `step-${idx}-${Date.now()}`,
+            toolName: fc.name,
+            blockId:
+              (fc.args as any)?.block_id ||
+              (fc.args as any)?.anchor_block_id ||
+              "",
+            status: "waiting",
+            stepNote:
+              (fc.args as any)?.step_note ||
+              `تعديل الفقرة ${(fc.args as any)?.block_id || ""}`,
+          })
+        );
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: introMsgId,
+            role: "assistant",
+            content: introContent,
+            timestamp: new Date(),
+            isAgent: true,
+          },
+          {
+            id: stepsMsgId,
+            role: "agent_steps",
+            content: "",
+            timestamp: new Date(),
+            steps: initialSteps,
+          },
+        ]);
+
+        const planResult = await executeAgentPlan({
+          rootElement: targetRoot,
+          rawCalls: decision.functionCalls as ExecutiveToolCall[],
+          onStepUpdate: (updatedSteps) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === stepsMsgId
+                  ? { ...m, steps: [...updatedSteps] }
+                  : m
+              )
+            );
+          },
+          onCommit: () => {
+            onCommitAgentChanges?.();
+          },
+          accentColor: currentTheme.accent || "#D97706",
+        });
+
+        if (planResult.askWriter) {
+          setPendingAgentRequest({
+            ...planResult.askWriter,
+            originalMessage:
+              pendingAgentRequest?.originalMessage || userPromptText,
+          });
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 3).toString(),
+              role: "assistant",
+              content: planResult.askWriter.question,
+              timestamp: new Date(),
+              isAgent: true,
+            },
+          ]);
+        }
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === stepsMsgId
+              ? {
+                  ...m,
+                  agentResult: {
+                    totalMutations: planResult.totalMutations,
+                    completed: planResult.success,
+                    failed: !planResult.success && !planResult.askWriter,
+                    error: planResult.error,
+                  },
+                }
+              : m
+          )
+        );
+
+        // 2. Concluding summary and polite inquiry after successful execution
+        if (planResult.success && !planResult.askWriter) {
+          const summaryMsgId = (Date.now() + 4).toString();
+          let summaryText = "";
+          try {
+            summaryText = await generateAgentCompletionSummary({
+              userPrompt: userPromptText,
+              executedSteps: planResult.executedSteps.map((s) => ({
+                toolName: s.toolName,
+                stepNote: s.stepNote,
+              })),
+              storyTitle: storyContext?.title,
+            });
+          } catch {
+            summaryText = generateDefaultAgentSummary(
+              planResult.executedSteps.map((s) => ({
+                toolName: s.toolName,
+                stepNote: s.stepNote,
+              }))
+            );
+          }
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: summaryMsgId,
+              role: "assistant",
+              content: summaryText,
+              timestamp: new Date(),
+              isAgent: true,
+              isNew: true,
+            },
+          ]);
+        }
+
+        setIsAgentExecuting(false);
+        return;
+      }
+
+      // If plain text response
+      if (decision.text) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: decision.text || "",
+            timestamp: new Date(),
+            isAgent: true,
+          },
+        ]);
+      }
+      setIsAgentExecuting(false);
+    },
+    [
+      editorRootElement,
+      isNovelMode,
+      chapters,
+      storyContext,
+      pendingAgentRequest,
+      onCommitAgentChanges,
+      currentTheme.accent,
+    ]
+  );
 
   const handleSendMessage = async (text: string, replaceUserMessageId?: string) => {
     const trimmed = text.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || isAgentExecuting) return;
 
     const replaceIndex = replaceUserMessageId
       ? messages.findIndex(
@@ -961,7 +1494,6 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     });
 
     setInputValue("");
-    setIsLoading(true);
 
     let currentConvId = activeConversationId;
     if (!currentConvId) {
@@ -978,6 +1510,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       setConversations((prev) => [newConv, ...prev]);
     }
 
+    const isEditIntent =
+      isExplicitEditIntent(trimmed, activeMentions.length > 0) ||
+      pendingAgentRequest !== null;
+
+    if (isEditIntent) {
+      await executeExecutiveEditing(trimmed, activeMentions, historyMessages, currentConvId);
+      return;
+    }
+
     const aiMsgId = (Date.now() + 1).toString();
     const aiMsg: Message = {
       id: aiMsgId,
@@ -989,10 +1530,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     };
 
     setMessages((prev) => [...prev, aiMsg]);
-    setIsLoading(false);
+    setIsLoading(true);
 
     try {
       let accumulated = "";
+      let detectedExec = false;
       const apiHistory = historyMessages
         .filter((m) => !m.ephemeral && (m.role === "user" || m.role === "assistant"))
         .map((m) => ({
@@ -1008,10 +1550,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         storyContext,
         (chunk) => {
           accumulated += chunk;
+          if (accumulated.includes("[[EXEC]]")) {
+            detectedExec = true;
+          }
+          const displayContent = accumulated.replaceAll("[[EXEC]]", "").trimEnd();
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === aiMsgId
-                ? { ...msg, content: accumulated, isStreaming: true }
+                ? { ...msg, content: displayContent, isStreaming: true }
                 : msg
             )
           );
@@ -1025,6 +1571,24 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         )
       );
       setStorageError(null);
+
+      // Universal Bridge: Automatically escalate to Executive Mode
+      if (detectedExec) {
+        await executeExecutiveEditing(
+          trimmed,
+          activeMentions,
+          [
+            ...historyMessages,
+            {
+              id: aiMsgId,
+              role: "assistant",
+              content: accumulated.replaceAll("[[EXEC]]", "").trim(),
+              timestamp: new Date(),
+            },
+          ],
+          currentConvId
+        );
+      }
     } catch (error) {
       console.error("Dar Al-Hikayat AI assistant error:", error);
       setMessages((prev) => {
@@ -1712,6 +2276,16 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 );
               }
 
+              if (m.role === "agent_steps") {
+                return (
+                  <AgentStepsMessageCard
+                    key={m.id}
+                    message={m}
+                    theme={currentTheme}
+                  />
+                );
+              }
+
               const isUser = m.role === "user";
               const isEditingThisMessage = isUser && editingMessageId === m.id;
               const canEditThisMessage =
@@ -1745,6 +2319,18 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                       <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
                         <Sparkles size={11} style={{ color: currentTheme.accent }} />
                         <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
+                        {m.isAgent && (
+                          <span
+                            className="text-[9px] font-sans font-bold tracking-wider px-1.5 py-0.5 rounded-full border leading-none uppercase select-none"
+                            style={{
+                              backgroundColor: `${currentTheme.accent}18`,
+                              borderColor: `${currentTheme.accent}40`,
+                              color: currentTheme.accent,
+                            }}
+                          >
+                            Agent
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -2000,25 +2586,41 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               );
             })}
 
-            {isLoading && (
-              <div className="flex justify-start w-full pr-1 py-1 pl-4">
-                <div
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-xs"
-                  style={{
-                    backgroundColor: currentTheme.glass,
-                    borderColor: currentTheme.border,
-                  }}
-                >
-                  <Sparkles
-                    className="w-3.5 h-3.5 animate-pulse"
-                    style={{ color: currentTheme.accent }}
-                  />
-                  <span
-                    className="text-xs font-zain-bold thinking-shimmer"
-                    style={{ color: currentTheme.accent }}
-                  >
-                    جارٍ التفكير وصياغة الرد...
-                  </span>
+            {(isLoading || isAgentExecuting) && !hasStreamingAssistantMessage && (
+              <div className="w-full flex flex-col animate-in fade-in duration-200">
+                <div className="w-full">
+                  <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
+                    <Sparkles size={11} style={{ color: currentTheme.accent }} />
+                    <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
+                    {isAgentExecuting && (
+                      <span
+                        className="text-[9px] font-sans font-bold tracking-wider px-1.5 py-0.5 rounded-full border leading-none uppercase select-none"
+                        style={{
+                          backgroundColor: `${currentTheme.accent}18`,
+                          borderColor: `${currentTheme.accent}40`,
+                          color: currentTheme.accent,
+                        }}
+                      >
+                        Agent
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full text-right bg-transparent border-none shadow-none px-0 py-1">
+                    <div className="flex items-center gap-1.5 py-2 justify-start">
+                      <span
+                        className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.3s]"
+                        style={{ backgroundColor: currentTheme.accent }}
+                      />
+                      <span
+                        className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.15s]"
+                        style={{ backgroundColor: currentTheme.accent }}
+                      />
+                      <span
+                        className="w-2 h-2 rounded-full animate-bounce"
+                        style={{ backgroundColor: currentTheme.accent }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -2116,8 +2718,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               ref={textareaRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="اسأل المساعد الأدبي..."
-              disabled={isLoading || editingMessageId !== null}
+              placeholder={
+                isAgentExecuting
+                  ? "جارٍ تنفيذ التعديلات الجراحية في النص..."
+                  : pendingAgentRequest
+                  ? "أجيبي على سؤال الوكيل لتثبيت التعديل..."
+                  : "اسأل المساعد الأدبي..."
+              }
+              disabled={isLoading || isAgentExecuting || editingMessageId !== null}
               rows={1}
               className={`w-full min-w-0 bg-transparent border-none outline-none px-4 py-1 text-sm font-zain-bold disabled:opacity-50 resize-none max-h-24 text-start break-words placeholder:font-zain-reg leading-normal ${
                 isMultiline ? "overflow-y-auto" : "overflow-hidden"
@@ -2132,28 +2740,32 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             <motion.button
               whileTap={{ scale: 0.92 }}
               type="submit"
-              disabled={!inputValue.trim() || isLoading || editingMessageId !== null}
+              disabled={!inputValue.trim() || isLoading || isAgentExecuting || editingMessageId !== null}
               className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer"
               style={{
                 backgroundColor:
-                  inputValue.trim() && !isLoading && editingMessageId === null
+                  inputValue.trim() && !isLoading && !isAgentExecuting && editingMessageId === null
                     ? currentTheme.accent
                     : currentTheme.isDark
                     ? "rgba(255,255,255,0.06)"
                     : `${currentTheme.accent}18`,
                 color:
-                  inputValue.trim() && !isLoading && editingMessageId === null
+                  inputValue.trim() && !isLoading && !isAgentExecuting && editingMessageId === null
                     ? "#ffffff"
                     : currentTheme.text,
                 opacity:
-                  inputValue.trim() && !isLoading && editingMessageId === null
+                  inputValue.trim() && !isLoading && !isAgentExecuting && editingMessageId === null
                     ? 1
                     : 0.65,
               }}
               aria-label="إرسال"
               title="إرسال"
             >
-              <ArrowUp size={16} strokeWidth={2.4} />
+              {isAgentExecuting ? (
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+              ) : (
+                <ArrowUp size={16} strokeWidth={2.4} />
+              )}
             </motion.button>
           </form>
 

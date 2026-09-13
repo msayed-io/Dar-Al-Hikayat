@@ -1121,6 +1121,24 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
+  const commitAgentMutationsToState = React.useCallback(() => {
+    if (isNovelMode) {
+      const newChs = chapters.map((c) => {
+        const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+        return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+      });
+      setChapters(newChs);
+      pushHistory(content, newChs, true);
+    } else {
+      if (editorRef.current) {
+        const val = editorRef.current.innerHTML;
+        setContent(val);
+        pushHistory(val, [], false);
+      }
+    }
+    setIsDirty(true);
+  }, [isNovelMode, chapters, content]);
+
   const calculateDuration = (start: Date, end: Date) => {
     const diff = end.getTime() - start.getTime();
     const h = Math.floor(diff / 3600000);
@@ -2939,6 +2957,9 @@ const DarAlHikayatMaster: React.FC = () => {
                   ? (document.querySelector("#story-content") as HTMLElement | null)
                   : editorRef.current
               }
+              onCommitAgentChanges={commitAgentMutationsToState}
+              isNovelMode={isNovelMode}
+              chapters={chapters}
               theme={currentTheme}
             />
           </aside>
@@ -3553,7 +3574,7 @@ const DarAlHikayatMaster: React.FC = () => {
         </div>
       )}
 
-      {toolbarVisible && (
+      {toolbarVisible && !isAgentEditLocked() && (
         <div
           ref={toolbarRef}
           className="fixed z-50 flex items-center gap-1 p-0.5 px-1.5 rounded-full shadow-2xl backdrop-blur-md transition-all duration-200 ease-out border"
@@ -3636,7 +3657,7 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Separate Adjacent @ Mention Capsule Button */}
-      {toolbarVisible && screenInfo.canOpenAssistant && wordCount >= 300 && (
+      {toolbarVisible && !isAgentEditLocked() && screenInfo.canOpenAssistant && wordCount >= 300 && (
         <button
           onMouseDown={(e) => {
             e.preventDefault();

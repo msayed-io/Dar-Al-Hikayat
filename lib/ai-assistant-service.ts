@@ -30,6 +30,145 @@ export const RAHMA_MOWAFI_SYSTEM_PROMPT = `أنت محرر أدبي محترف،
 
 اقرأ الآن النص الكامل للحكاية المرفق، واستوعبه بعمق تام، ثم استقبل أول تفاعل من الكاتبة بناءً على هذا الفهم الكامل.`;
 
+// ── UNIFIED EXECUTIVE LITERARY AGENT INSTRUCTION (التعليمة الموحدة للوكيل الأدبي التنفيذي) ──
+export const UNIFIED_AGENT_INSTRUCTION = `أنت المساعد والوكيل الأدبي التنفيذي المباشر داخل محرر "دَارُ الحِكَايَاتِ"، تعمل حصرياً للكاتبة رحمة السيد موافي.
+تتمتع بهوية مزدوجة متكاملة وواعية:
+1. الناقد الاستشاري الفطن: عندما تسألك الكاتبة عن رأي نقدي، تحليل شخصية، استشارة حبكة، تقييم بلاغي، أو مناقشة أفكار — تجيبها بنص عربي فصيح رصين، مبني على الأدلة النصية وبأعلى معايير الأدب والاحترام لصوتها السردي.
+2. الجراح التنفيذي الحاسم: عندما تطلب منك الكاتبة تعديلاً، صياغة، استبدالاً، حذفاً، إضافة، تصحيحاً، أو تطبيق أي تغيير فعلي على نص الحكاية المفتوحة — تتحول فوراً إلى جراح نصي دقيق وتستدعي الأدوات التنفيذية (Function Calling) دون غيرها.
+
+قاعدة القرار والتنفيذ:
+- عند استدعاء أدوات التعديل الجراحي:
+  1. قدّم أولاً رداً تمهيدياً موجزاً وأنيقاً في سطرين إلى ثلاثة أسطر في النص المرفق، توضح فيه للكاتبة رحمة ما ستباشر تنفيذه الآن في نص الحكاية بنبرة محرّر أدبي واثق ومحترف، لتهيئة الكاتبة لمسار العمليات الجراحية.
+  2. استدعِ الأدوات التنفيذية المناسبة لتنفيذ العمليات المطلوبة بدقة متناهية.
+- عند الاستفسار أو النقاش الفكري أو التحليل دون تعديل:
+  أجب بنص نثري أدبي فقط دون استدعاء أي أداة.
+
+مخططات الأدوات المعتمدة حصراً:
+1. replace_text: استبدال نص محدد داخل فقرة معينة.
+   - block_id: معرّف الفقرة ويبدأ وجوباً بـ "b_" (مثل "b_a1b2c3d4").
+   - target_text: النص الأصلي كما هو بالحرف تماماً دون زيادة أو نقصان من واقع الفقرة.
+   - new_text: النص البديل الجديد بدقة تامة. (لحذف عبارة جزئية من فقرة: اجعل new_text فارغة "").
+   - step_note: سطر وصفي عربي واحد موجز ومولّد خصيصاً لهذه العملية يوضح ما قمت به (مثال: "استبدال وصف الليل لتعميق الرهبة النفسية").
+
+2. insert_text: إدراج فقرة جديدة بالكامل بجوار فقرة قائمة.
+   - anchor_block_id: معرّف الفقرة المرجعية الحالية (يبدأ بـ "b_").
+   - position: موضع الإدراج، ويجب أن يكون إما "after" (بعد الفقرة) أو "before" (قبل الفقرة).
+   - new_text: نص الفقرة الجديدة التي تريد إضافتها.
+   - step_note: سطر وصفي عربي واحد موجز يشرح الإضافة (مثال: "إدراج مشهد خاطف يرصد ترقب البطل عند الباب").
+
+3. delete_text: حذف فقرة كاملة برمتها من المحرر.
+   - block_id: معرّف الفقرة المراد حذفها نهائياً (يبدأ بـ "b_").
+   - step_note: سطر وصفي عربي واحد موجز يشرح سبب حذف الفقرة (مثال: "حذف الفقرة المتكررة حفظاً لرشاقة السرد").
+
+4. ask_writer: سؤال الكاتبة والتوقف طلباً للإيضاح في الحالات المعلقة.
+   - question: سؤال عربي لطيف وواضح ومحدد يُوجّه للكاتبة مباشرة.
+   - reason: سبب الاستفسار، ويجب أن يكون إحدى القيم الأربع حصراً:
+     * "SCOPE": إذا كان التعديل المطلوب يتجاوز الفصل المفتوح حالياً أو يمس فصولاً أخرى.
+     * "AMBIGUOUS": إذا كان موضع التعديل أو نية الكاتبة تحتمل أكثر من معنى أو موضع.
+     * "NOT_FOUND": إذا لم تجد النص أو الفقرة المذكورة في نص الفصل المفتوح.
+     * "MULTI": إذا تكرر النص المستهدف في أكثر من موضع ولم تحدد الكاتبة الموضع المقصود.
+
+قواعد الجراحة والنطاق والمحرّمات:
+1. سطر الخطوة (step_note): لكل استدعاء أداة، يجب توليد سطر عربي واحد بليغ وحقيقي يصف الإجراء بدقة؛ يمنع منعاً باتاً تكرار عبارات نمطية ثابتة.
+2. الجراحة الموضعية: لا تلمس حرفاً واحداً خارج نطاق التعديل المطلوب. حافظ على علامات الترقيم والسياق المحيط.
+3. حدود النطاق (Scope): نطاق عملك الجراحي هو "الفصل المفتوح حالياً فقط". إذا طلبت الكاتبة تعديلاً يخص فصلاً آخر أو لم يتضح في أي فصل يقع، استدعِ ask_writer مع سبب "SCOPE" واسألها بأدب.
+4. الغموض وتعدد المطابقات: ممنوع التخمين إطلاقاً! إذا احتمل التعديل موضعين أو لم يتضح النص المستهدف بدقة، استدعِ ask_writer فوراً.
+5. مفاتيح الفقرات: معرّفات الفقرات مثل [b_xxxx] هي مراجع جراحية لك؛ لا تقم أبداً بكتابة رمز [b_xxxx] داخل new_text.
+6. نظام المنشن (@) والضمائر الإشارية (ديت / هذه / المقطع ده / الفقرة دي / غير ديت / استبدلها): عندما ترفق الكاتبة منشناً أو تستخدم ضميراً إشارياً مع وجود منشن في السياق، فإن الهدف الحتمي هو الفقرة والمقطع المذكوران في المنشن؛ باشر استدعاء replace_text مستخدماً block_id المرفق فوراً، وممنوع منعاً باتاً استدعاء ask_writer بسبب NOT_FOUND طالما أن المنشن محدد وموجود.`;
+
+export const AGENTIC_TOOL_DECLARATIONS = [
+  {
+    name: "replace_text",
+    description: "استبدال نص محدد بدقة جراحية داخل فقرة موجودة بالمحرر، أو حذف عبارة جزئية بجعل new_text فارغة.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        block_id: {
+          type: "STRING",
+          description: "معرّف الفقرة المستهدفة ويبدأ بـ b_ (إجباري)",
+        },
+        target_text: {
+          type: "STRING",
+          description: "النص الأصلي المراد استبداله بالحرف من داخل الفقرة (إجباري)",
+        },
+        new_text: {
+          type: "STRING",
+          description: "النص البديل الجديد بعد التحسين، أو نص فارغ للحذف الجزئي (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف التعديل حرفياً لعرضه في خطوات التنفيذ (إجباري)",
+        },
+      },
+      required: ["block_id", "target_text", "new_text", "step_note"],
+    },
+  },
+  {
+    name: "insert_text",
+    description: "إدراج فقرة جديدة كاملة قبل أو بعد فقرة مرجعية محددة في المحرر.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        anchor_block_id: {
+          type: "STRING",
+          description: "معرّف الفقرة المرجعية التي سيتم الإدراج بجوارها (إجباري)",
+        },
+        position: {
+          type: "STRING",
+          enum: ["after", "before"],
+          description: "موضع الإدراج: after بعد الفقرة، أو before قبل الفقرة (إجباري)",
+        },
+        new_text: {
+          type: "STRING",
+          description: "نص الفقرة أو الفقرات الجديدة المراد إدراجها (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف الإضافة حرفياً (إجباري)",
+        },
+      },
+      required: ["anchor_block_id", "position", "new_text", "step_note"],
+    },
+  },
+  {
+    name: "delete_text",
+    description: "حذف فقرة كاملة برمتها من المحرر مع التحقق من عدم كونها الفقرة الوحيدة.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        block_id: {
+          type: "STRING",
+          description: "معرّف الفقرة المراد حذفها بالكامل ويبدأ بـ b_ (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف الحذف حرفياً (إجباري)",
+        },
+      },
+      required: ["block_id", "step_note"],
+    },
+  },
+  {
+    name: "ask_writer",
+    description: "توجيه سؤال استفساري لطيف للكاتبة عند الغموض أو تعدد المواضع أو الخروج عن نطاق الفصل المفتوح.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        question: {
+          type: "STRING",
+          description: "السؤال الموجه للكاتبة بالعربية الفصحى (إجباري)",
+        },
+        reason: {
+          type: "STRING",
+          enum: ["SCOPE", "AMBIGUOUS", "NOT_FOUND", "MULTI"],
+          description: "سبب الاستفسار: SCOPE تجاوز نطاق الفصل، AMBIGUOUS غموض المعنى، NOT_FOUND تعذر العثور على النص، MULTI تعدد المواضع المحتملة (إجباري)",
+        },
+      },
+      required: ["question", "reason"],
+    },
+  },
+];
+
 export type AIMessage = {
   id: string;
   role: "user" | "assistant";
@@ -418,6 +557,249 @@ export async function streamLiteraryAssistantResponse(
 
     onChunk(fallbackMessage);
     return fallbackMessage;
+  }
+}
+
+/**
+ * دالة طلب القرار التنفيذي للوكيل الأدبي (Executive Decision Request)
+ * تستخدم النمط الصارم والدقيق: حرارة 0.2 ونموذج gemini-2.5-flash حصراً لضمان حتمية العقد،
+ * مع التحقق الشامل من مطابقة مخططات الاستدعاء الأربع.
+ */
+export async function requestExecutiveDecision({
+  contents,
+  executiveInstruction,
+  tools,
+}: {
+  contents: any[];
+  executiveInstruction?: string;
+  tools?: any[];
+}): Promise<{
+  text: string;
+  functionCalls: Array<{ name: string; args: any }>;
+  model: string;
+  error?: string;
+}> {
+  try {
+    return await executeWithSmartRotation(async (apiKey) => {
+      const res = await fetch("/api/gemini/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
+          contents,
+          apiKey: apiKey || undefined,
+          model: "gemini-2.5-flash",
+          temperature: 0.2,
+          tools: tools || AGENTIC_TOOL_DECLARATIONS,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const err: any = new Error(
+          errData?.error?.message || `خطأ في خادم اتخاذ القرار التنفيذي: ${res.status}`
+        );
+        err.status = res.status;
+        err.data = errData;
+        throw err;
+      }
+
+      const data = await res.json();
+      const rawCalls = data.functionCalls || [];
+
+      // تحقق صارم من صحة مخططات الاستدعاء (Schema Validation)
+      const validatedCalls: Array<{ name: string; args: any }> = [];
+      for (const call of rawCalls) {
+        if (!call || typeof call !== "object") continue;
+        const { name, args } = call;
+        if (!name || !args || typeof args !== "object") continue;
+
+        if (name === "replace_text") {
+          if (
+            typeof args.block_id === "string" &&
+            args.block_id.startsWith("b_") &&
+            typeof args.target_text === "string" &&
+            typeof args.new_text === "string" &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                block_id: args.block_id.trim(),
+                target_text: args.target_text,
+                new_text: args.new_text,
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "insert_text") {
+          if (
+            typeof args.anchor_block_id === "string" &&
+            args.anchor_block_id.startsWith("b_") &&
+            (args.position === "after" || args.position === "before") &&
+            typeof args.new_text === "string" &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                anchor_block_id: args.anchor_block_id.trim(),
+                position: args.position,
+                new_text: args.new_text,
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "delete_text") {
+          if (
+            typeof args.block_id === "string" &&
+            args.block_id.startsWith("b_") &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                block_id: args.block_id.trim(),
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "ask_writer") {
+          if (
+            typeof args.question === "string" &&
+            args.question.trim().length > 0 &&
+            ["SCOPE", "AMBIGUOUS", "NOT_FOUND", "MULTI"].includes(args.reason)
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                question: args.question.trim(),
+                reason: args.reason,
+              },
+            });
+          }
+        }
+      }
+
+      return {
+        text: data.text || "",
+        functionCalls: validatedCalls,
+        model: data.model || "gemini-2.5-flash",
+      };
+    });
+  } catch (err: any) {
+    console.error("[Executive Decision Request Failed]:", err);
+    let friendlyError =
+      "عذراً يا أستاذة رحمة، تعذر تنفيذ القرار الأدبي حالياً. يمكنكِ إعادة المحاولة.";
+
+    const msg = (err?.message || "").toLowerCase();
+    if (
+      msg.includes("high demand") ||
+      msg.includes("503") ||
+      msg.includes("unavailable") ||
+      msg.includes("overloaded")
+    ) {
+      friendlyError =
+        "الخوادم تشهد ضغطاً مؤقتاً أثناء التجهيز للتعديل. يرجى الضغط على زر الإعادة للمتابعة فوراً.";
+    } else if (err instanceof AllKeysExhaustedError || err instanceof NoActiveKeysConfiguredError) {
+      friendlyError = err.message;
+    } else if (isNetworkConnectionError(err)) {
+      friendlyError =
+        "تعذر الاتصال بالشبكة لإتمام التعديل الجراحي. يرجى التحقق من الإنترنت ثم إعادة المحاولة.";
+    }
+
+    return {
+      text: "",
+      functionCalls: [],
+      model: "gemini-2.5-flash",
+      error: friendlyError,
+    };
+  }
+}
+
+/**
+ * توليد تمهيد سياقي للوكيل في حال لم يُرجع النموذج نصاً تمهيدياً مع دوال الاستدعاء
+ */
+export function generateDefaultAgentIntro(
+  _userPrompt: string,
+  calls: Array<{ name: string; args: any }>
+): string {
+  const count = calls.length;
+  const firstNote = (calls[0]?.args as any)?.step_note;
+  if (firstNote) {
+    return `على الرحب والسعة يا أستاذة رحمة؛ سأباشر الآن تنفيذ التعديل في النص: ${firstNote}.`;
+  }
+  return `على الرحب والسعة يا أستاذة رحمة؛ سأقوم الآن بتنفيذ ${
+    count > 1 ? `${count} خطوات جراحية` : "الخطوة الجراحية المطلوبة"
+  } على النص بعناية لتتطابق النتيجة مع رؤيتك الأدبية:`;
+}
+
+/**
+ * نص ختامي احتياطي سريع وأنيق في حال تعذر الاتصال الإضافي
+ */
+export function generateDefaultAgentSummary(
+  steps: Array<{ toolName?: string; stepNote?: string }>
+): string {
+  const count = steps.length;
+  if (count <= 1) {
+    const note = steps[0]?.stepNote;
+    return `تم بحمد الله تطبيق التعديل على النص بدقة متناهية${
+      note ? `؛ حيث تم ${note}` : ""
+    }.\n\nهل ترغبين يا أستاذة رحمة في ضبط أي جزئية أخرى، أو إضفاء لمسات أدبية إضافية على هذا المقطع؟`;
+  }
+  return `تم بحمد الله إنجاز كافة الخطوات المطلوبة (${count} خطوات) وتحديث النص في المحرر بدقة بالغة.\n\nهل تودين يا أستاذة رحمة مراجعة أي مقطع آخر أو تجربة صياغات إضافية؟`;
+}
+
+/**
+ * توليد ملخص ختامي أدبي موجز ومحترف بعد إنجاز خطوات الوكيل التنفيذي
+ */
+export async function generateAgentCompletionSummary({
+  userPrompt,
+  executedSteps,
+  storyTitle,
+}: {
+  userPrompt: string;
+  executedSteps: Array<{ toolName: string; stepNote: string }>;
+  storyTitle?: string;
+}): Promise<string> {
+  const stepsSummary = executedSteps
+    .map((s, i) => `${i + 1}. ${s.stepNote || s.toolName}`)
+    .join("\n");
+
+  const prompt = `أنت المحرر الأدبي الخاص بالكاتبة رحمة السيد موافي في حكايتها "${storyTitle || "العمل الأدبي"}".
+أنهيت الآن للتو بنجاح تنفيذ التعديلات الجراحية التالية على النص المكتوب داخل المحرر:
+${stepsSummary}
+
+بناءً على طلب الكاتبة الأصلي: "${userPrompt}"
+
+المطلوب: اكتب رداً ختامياً بليغاً وموجزاً جداً (في سطرين إلى ثلاثة أسطر):
+1. أخبر الكاتبة بلباقة واعتزاز بما تم إنجازه وتحسينه في النص.
+2. اسألها باحترام وود إن كانت ترغب في مراجعة أي جزئية أخرى أو إضفاء مزيد من اللمسات الأدبية على هذا المقطع أو الانتقال لموضع آخر.
+3. اكتب مباشرة كنص حواري أنيق دون مقدمات أو حشو أو استدعاء أدوات.`;
+
+  try {
+    return await executeWithSmartRotation(async (apiKey) => {
+      const res = await fetch("/api/gemini/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          apiKey: apiKey || undefined,
+          model: "gemini-2.5-flash",
+          temperature: 0.3,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to generate agent summary");
+      const data = await res.json();
+      const text = (data.text || "").trim();
+      return text || generateDefaultAgentSummary(executedSteps);
+    });
+  } catch {
+    return generateDefaultAgentSummary(executedSteps);
   }
 }
 

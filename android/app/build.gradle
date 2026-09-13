@@ -16,10 +16,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (System.getenv("KEYSTORE_PATH") != null && file(System.getenv("KEYSTORE_PATH")).exists()) {
+                storeFile file(System.getenv("KEYSTORE_PATH"))
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD")
+            } else if (file("daralhikayat-release.keystore").exists()) {
+                storeFile file("daralhikayat-release.keystore")
+                storePassword System.getenv("RELEASE_STORE_PASSWORD") ?: "DarAlHikayat2026SecureKey"
+                keyAlias System.getenv("RELEASE_KEY_ALIAS") ?: "daralhikayat"
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD") ?: "DarAlHikayat2026SecureKey"
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     applicationVariants.all { variant ->

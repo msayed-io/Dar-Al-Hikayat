@@ -243,7 +243,7 @@ async function startServer() {
   // Non-streaming generate content route with model fallback
   app.post("/api/gemini/generate", async (req, res) => {
     try {
-      const { contents, systemInstruction, model, apiKey } = req.body;
+      const { contents, systemInstruction, model, apiKey, tools, temperature } = req.body;
       const resolvedKey = resolveApiKey(apiKey);
 
       if (!resolvedKey) {
@@ -274,17 +274,51 @@ async function startServer() {
 
       for (const currentModel of modelsToTry) {
         try {
+          const config: any = {
+            systemInstruction: systemInstruction || undefined,
+            temperature: typeof temperature === "number" ? temperature : 0.7,
+            topP: 0.9,
+          };
+
+          if (tools && Array.isArray(tools) && tools.length > 0) {
+            config.tools = [{ functionDeclarations: tools }];
+          }
+
           const response = await ai.models.generateContent({
             model: currentModel,
             contents,
-            config: {
-              systemInstruction: systemInstruction || undefined,
-              temperature: 0.7,
-              topP: 0.9,
-            },
+            config,
           });
 
-          return res.json({ text: response.text || "", model: currentModel });
+          const rawCalls = (response as any).functionCalls;
+          const functionCalls = Array.isArray(rawCalls)
+            ? rawCalls.map((fc: any) => ({
+                name: fc.name,
+                args: fc.args || {},
+              }))
+            : [];
+
+          let responseText = "";
+          try {
+            responseText = response.text || "";
+          } catch {
+            // ignore
+          }
+
+          if (!responseText && (response as any)?.candidates?.[0]?.content?.parts) {
+            const parts = (response as any).candidates[0].content.parts;
+            responseText = parts
+              .filter((p: any) => typeof p.text === "string" && !p.thought)
+              .map((p: any) => p.text)
+              .join("\n")
+              .trim();
+          }
+
+          return res.json({
+            text: responseText,
+            functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
+            model: currentModel,
+          });
         } catch (err: any) {
           lastError = err;
           console.warn(

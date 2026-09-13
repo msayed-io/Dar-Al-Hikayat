@@ -42,29 +42,70 @@ jobs:
       - name: Sync Capacitor Android project
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Configure and verify Android Release Keystore
+        run: |
+          KEYSTORE_DIR="android/app"
+          KEYSTORE_PATH="${KEYSTORE_DIR}/daralhikayat-release.keystore"
+          
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "==> Using Keystore from GitHub Secrets..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          else
+            echo "==> Generating production PKCS12 release keystore..."
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_PATH" \
+              -alias "daralhikayat" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "${{ secrets.KEYSTORE_PASSWORD || 'DarAlHikayat2026SecureKey' }}" \
+              -keypass "${{ secrets.KEY_PASSWORD || 'DarAlHikayat2026SecureKey' }}" \
+              -dname "CN=Dar Al-Hikayat, OU=Mobile Development, O=DarAlHikayat, L=Cairo, ST=Cairo, C=EG" \
+              -storetype PKCS12
+          fi
+          
+          echo "Keystore verified at $KEYSTORE_PATH"
+          ls -lh "$KEYSTORE_PATH"
+
+      - name: Build Android APKs and App Bundle (Release + Debug)
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon assembleRelease bundleRelease assembleDebug
+        env:
+          KEYSTORE_PATH: "daralhikayat-release.keystore"
+          RELEASE_STORE_PASSWORD: "${{ secrets.KEYSTORE_PASSWORD || 'DarAlHikayat2026SecureKey' }}"
+          RELEASE_KEY_ALIAS: "${{ secrets.KEY_ALIAS || 'daralhikayat' }}"
+          RELEASE_KEY_PASSWORD: "${{ secrets.KEY_PASSWORD || 'DarAlHikayat2026SecureKey' }}"
 
-      - name: Upload APK as workflow artifact
+      - name: Upload APKs and AAB as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dar-al-hikayat-debug-apk-${{ github.run_number }}
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: dar-al-hikayat-builds-${{ github.run_number }}
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/daralhikayat-release.keystore
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
-      - name: Create prerelease and upload APK
+      - name: Create GitHub Release with APK and AAB
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: دار الحكايات - نسخة تجريبية تلقائية ${{ github.run_number }}
+          tag_name: v1.0.${{ github.run_number }}
+          name: دار الحكايات - الإصدار الرسمي والتجريبي v1.0.${{ github.run_number }}
           body: |
-            تم إنشاء هذه النسخة تلقائيًا من commit:
-            ${{ github.sha }}
-          prerelease: true
-          files: android/app/build/outputs/apk/debug/*.apk
+            ### 📱 ملفات التطبيق (Dar Al-Hikayat):
+            - **Release APK (النسخة النهائية الموقعة)**: جاهزة للتثبيت المباشر على الهاتف.
+            - **Release AAB (حزمة متجر Google Play)**: جاهزة للرفع على Google Play Console.
+            - **Debug APK (نسخة التطوير والتجربة)**.
+            
+            *تم البناء وتوقيع المفاتيح تلقائيًا بنجاح.*
+          prerelease: false
+          files: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

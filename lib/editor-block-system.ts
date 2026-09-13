@@ -486,12 +486,21 @@ export function getStructuredContentForAI(
       const parser = new DOMParser();
       const doc = parser.parseFromString(containerOrHtml, "text/html");
       ensureBlockIdsInElement(doc.body);
-      const elements = Array.from(doc.body.children);
-      for (const el of elements) {
-        if (el instanceof HTMLElement) {
+      const queriedBlocks = Array.from(doc.body.querySelectorAll<HTMLElement>("[data-block-id]"));
+      if (queriedBlocks.length > 0) {
+        for (const el of queriedBlocks) {
           const id = el.getAttribute("data-block-id") || generateBlockId();
           const cleanText = cleanBlockRawText(el.innerHTML);
           blocks.push({ id, text: cleanText });
+        }
+      } else {
+        const elements = Array.from(doc.body.children);
+        for (const el of elements) {
+          if (el instanceof HTMLElement) {
+            const id = el.getAttribute("data-block-id") || generateBlockId();
+            const cleanText = cleanBlockRawText(el.innerHTML);
+            blocks.push({ id, text: cleanText });
+          }
         }
       }
     } else {
@@ -499,19 +508,46 @@ export function getStructuredContentForAI(
       return `[${generateBlockId()}] ${clean}`;
     }
   } else if (containerOrHtml instanceof HTMLElement) {
-    ensureBlockIdsInElement(containerOrHtml);
-    const elements = Array.from(containerOrHtml.children);
-
-    if (elements.length === 0) {
-      const clean = cleanBlockRawText(containerOrHtml.innerHTML);
-      const id = containerOrHtml.getAttribute("data-block-id") || generateBlockId();
-      blocks.push({ id, text: clean });
+    // إذا كان الحاوي يحوي فصولاً داخلية أو حاويات تحريرية (.editor-container)
+    const editorContainers = Array.from(
+      containerOrHtml.querySelectorAll<HTMLElement>(".editor-container")
+    );
+    if (editorContainers.length > 0) {
+      for (const ec of editorContainers) {
+        ensureBlockIdsInElement(ec);
+      }
     } else {
-      for (const el of elements) {
-        if (el instanceof HTMLElement) {
-          const id = el.getAttribute("data-block-id") || generateBlockId();
-          const cleanText = cleanBlockRawText(el.innerHTML);
-          blocks.push({ id, text: cleanText });
+      ensureBlockIdsInElement(containerOrHtml);
+    }
+
+    // استخراج جميع الفقرات الحاملة للمعرّف الفعلي في شجرة الـ DOM
+    const queriedBlocks = Array.from(
+      containerOrHtml.querySelectorAll<HTMLElement>("[data-block-id]")
+    );
+
+    if (queriedBlocks.length > 0) {
+      for (const el of queriedBlocks) {
+        const id = el.getAttribute("data-block-id") || generateBlockId();
+        const cleanText = cleanBlockRawText(el.innerHTML);
+        blocks.push({ id, text: cleanText });
+      }
+    } else if (containerOrHtml.hasAttribute("data-block-id")) {
+      const id = containerOrHtml.getAttribute("data-block-id") || generateBlockId();
+      const cleanText = cleanBlockRawText(containerOrHtml.innerHTML);
+      blocks.push({ id, text: cleanText });
+    } else {
+      const elements = Array.from(containerOrHtml.children);
+      if (elements.length === 0) {
+        const clean = cleanBlockRawText(containerOrHtml.innerHTML);
+        const id = containerOrHtml.getAttribute("data-block-id") || generateBlockId();
+        blocks.push({ id, text: clean });
+      } else {
+        for (const el of elements) {
+          if (el instanceof HTMLElement) {
+            const id = el.getAttribute("data-block-id") || generateBlockId();
+            const cleanText = cleanBlockRawText(el.innerHTML);
+            blocks.push({ id, text: cleanText });
+          }
         }
       }
     }
@@ -796,49 +832,36 @@ export function replaceTextWithinBlock(
   if (exactOccurrences === 1) {
     const replaceResult = safelyReplaceTextInElement(targetBlockEl, targetText, newText);
 
-    // 0.1 إذا تعذّر التطبيق في DOM الخام (مثلاً لوجود &nbsp; أو تباين في المحارف)
-    if (!replaceResult) {
+    if (replaceResult) {
+      const updatedHtml = targetBlockEl.innerHTML;
+      if (options?.onSuccess) {
+        options.onSuccess(updatedHtml);
+      }
+
       globalAuditLog.record({
         type: "REPLACE",
         blockId,
-        details: { targetText, newText, reason: "DOM_SYNC_MISMATCH" },
-        status: "DOM_SYNC_MISMATCH",
-        error: "النص مطابَق منطقياً لكن تعذّر تطبيقه على بنية الـ DOM الخام.",
+        details: { targetText, newText, matchType: "EXACT" },
+        status: "SUCCESS",
       });
+
       return {
-        status: "DOM_SYNC_MISMATCH",
+        status: "SUCCESS",
         blockId,
-        error: "النص مطابَق منطقياً لكن تعذّر تطبيقه على بنية الـ DOM الخام.",
-      };
-    }
-
-    const updatedHtml = targetBlockEl.innerHTML;
-    if (options?.onSuccess) {
-      options.onSuccess(updatedHtml);
-    }
-
-    globalAuditLog.record({
-      type: "REPLACE",
-      blockId,
-      details: { targetText, newText, matchType: "EXACT" },
-      status: "SUCCESS",
-    });
-
-    return {
-      status: "SUCCESS",
-      blockId,
-      originalText: targetText,
-      updatedText: newText,
-      matchType: "EXACT",
-      node: replaceResult.node,
-      startOffset: replaceResult.startOffset,
-      endOffset: replaceResult.endOffset,
-      range: {
+        originalText: targetText,
+        updatedText: newText,
+        matchType: "EXACT",
+        node: replaceResult.node,
         startOffset: replaceResult.startOffset,
         endOffset: replaceResult.endOffset,
-        node: replaceResult.node,
-      },
-    };
+        range: {
+          startOffset: replaceResult.startOffset,
+          endOffset: replaceResult.endOffset,
+          node: replaceResult.node,
+        },
+      };
+    }
+    // إذا لم ينجح الاستبدال المباشر للـ DOM الخام، سننتقل تلقائياً للخطوة الثانية (Normalized Match with Index Mapping)
   }
 
   // 2. المطابقة المرنة عبر خريطة المواضع (0.2 Normalized Match with Index Mapping)
@@ -1367,7 +1390,10 @@ export function validateBatchOperations(
 
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i];
-    const el = searchRoot.querySelector(`[data-block-id="${op.blockId}"]`);
+    let el = searchRoot.querySelector(`[data-block-id="${op.blockId}"]`);
+    if (!el && searchRoot instanceof HTMLElement && searchRoot.getAttribute("data-block-id") === op.blockId) {
+      el = searchRoot;
+    }
     if (!el) {
       allValid = false;
       results.push({
