@@ -181,18 +181,39 @@ class MockElement extends MockNode {
   }
 
   querySelector(selector: string): MockElement | null {
-    const match = selector.match(/\[([a-z0-9_-]+)="([^"]*)"\]/i);
-    if (match) {
-      const [, attrName, attrVal] = match;
-      const search = (el: MockElement): MockElement | null => {
-        if (el.getAttribute(attrName) === attrVal) return el;
-        for (const child of el.children) {
-          const found = search(child);
-          if (found) return found;
+    const all = this.querySelectorAll(selector);
+    return all.length > 0 ? all[0] : null;
+  }
+
+  querySelectorAll(selector: string): MockElement[] {
+    const results: MockElement[] = [];
+    const walk = (el: MockElement) => {
+      for (const child of el.children) {
+        if (selector === "[data-block-id]" && child.hasAttribute("data-block-id")) {
+          results.push(child);
+        } else if (selector.startsWith('[data-block-id="') && child.getAttribute("data-block-id") === selector.slice(16, -2)) {
+          results.push(child);
+        } else if (selector === ".editor-container" && (child.getAttribute("class")?.includes("editor-container"))) {
+          results.push(child);
+        } else if (selector === "[data-chapter-id]" && child.hasAttribute("data-chapter-id")) {
+          results.push(child);
+        } else if (selector.toLowerCase() === child.tagName.toLowerCase()) {
+          results.push(child);
         }
-        return null;
-      };
-      return search(this);
+        walk(child);
+      }
+    };
+    walk(this);
+    return results;
+  }
+
+  closest(selector: string): MockElement | null {
+    let curr: MockElement | null = this;
+    while (curr) {
+      if (selector === "[data-chapter-id]" && curr.hasAttribute("data-chapter-id")) return curr;
+      if (selector === ".editor-container" && (curr.getAttribute("class")?.includes("editor-container"))) return curr;
+      if (curr.tagName.toLowerCase() === selector.toLowerCase()) return curr;
+      curr = curr.parentNode;
     }
     return null;
   }

@@ -507,45 +507,66 @@ export function getStructuredContentForAI(
       const clean = cleanBlockRawText(containerOrHtml);
       return `[${generateBlockId()}] ${clean}`;
     }
-  } else if (containerOrHtml instanceof HTMLElement) {
-    // إذا كان الحاوي يحوي فصولاً داخلية أو حاويات تحريرية (.editor-container)
-    const editorContainers = Array.from(
-      containerOrHtml.querySelectorAll<HTMLElement>(".editor-container")
-    );
-    if (editorContainers.length > 0) {
-      for (const ec of editorContainers) {
-        ensureBlockIdsInElement(ec);
+  } else if (containerOrHtml && typeof containerOrHtml === "object") {
+    const hasQuerySelectorAll = typeof (containerOrHtml as any).querySelectorAll === "function";
+
+    if (hasQuerySelectorAll) {
+      // إذا كان الحاوي يحوي فصولاً داخلية أو حاويات تحريرية (.editor-container)
+      const editorContainers = Array.from(
+        (containerOrHtml as HTMLElement).querySelectorAll<HTMLElement>(".editor-container")
+      );
+      if (editorContainers.length > 0) {
+        for (const ec of editorContainers) {
+          ensureBlockIdsInElement(ec);
+        }
+      } else {
+        ensureBlockIdsInElement(containerOrHtml as HTMLElement);
       }
-    } else {
-      ensureBlockIdsInElement(containerOrHtml);
-    }
 
-    // استخراج جميع الفقرات الحاملة للمعرّف الفعلي في شجرة الـ DOM
-    const queriedBlocks = Array.from(
-      containerOrHtml.querySelectorAll<HTMLElement>("[data-block-id]")
-    );
+      // استخراج جميع الفقرات الحاملة للمعرّف الفعلي في شجرة الـ DOM
+      const queriedBlocks = Array.from(
+        (containerOrHtml as HTMLElement).querySelectorAll<HTMLElement>("[data-block-id]")
+      );
 
-    if (queriedBlocks.length > 0) {
-      for (const el of queriedBlocks) {
-        const id = el.getAttribute("data-block-id") || generateBlockId();
-        const cleanText = cleanBlockRawText(el.innerHTML);
+      if (queriedBlocks.length > 0) {
+        for (const el of queriedBlocks) {
+          const id = el.getAttribute("data-block-id") || generateBlockId();
+          const cleanText = cleanBlockRawText(el.innerHTML);
+          blocks.push({ id, text: cleanText });
+        }
+      } else if (typeof (containerOrHtml as any).hasAttribute === "function" && (containerOrHtml as any).hasAttribute("data-block-id")) {
+        const id = (containerOrHtml as any).getAttribute("data-block-id") || generateBlockId();
+        const cleanText = cleanBlockRawText((containerOrHtml as any).innerHTML);
         blocks.push({ id, text: cleanText });
+      } else {
+        const elements = Array.from((containerOrHtml as any).children || []);
+        if (elements.length === 0) {
+          const clean = cleanBlockRawText((containerOrHtml as any).innerHTML || "");
+          const id = (typeof (containerOrHtml as any).getAttribute === "function" && (containerOrHtml as any).getAttribute("data-block-id")) || generateBlockId();
+          blocks.push({ id, text: clean });
+        } else {
+          for (const el of elements) {
+            if (el && typeof el === "object") {
+              const id = (typeof (el as any).getAttribute === "function" && (el as any).getAttribute("data-block-id")) || generateBlockId();
+              const cleanText = cleanBlockRawText((el as any).innerHTML || "");
+              blocks.push({ id, text: cleanText });
+            }
+          }
+        }
       }
-    } else if (containerOrHtml.hasAttribute("data-block-id")) {
-      const id = containerOrHtml.getAttribute("data-block-id") || generateBlockId();
-      const cleanText = cleanBlockRawText(containerOrHtml.innerHTML);
-      blocks.push({ id, text: cleanText });
     } else {
-      const elements = Array.from(containerOrHtml.children);
+      // Mock / Minimal Element fallback (without querySelectorAll)
+      ensureBlockIdsInElement(containerOrHtml as HTMLElement);
+      const elements = Array.from((containerOrHtml as any).children || []);
       if (elements.length === 0) {
-        const clean = cleanBlockRawText(containerOrHtml.innerHTML);
-        const id = containerOrHtml.getAttribute("data-block-id") || generateBlockId();
+        const clean = cleanBlockRawText((containerOrHtml as any).innerHTML || (containerOrHtml as any).textContent || "");
+        const id = (typeof (containerOrHtml as any).getAttribute === "function" && (containerOrHtml as any).getAttribute("data-block-id")) || generateBlockId();
         blocks.push({ id, text: clean });
       } else {
         for (const el of elements) {
-          if (el instanceof HTMLElement) {
-            const id = el.getAttribute("data-block-id") || generateBlockId();
-            const cleanText = cleanBlockRawText(el.innerHTML);
+          if (el && typeof el === "object") {
+            const id = (typeof (el as any).getAttribute === "function" && (el as any).getAttribute("data-block-id")) || generateBlockId();
+            const cleanText = cleanBlockRawText((el as any).innerHTML || (el as any).textContent || "");
             blocks.push({ id, text: cleanText });
           }
         }

@@ -189,18 +189,39 @@ class MockElement extends MockNode {
   }
 
   querySelector(selector: string): MockElement | null {
-    const match = selector.match(/\[data-block-id="([^"]+)"\]/);
-    if (match) {
-      const targetId = match[1];
-      const search = (el: MockElement): MockElement | null => {
-        if (el.getAttribute("data-block-id") === targetId) return el;
-        for (const child of el.children) {
-          const res = search(child);
-          if (res) return res;
+    const all = this.querySelectorAll(selector);
+    return all.length > 0 ? all[0] : null;
+  }
+
+  querySelectorAll(selector: string): MockElement[] {
+    const results: MockElement[] = [];
+    const walk = (el: MockElement) => {
+      for (const child of el.children) {
+        if (selector === "[data-block-id]" && child.hasAttribute("data-block-id")) {
+          results.push(child);
+        } else if (selector.startsWith('[data-block-id="') && child.getAttribute("data-block-id") === selector.slice(16, -2)) {
+          results.push(child);
+        } else if (selector === ".editor-container" && (child.getAttribute("class")?.includes("editor-container"))) {
+          results.push(child);
+        } else if (selector === "[data-chapter-id]" && child.hasAttribute("data-chapter-id")) {
+          results.push(child);
+        } else if (selector.toLowerCase() === child.tagName.toLowerCase()) {
+          results.push(child);
         }
-        return null;
-      };
-      return search(this);
+        walk(child);
+      }
+    };
+    walk(this);
+    return results;
+  }
+
+  closest(selector: string): MockElement | null {
+    let curr: MockElement | null = this;
+    while (curr) {
+      if (selector === "[data-chapter-id]" && curr.hasAttribute("data-chapter-id")) return curr;
+      if (selector === ".editor-container" && (curr.getAttribute("class")?.includes("editor-container"))) return curr;
+      if (curr.tagName.toLowerCase() === selector.toLowerCase()) return curr;
+      curr = curr.parentNode;
     }
     return null;
   }
@@ -241,9 +262,9 @@ async function runPhase3Verification() {
   const totalTests = 11;
 
   // -------------------------------------------------------------
-  // 1️⃣ البند 1: إثبات DOM_SYNC_MISMATCH على فقرة حقيقية فيها &nbsp; وعدم تسجيل History
+  // 1️⃣ البند 1: إثبات المعالجة المرنة للـ &nbsp; والمسافات الخاصة مع الحفاظ على التنسيق
   // -------------------------------------------------------------
-  console.log("--- [1/11] فحص حالة DOM_SYNC_MISMATCH وعدم تسجيل التاريخ ---");
+  console.log("--- [1/11] فحص المعالجة المرنة لمحارف &nbsp; والمسافات غير القابلة للكسر ---");
   const container1 = new MockElement("div");
   const block1 = new MockElement("div");
   block1.setAttribute("data-block-id", "b_nbsp1");
@@ -260,16 +281,16 @@ async function runPhase3Verification() {
     },
   });
 
-  console.log("Raw Result 1:", JSON.stringify(res1, null, 2));
+  console.log("Raw Result 1:", safeResultStringify(res1));
   console.log("Container 1 HTML after attempt:", container1.innerHTML);
   console.log("History recorded flag:", historyRecorded);
 
   if (
-    res1.status === "DOM_SYNC_MISMATCH" &&
-    !historyRecorded &&
-    container1.innerHTML.includes("جلس\u00A0الكاتب\u00A0يكتب.")
+    res1.status === "SUCCESS" &&
+    res1.matchType === "NORMALIZED" &&
+    container1.innerHTML.includes("وقف الكاتب")
   ) {
-    console.log("✅ نجاح البند 1: تم إرجاع DOM_SYNC_MISMATCH ولم يتأثر الـ DOM ولم يُسجَّل تاريخ.");
+    console.log("✅ نجاح البند 1: تم استبدال النص المرن بنجاح مع مطابقة NORMALIZED وتحديث الـ DOM بدقة.");
     passedTests++;
   } else {
     console.error("❌ فشل البند 1");

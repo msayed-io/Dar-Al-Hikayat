@@ -1179,10 +1179,25 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         editorRootElement ||
         (document.querySelector("#story-content") as HTMLElement | null);
 
+      // تحديد رقم الفصل النشط إن وجد ديناميكياً بدلاً من التصليد
+      let activeChapterIdx: number | undefined = undefined;
+      if (isNovelMode && chapters && chapters.length > 0) {
+        if (mentionsToUse.length > 0) {
+          const firstBlockId = mentionsToUse[0].blockId;
+          const blockEl = targetRoot?.querySelector(`[data-block-id="${firstBlockId}"]`);
+          const chapterEl = blockEl?.closest?.("[data-chapter-id]");
+          const chId = chapterEl?.getAttribute("data-chapter-id");
+          if (chId) {
+            const foundIdx = chapters.findIndex((c) => c.id === chId);
+            if (foundIdx !== -1) activeChapterIdx = foundIdx;
+          }
+        }
+      }
+
       const structuredDoc = formatExecutiveContextForAI({
         chapterHtmlOrEl: targetRoot || "",
         chapterTitle: storyContext?.title || "نص الرواية",
-        chapterIndex: 0,
+        chapterIndex: activeChapterIdx,
         pendingMentions: mentionsToUse,
         allChaptersSummary: chapters?.map((c, i) => ({ index: i, title: c.title })),
       });
@@ -1201,12 +1216,25 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         effectivePrompt = `[سياق توضيحي لسؤال سابق: "${pendingAgentRequest.question}"]\nإجابة الكاتبة وقرارها: ${userPromptText}\nالطلب الأصلي الأساسي: ${pendingAgentRequest.originalMessage}`;
       }
 
-      const decision = await askExecutiveAgentForDecision({
-        history: apiHistory,
-        userPrompt: effectivePrompt,
-        structuredDocContext: structuredDoc,
-        mentions: mentionsToUse,
-      });
+      // إذا كانت الكاتبة تؤكد وتوافق على تنفيذ العمليات المعلّقة
+      const isAffirmative = /^(نعم|تمام|موافقة|موافق|أجل|طبقي|طبق|استمري|استمر|أكيد|طبعاً|يلا|نفذي|نفذ|أوافق|موافقين)/i.test(userPromptText.trim());
+      let directPendingCalls: ExecutiveToolCall[] | null = null;
+      if (pendingAgentRequest?.pendingOperations && pendingAgentRequest.pendingOperations.length > 0 && isAffirmative) {
+        directPendingCalls = pendingAgentRequest.pendingOperations;
+      }
+
+      let decision: { text?: string; functionCalls: Array<{ name: string; args: any }>; error?: string } = {
+        functionCalls: directPendingCalls ? directPendingCalls : [],
+      };
+
+      if (!directPendingCalls) {
+        decision = await askExecutiveAgentForDecision({
+          history: apiHistory,
+          userPrompt: effectivePrompt,
+          structuredDocContext: structuredDoc,
+          mentions: mentionsToUse,
+        });
+      }
 
       setIsLoading(false);
 
@@ -1234,12 +1262,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           (askWriterCall.args as any)?.question ||
           "هل ترغبين في توضيح المقطع المستهدف بدقة؟";
         const reason = (askWriterCall.args as any)?.reason || "AMBIGUOUS";
+        const remainingOps = decision.functionCalls.filter((fc) => fc.name !== "ask_writer") as ExecutiveToolCall[];
+
         setPendingAgentRequest({
           question: q,
           reason,
           originalMessage: pendingAgentRequest?.originalMessage || userPromptText,
+          pendingOperations: remainingOps.length > 0 ? remainingOps : undefined,
           fixedScope: {
-            chapterIndex: 0,
+            chapterIndex: activeChapterIdx,
             blockId: (askWriterCall.args as any)?.block_id,
           },
         });
@@ -1328,6 +1359,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             ...planResult.askWriter,
             originalMessage:
               pendingAgentRequest?.originalMessage || userPromptText,
+            pendingOperations: planResult.askWriter.pendingOperations,
           });
           setMessages((prev) => [
             ...prev,

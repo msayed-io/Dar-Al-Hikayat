@@ -85,8 +85,9 @@ export interface PendingAgentRequest {
   question: string;
   reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI";
   originalMessage: string;
+  pendingOperations?: ExecutiveToolCall[];
   fixedScope?: {
-    chapterIndex: number;
+    chapterIndex?: number;
     blockId?: string;
   };
 }
@@ -97,6 +98,7 @@ export interface AgentExecutionResult {
   askWriter?: {
     question: string;
     reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI";
+    pendingOperations?: ExecutiveToolCall[];
   };
   error?: string;
   totalMutations: number;
@@ -204,15 +206,16 @@ export function formatExecutiveContextForAI({
 }: {
   chapterHtmlOrEl: HTMLElement | string;
   chapterTitle?: string;
-  chapterIndex: number;
+  chapterIndex?: number;
   pendingMentions?: AttachedMention[];
   allChaptersSummary?: Array<{ index: number; title: string }>;
 }): string {
   const structuredBlocks = getStructuredContentForAI(chapterHtmlOrEl);
   const title = (chapterTitle && chapterTitle.trim()) || "بدون عنوان";
+  const indexDisplay = typeof chapterIndex === "number" ? `=== الفصل ${chapterIndex + 1}: ${title} ===\n` : `=== ${title} ===\n`;
 
   let out = `[سياق التحرير الجراحي التنفيذي — الفصل المفتوح حالياً]\n`;
-  out += `=== الفصل ${chapterIndex + 1}: ${title} ===\n`;
+  out += indexDisplay;
   out += `${structuredBlocks}\n`;
   out += `[نهاية نص الفصل المفتوح]\n`;
 
@@ -220,7 +223,7 @@ export function formatExecutiveContextForAI({
   if (allChaptersSummary && allChaptersSummary.length > 1) {
     out += `\n[فهرس فصول العمل الأدبي الأخرى (للعلم بالنطاق فقط — محظور التعديل عليها دون استدعاء ask_writer)]:\n`;
     for (const chap of allChaptersSummary) {
-      if (chap.index !== chapterIndex) {
+      if (typeof chapterIndex !== "number" || chap.index !== chapterIndex) {
         out += `- الفصل ${chap.index + 1}: "${chap.title || "بدون عنوان"}"\n`;
       }
     }
@@ -320,7 +323,8 @@ export function applyAgentHighlight(
   const span = document.createElement("span");
   span.setAttribute("data-agent-fx", "1");
   span.className = "highlight";
-  span.style.backgroundColor = hexToRgba(accentColor, 0.35);
+  span.style.backgroundImage = `linear-gradient(90deg, ${hexToRgba(accentColor, 0.25)} 0%, ${hexToRgba(accentColor, 0.6)} 50%, ${hexToRgba(accentColor, 0.25)} 100%)`;
+  span.style.backgroundSize = "200% 100%";
   span.style.color = "transparent"; // النص الأصلي يختفي مع الحفاظ على التخطيط
   span.style.borderRadius = "3px";
   span.style.padding = "1px 5px";
@@ -424,16 +428,78 @@ export async function executeAgentPlan({
     };
   }
 
-  // فحص سقف الأمان
+  // فحص سقف الأمان (F5-3: سطر تدقيق عند قص الخطة)
   const safeCalls = rawCalls.slice(0, MAX_TOOL_CALLS_PER_REQUEST);
+  if (rawCalls.length > MAX_TOOL_CALLS_PER_REQUEST) {
+    globalAuditLog.record({
+      type: "BATCH_BEGIN",
+      blockId: "plan_limit",
+      details: { note: `قُصَّت الخطة إلى ${MAX_TOOL_CALLS_PER_REQUEST} عمليات كحد أقصى للأمان` },
+      status: "SUCCESS",
+    });
+  }
 
-  // إذا كان هناك استدعاء ask_writer في البداية
+  // إذا كان هناك استدعاء ask_writer في البداية (F4: حفظ التعديلات المعلّقة دون إسقاطها)
   const askCall = safeCalls.find((c) => c.name === "ask_writer");
   if (askCall && askCall.name === "ask_writer") {
+    const remainingOps = safeCalls.filter((c) => c.name !== "ask_writer");
+    let questionText = askCall.args.question;
+    if (remainingOps.length > 0 && !questionText.includes("تعديل") && !questionText.includes("خطوة")) {
+      questionText += ` (هناك ${remainingOps.length} تعديلات معلّقة بانتظار توضيحك)`;
+    }
     return {
       success: true,
       executedSteps: [],
-      askWriter: askCall.args,
+      askWriter: {
+        ...askCall.args,
+        question: questionText,
+        pendingOperations: remainingOps,
+      },
+      totalMutations: 0,
+      auditEntriesCount: 0,
+    };
+  }
+
+  // فحص النطاق متعدد الفصول (Multi-Chapter Scope Check - F2)
+  const chaptersInvolved = new Set<string>();
+  const chapterNames: string[] = [];
+
+  for (const c of safeCalls) {
+    let targetBlockId = "";
+    if (c.name === "replace_text" || c.name === "delete_text") {
+      targetBlockId = c.args.block_id;
+    } else if (c.name === "insert_text") {
+      targetBlockId = c.args.anchor_block_id;
+    }
+
+    if (targetBlockId) {
+      const el = rootElement.querySelector<HTMLElement>(`[data-block-id="${targetBlockId}"]`);
+      if (el) {
+        const chapterParent = (typeof el.closest === "function" ? el.closest("[data-chapter-id]") : null) ||
+                              (typeof el.closest === "function" ? el.closest(".editor-container") : null);
+        const chapterId = chapterParent?.getAttribute("data-chapter-id");
+        if (chapterId) {
+          if (!chaptersInvolved.has(chapterId)) {
+            chaptersInvolved.add(chapterId);
+            const titleInput = chapterParent?.parentElement?.querySelector<HTMLInputElement>("input");
+            const chTitle = titleInput?.value || `فصل (${chapterId})`;
+            chapterNames.push(chTitle);
+          }
+        }
+      }
+    }
+  }
+
+  // إذا كانت الخطة تمتد عبر أكثر من فصل في آن واحد دون موافقة مسبقة
+  if (chaptersInvolved.size > 1) {
+    return {
+      success: true,
+      executedSteps: [],
+      askWriter: {
+        question: `الخطة المقترحة تشمل تعديلات تمتد عبر عدة فصول (${chapterNames.join("، ")}). لتأكيد الدقة، هل تودين تطبيق هذه التعديلات عبر الفصول مجتمعة؟`,
+        reason: "SCOPE",
+        pendingOperations: safeCalls,
+      },
       totalMutations: 0,
       auditEntriesCount: 0,
     };
@@ -589,12 +655,14 @@ export async function executeAgentPlan({
           );
 
           if (opRes.status === "SUCCESS") {
-            // 4. كشف تدريجي وتثبيت
+            // 4. كشف تدريجي وتثبيت (F1: قراءة النص الكامل للفقرة بعد الاستبدال الجزئي لمنع مسح بقية النص)
             const updatedBlock = rootElement.querySelector<HTMLElement>(
               `[data-block-id="${call.args.block_id}"]`
             );
             if (updatedBlock) {
-              await typewriterReveal(updatedBlock, call.args.new_text, accentColor);
+              const fullBlockText =
+                updatedBlock.textContent || cleanBlockRawText(updatedBlock.innerHTML);
+              await typewriterReveal(updatedBlock, fullBlockText, accentColor);
             }
 
             // 5. تدقيق

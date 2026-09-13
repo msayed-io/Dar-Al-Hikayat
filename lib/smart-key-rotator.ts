@@ -4,6 +4,7 @@ import {
   updateManagedKey,
   type ManagedApiKey,
 } from "./api-key-repository";
+import { isNativeMobileEnvironment } from "./gemini-direct-client";
 
 /**
  * Default duration to keep a rate-limited key paused before auto-reactivating it.
@@ -192,9 +193,20 @@ export type KeyOperationCallback<T> = (
 export async function executeWithSmartRotation<T>(
   operation: KeyOperationCallback<T>
 ): Promise<T> {
+  const isNative = isNativeMobileEnvironment();
   const candidates = await getActiveCandidates();
 
-  // Always append a server default candidate as fallback if not already using native offline
+  if (isNative && candidates.length === 0) {
+    const allStored = getManagedKeys();
+    if (allStored.length > 0 && allStored.every((k) => k.status === "rate_limited")) {
+      throw new AllKeysExhaustedError();
+    }
+    throw new NoActiveKeysConfiguredError(
+      "عذراً يا أستاذة رحمة، لم يتم العثور على أي مفتاح اتصال نشط بنموذج الذكاء الاصطناعي على هذا الهاتف. يرجى إضافة مفتاح اتصال من شاشة الإعدادات لبدء استخدام المساعد الأدبي."
+    );
+  }
+
+  // Server fallback candidate for web environment
   const serverFallbackCandidate: ManagedApiKey = {
     id: "server_default",
     key: "",
@@ -203,8 +215,10 @@ export async function executeWithSmartRotation<T>(
     createdAt: 0,
   };
 
-  // User-configured keys take priority; server fallback ensures zero downtime
-  const candidateQueue = [...candidates, serverFallbackCandidate];
+  // On native mobile, only use configured user keys; on web, include server fallback
+  const candidateQueue = isNative
+    ? [...candidates]
+    : [...candidates, serverFallbackCandidate];
 
   let lastError: any = null;
 

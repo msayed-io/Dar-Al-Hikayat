@@ -6,6 +6,10 @@ import {
   isInvalidKeyError,
   isNetworkConnectionError,
 } from "./smart-key-rotator";
+import {
+  generateGeminiDirectly,
+  streamGeminiDirectly,
+} from "./gemini-direct-client";
 
 // ── SYSTEM PROMPT FOR RAHMA EL SAYED MOWAFI ──
 export const RAHMA_MOWAFI_SYSTEM_PROMPT = `أنت محرر أدبي محترف، صاحب خبرة عريقة تمتد لعقود في قراءة وتحرير الأعمال الروائية والقصصية العربية، عملت مع كبار الكتّاب في دور نشر مرموقة، ولك حس نقدي رفيع ومتوازن يجمع بين الدقة العلمية والذوق الأدبي واحترام صوت الكاتب الخاص. أنت الآن تعمل حصرياً كمساعد أدبي شخصي للكاتبة رحمة السيد موافي داخل حكايتها الحالية.
@@ -240,67 +244,30 @@ export async function initializeStoryAssistant(
 
   try {
     return await executeWithSmartRotation(async (apiKey) => {
-      // 1. Try server-side API endpoint first
-      try {
+      // Direct call on mobile / custom key
+      if (apiKey) {
+        const directRes = await generateGeminiDirectly({
+          apiKey,
+          systemInstruction: fullSystemInstruction,
+          contents: [{ role: "user", parts: [{ text: userInitialPrompt }] }],
+          generationConfig: { temperature: 0.7 },
+        });
+        if (directRes.text) return directRes.text;
+      } else {
+        // Server-side fallback for web environment
         const res = await fetch("/api/gemini/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             systemInstruction: fullSystemInstruction,
             contents: [{ role: "user", parts: [{ text: userInitialPrompt }] }],
-            apiKey: apiKey || undefined,
             model: "gemini-2.5-flash",
           }),
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const err: any = new Error(
-            errData?.error?.message || `API error: ${res.status}`
-          );
-          err.status = res.status;
-          err.data = errData;
-          throw err;
-        }
-
-        const data = await res.json();
-        const candidateText = data.text || "";
-        if (candidateText) return candidateText;
-      } catch (serverErr: any) {
-        if (
-          isRateLimitError(serverErr?.status || 0, serverErr?.data, serverErr?.message) ||
-          isInvalidKeyError(serverErr?.status || 0, serverErr?.data, serverErr?.message)
-        ) {
-          throw serverErr;
-        }
-
-        // Direct fetch fallback if on standalone mobile with custom key
-        if (apiKey) {
-          const directRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: fullSystemInstruction }] },
-                contents: [{ role: "user", parts: [{ text: userInitialPrompt }] }],
-              }),
-            }
-          );
-          if (!directRes.ok) {
-            const errData = await directRes.json().catch(() => ({}));
-            const err: any = new Error(
-              errData?.error?.message || `Direct Gemini API error: ${directRes.status}`
-            );
-            err.status = directRes.status;
-            err.data = errData;
-            throw err;
-          }
-          const data = await directRes.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          if (text) return text;
-        } else {
-          throw serverErr;
+        if (res.ok) {
+          const data = await res.json();
+          if (data.text) return data.text;
         }
       }
 
@@ -324,13 +291,15 @@ export async function streamLiteraryAssistantResponse(
   mentionsContext?: string
 ): Promise<string> {
   const contextBlock = formatStoryContextForAI(storyContext);
-  const fullSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}${mentionsContext ? `\n\n${mentionsContext}` : ""}`;
+  const fullSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}${
+    mentionsContext ? `\n\n${mentionsContext}` : ""
+  }`;
 
   // Build full contents payload with conversation history
   const contents = history
     .filter((msg) => msg.content && msg.content.trim())
     .map((msg) => ({
-      role: msg.role === "user" ? "user" : "model",
+      role: (msg.role === "user" ? "user" : "model") as "user" | "model",
       parts: [{ text: msg.content }],
     }));
 
@@ -343,193 +312,152 @@ export async function streamLiteraryAssistantResponse(
     return await executeWithSmartRotation(async (apiKey) => {
       let candidateAccumulated = "";
 
-      // 1. Try server-side streaming with /api/gemini/stream
-      try {
-        const res = await fetch("/api/gemini/stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      if (apiKey) {
+        // Direct SSE streaming from Google Generative Language API
+        try {
+          candidateAccumulated = await streamGeminiDirectly({
+            apiKey,
             systemInstruction: fullSystemInstruction,
             contents,
-            apiKey: apiKey || undefined,
-            model: "gemini-2.5-flash",
-          }),
-        });
+            onChunk,
+          });
+          return candidateAccumulated;
+        } catch (streamErr: any) {
+          if (
+            isRateLimitError(streamErr?.status || 0, streamErr?.data, streamErr?.message) ||
+            isInvalidKeyError(streamErr?.status || 0, streamErr?.data, streamErr?.message)
+          ) {
+            throw streamErr;
+          }
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const err: any = new Error(
-            errData?.error?.message || `Server streaming failed with status ${res.status}`
-          );
-          err.status = res.status;
-          err.data = errData;
-          throw err;
+          // Fallback to direct generateContent
+          const genResult = await generateGeminiDirectly({
+            apiKey,
+            systemInstruction: fullSystemInstruction,
+            contents,
+          });
+          if (genResult.text) {
+            onChunk(genResult.text);
+            return genResult.text;
+          }
+          throw streamErr;
         }
+      } else {
+        // Web Server-side streaming with /api/gemini/stream
+        try {
+          const res = await fetch("/api/gemini/stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: fullSystemInstruction,
+              contents,
+              model: "gemini-2.5-flash",
+            }),
+          });
 
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder("utf-8");
-        if (!reader) {
-          throw new Error("Response body is not readable");
-        }
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const err: any = new Error(
+              errData?.error?.message || `Server streaming failed with status ${res.status}`
+            );
+            err.status = res.status;
+            err.data = errData;
+            throw err;
+          }
 
-        let buffer = "";
+          const reader = res.body?.getReader();
+          const decoder = new TextDecoder("utf-8");
+          if (!reader) {
+            throw new Error("Response body is not readable");
+          }
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
+          let buffer = "";
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data: ")) continue;
-            const payloadStr = trimmed.slice(6).trim();
-            if (payloadStr === "[DONE]") break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
 
-            try {
-              const parsed = JSON.parse(payloadStr);
-              if (parsed.error) {
-                const err: any = new Error(parsed.error.message || "Server streaming error");
-                err.status = parsed.error.code || 500;
-                err.data = parsed;
-                throw err;
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith("data: ")) continue;
+              const payloadStr = trimmed.slice(6).trim();
+              if (payloadStr === "[DONE]") break;
+
+              try {
+                const parsed = JSON.parse(payloadStr);
+                if (parsed.error) {
+                  const err: any = new Error(parsed.error.message || "Server streaming error");
+                  err.status = parsed.error.code || 500;
+                  err.data = parsed;
+                  throw err;
+                }
+                const chunkText = parsed.text || "";
+                if (chunkText) {
+                  candidateAccumulated += chunkText;
+                  onChunk(chunkText);
+                }
+              } catch (pErr: any) {
+                if (pErr?.status) throw pErr;
               }
+            }
+          }
+
+          if (!candidateAccumulated && buffer && buffer.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(buffer.slice(6).trim());
               const chunkText = parsed.text || "";
               if (chunkText) {
                 candidateAccumulated += chunkText;
                 onChunk(chunkText);
               }
-            } catch (pErr: any) {
-              if (pErr?.status) throw pErr;
+            } catch {
+              // ignore
             }
           }
-        }
 
-        if (!candidateAccumulated && buffer && buffer.startsWith("data: ")) {
-          try {
-            const parsed = JSON.parse(buffer.slice(6).trim());
-            const chunkText = parsed.text || "";
-            if (chunkText) {
-              candidateAccumulated += chunkText;
-              onChunk(chunkText);
-            }
-          } catch {
-            // ignore
+          return candidateAccumulated;
+        } catch (serverErr: any) {
+          if (
+            isRateLimitError(serverErr?.status || 0, serverErr?.data, serverErr?.message) ||
+            isInvalidKeyError(serverErr?.status || 0, serverErr?.data, serverErr?.message)
+          ) {
+            throw serverErr;
           }
-        }
-      } catch (streamErr: any) {
-        // If it's a rate limit or auth error, throw so SmartKeyRotator catches and rotates to next key!
-        if (
-          isRateLimitError(streamErr?.status || 0, streamErr?.data, streamErr?.message) ||
-          isInvalidKeyError(streamErr?.status || 0, streamErr?.data, streamErr?.message)
-        ) {
-          throw streamErr;
-        }
 
-        // If streaming failed for another reason and no text was received, try server-side generateContent
-        if (!candidateAccumulated) {
-          console.warn(
-            "Streaming encountered error, trying server generateContent fallback:",
-            streamErr
-          );
-          try {
-            const fallbackRes = await fetch("/api/gemini/generate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                systemInstruction: fullSystemInstruction,
-                contents,
-                apiKey: apiKey || undefined,
-                model: "gemini-3.8-flash",
-              }),
-            });
+          // Fallback to /api/gemini/generate
+          const fallbackRes = await fetch("/api/gemini/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: fullSystemInstruction,
+              contents,
+              model: "gemini-2.5-flash",
+            }),
+          });
 
-            if (!fallbackRes.ok) {
-              const fallbackErrData = await fallbackRes.json().catch(() => ({}));
-              const fErr: any = new Error(
-                fallbackErrData?.error?.message || `Fallback failed: ${fallbackRes.status}`
-              );
-              fErr.status = fallbackRes.status;
-              fErr.data = fallbackErrData;
-              throw fErr;
-            }
-
-            const fallbackData = await fallbackRes.json();
-            const text = fallbackData.text || "";
-            if (text) {
-              candidateAccumulated = text;
-              onChunk(text);
-            }
-          } catch (fallbackErr: any) {
-            if (
-              isRateLimitError(fallbackErr?.status || 0, fallbackErr?.data, fallbackErr?.message) ||
-              isInvalidKeyError(fallbackErr?.status || 0, fallbackErr?.data, fallbackErr?.message)
-            ) {
-              throw fallbackErr;
-            }
-
-            // Direct fetch fallback if on standalone mobile with custom key
-            if (apiKey) {
-              const directModels = ["gemini-2.5-flash", "gemini-3.8-flash"];
-              let directSucceeded = false;
-              for (const dModel of directModels) {
-                try {
-                  const directRes = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/${dModel}:generateContent?key=${apiKey}`,
-                    {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        systemInstruction: { parts: [{ text: fullSystemInstruction }] },
-                        contents,
-                      }),
-                    }
-                  );
-
-                  if (!directRes.ok) {
-                    const directErrData = await directRes.json().catch(() => ({}));
-                    const dErr: any = new Error(
-                      directErrData?.error?.message || `Direct fallback failed: ${directRes.status}`
-                    );
-                    dErr.status = directRes.status;
-                    dErr.data = directErrData;
-                    if (dModel === directModels[0] && (directRes.status === 503 || directRes.status === 429)) {
-                      continue;
-                    }
-                    throw dErr;
-                  }
-
-                  const directData = await directRes.json();
-                  const dText =
-                    directData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                  if (dText) {
-                    candidateAccumulated = dText;
-                    onChunk(dText);
-                    directSucceeded = true;
-                    break;
-                  }
-                } catch (dCatchErr: any) {
-                  if (dModel === directModels[0]) continue;
-                  throw dCatchErr;
-                }
-              }
-              if (!directSucceeded && !candidateAccumulated) {
-                throw fallbackErr;
-              }
-            } else {
-              throw fallbackErr;
-            }
+          if (!fallbackRes.ok) {
+            const fallbackErrData = await fallbackRes.json().catch(() => ({}));
+            const fErr: any = new Error(
+              fallbackErrData?.error?.message || `Fallback failed: ${fallbackRes.status}`
+            );
+            fErr.status = fallbackRes.status;
+            fErr.data = fallbackErrData;
+            throw fErr;
           }
+
+          const fallbackData = await fallbackRes.json();
+          const text = fallbackData.text || "";
+          if (text) {
+            onChunk(text);
+            return text;
+          }
+          throw serverErr;
         }
       }
-
-      if (!candidateAccumulated) {
-        throw new Error("لم يتم استلام أي رد من نموذج الذكاء الاصطناعي.");
-      }
-
-      return candidateAccumulated;
     });
   } catch (error: any) {
     console.error("Gemini response error in smart rotator:", error);
@@ -581,31 +509,56 @@ export async function requestExecutiveDecision({
 }> {
   try {
     return await executeWithSmartRotation(async (apiKey) => {
-      const res = await fetch("/api/gemini/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      let rawData: {
+        text: string;
+        functionCalls: Array<{ name: string; args: any }>;
+        model: string;
+      };
+
+      if (apiKey) {
+        // Direct execution against Google Generative Language API (Android Native & Web with custom key)
+        rawData = await generateGeminiDirectly({
+          apiKey,
           systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
           contents,
-          apiKey: apiKey || undefined,
-          model: "gemini-2.5-flash",
-          temperature: 0.2,
           tools: tools || AGENTIC_TOOL_DECLARATIONS,
-        }),
-      });
+          generationConfig: {
+            temperature: 0.2,
+          },
+        });
+      } else {
+        // Server proxy endpoint (Web with environment variable GEMINI_API_KEY)
+        const res = await fetch("/api/gemini/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
+            contents,
+            model: "gemini-2.5-flash",
+            temperature: 0.2,
+            tools: tools || AGENTIC_TOOL_DECLARATIONS,
+          }),
+        });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const err: any = new Error(
-          errData?.error?.message || `خطأ في خادم اتخاذ القرار التنفيذي: ${res.status}`
-        );
-        err.status = res.status;
-        err.data = errData;
-        throw err;
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const err: any = new Error(
+            errData?.error?.message || `خطأ في خادم اتخاذ القرار التنفيذي: ${res.status}`
+          );
+          err.status = res.status;
+          err.data = errData;
+          throw err;
+        }
+
+        const data = await res.json();
+        rawData = {
+          text: data.text || "",
+          functionCalls: data.functionCalls || [],
+          model: data.model || "gemini-2.5-flash",
+        };
       }
 
-      const data = await res.json();
-      const rawCalls = data.functionCalls || [];
+      const rawCalls = rawData.functionCalls || [];
 
       // تحقق صارم من صحة مخططات الاستدعاء (Schema Validation)
       const validatedCalls: Array<{ name: string; args: any }> = [];
@@ -685,9 +638,9 @@ export async function requestExecutiveDecision({
       }
 
       return {
-        text: data.text || "",
+        text: rawData.text || "",
         functionCalls: validatedCalls,
-        model: data.model || "gemini-2.5-flash",
+        model: rawData.model || "gemini-2.5-flash",
       };
     });
   } catch (err: any) {
@@ -782,21 +735,29 @@ ${stepsSummary}
 
   try {
     return await executeWithSmartRotation(async (apiKey) => {
-      const res = await fetch("/api/gemini/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      if (apiKey) {
+        const directResult = await generateGeminiDirectly({
+          apiKey,
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          apiKey: apiKey || undefined,
-          model: "gemini-2.5-flash",
-          temperature: 0.3,
-        }),
-      });
+          generationConfig: { temperature: 0.3 },
+        });
+        return directResult.text.trim() || generateDefaultAgentSummary(executedSteps);
+      } else {
+        const res = await fetch("/api/gemini/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            model: "gemini-2.5-flash",
+            temperature: 0.3,
+          }),
+        });
 
-      if (!res.ok) throw new Error("Failed to generate agent summary");
-      const data = await res.json();
-      const text = (data.text || "").trim();
-      return text || generateDefaultAgentSummary(executedSteps);
+        if (!res.ok) throw new Error("Failed to generate agent summary");
+        const data = await res.json();
+        const text = (data.text || "").trim();
+        return text || generateDefaultAgentSummary(executedSteps);
+      }
     });
   } catch {
     return generateDefaultAgentSummary(executedSteps);

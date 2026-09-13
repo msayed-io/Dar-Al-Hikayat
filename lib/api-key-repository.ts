@@ -1,4 +1,9 @@
 import { Preferences } from "@capacitor/preferences";
+import {
+  validateGeminiKeyDirectly,
+  sanitizeApiKey,
+  isNativeMobileEnvironment,
+} from "./gemini-direct-client";
 
 export type ApiKeyStatus = "active" | "rate_limited" | "disabled";
 
@@ -202,35 +207,67 @@ export async function addManagedKey(
 
 /**
  * Validates whether an API key connects and functions successfully with the Gemini API.
+ * Supports direct Google Generative Language verification (for Android/mobile/web) and server proxy fallback.
  */
 export async function testKeyConnection(
   apiKey: string
 ): Promise<{ success: boolean; message: string }> {
-  try {
-    const res = await fetch("/api/gemini/validate-key", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data?.valid === false) {
-      return {
-        success: false,
-        message: data?.message || `تعذر الاتصال بالمفتاح (رمز: ${res.status})`,
-      };
-    }
-
-    return {
-      success: true,
-      message: data?.message || "المفتاح متصل ويعمل بنجاح.",
-    };
-  } catch (err: any) {
+  const cleanKey = sanitizeApiKey(apiKey);
+  if (!cleanKey) {
     return {
       success: false,
-      message: err?.message || "تعذر الاتصال بالخادم لفحص المفتاح.",
+      message: "يرجى إدخال مفتاح API صالح للتحقق منه.",
     };
   }
+
+  // 1. Direct validation against Google Generative Language API (works 100% on Native Android and Web)
+  const directResult = await validateGeminiKeyDirectly(cleanKey);
+  if (directResult.valid) {
+    return {
+      success: true,
+      message: directResult.message,
+    };
+  }
+
+  // If direct validation returned a specific Gemini API error code (like 400, 401, 403, 429), return that accurate error
+  if (directResult.code && directResult.code !== 0 && directResult.code !== 404) {
+    return {
+      success: false,
+      message: directResult.message,
+    };
+  }
+
+  // 2. If running in a web environment with a server, attempt server proxy validation as secondary backup
+  if (!isNativeMobileEnvironment()) {
+    try {
+      const res = await fetch("/api/gemini/validate-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: cleanKey }),
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.valid) {
+          return {
+            success: true,
+            message: data?.message || "المفتاح متصل ويعمل بنجاح.",
+          };
+        }
+        return {
+          success: false,
+          message: data?.message || "المفتاح غير صالح.",
+        };
+      }
+    } catch {
+      // Ignore server proxy failure if direct result is available
+    }
+  }
+
+  return {
+    success: false,
+    message: directResult.message || "تعذر الاتصال بخوادم الذكاء الاصطناعي لفحص المفتاح.",
+  };
 }
 
 /**
