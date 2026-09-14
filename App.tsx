@@ -15,6 +15,7 @@ import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { PermissionsGuard } from "./components/PermissionsGuard";
+import { requestNotificationPermission } from "./lib/prayer-alarms";
 
 // The main component that manages views and persistent navigation
 const AppContent = () => {
@@ -424,6 +425,12 @@ function App() {
         try {
           const result = await checkForUpdates({ manual: false, force });
           if (result.hasUpdate && result.latestInfo && result.currentVersion) {
+            if (Capacitor.getPlatform() === "android") {
+              const notificationPermissionGranted = await requestNotificationPermission();
+              if (!notificationPermissionGranted) {
+                console.warn("Update notification skipped: Android notification permission is not granted");
+              }
+            }
             await notifyUpdateAvailable(result.latestInfo);
             openUpdateDialog(result.latestInfo, result.currentVersion, result.isMandatory);
           }
