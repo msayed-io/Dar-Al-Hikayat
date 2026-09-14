@@ -68,8 +68,9 @@ interface NativeAppUpdatePlugin {
 
 const NativeAppUpdate = registerPlugin<NativeAppUpdatePlugin>("AppUpdate");
 
-const GITHUB_LATEST_JSON_URL =
-  "https://github.com/msayed-io/Dar-Al-Hikayat/releases/latest/download/latest.json";
+const GITHUB_LATEST_RELEASE_API_URL =
+  "https://api.github.com/repos/msayed-io/Dar-Al-Hikayat/releases/latest";
+const UPDATE_CHECK_TIMEOUT_MS = 12_000;
 
 const STORAGE_KEYS = {
   LAST_CHECK_TIME: "dar_app_last_update_check_time",
@@ -141,30 +142,76 @@ export async function checkForUpdates(options?: {
   const currentVersion = await getCurrentAppVersion();
 
   try {
-    let updateData: UpdateInfo | null = null;
-    let fetchError: Error | null = null;
-
-    // Read only the immutable metadata published with the latest GitHub Release.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
+    let updateData: UpdateInfo;
     try {
+      // GitHub's /releases/download endpoint redirects through a host that does
+      // not expose CORS headers to Android WebView. The API endpoint does, so
+      // read release metadata there and use the official APK asset URL only for
+      // the native downloader (which follows GitHub's redirect safely).
       const response = await fetch(
-        `${GITHUB_LATEST_JSON_URL}?_t=${Date.now()}`,
+        `${GITHUB_LATEST_RELEASE_API_URL}?_t=${Date.now()}`,
         {
-          headers: { Accept: "application/json" },
+          headers: {
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
           cache: "no-store",
+          signal: controller.signal,
         }
       );
-      if (response.ok) {
-        updateData = (await response.json()) as UpdateInfo;
+      if (!response.ok) {
+        throw new Error(`تعذر الوصول إلى خادم التحديث (HTTP ${response.status})`);
       }
-    } catch (e: any) {
-      fetchError = e;
-    }
 
-    if (!updateData) {
-      throw (
-        fetchError ||
-        new Error("تعذر قراءة بيانات ملف التحديث. يرجى التحقق من اتصال الإنترنت.")
+      const release = (await response.json()) as {
+        tag_name?: string;
+        body?: string | null;
+        published_at?: string | null;
+        assets?: Array<{
+          name?: string;
+          size?: number;
+          browser_download_url?: string;
+          digest?: string | null;
+          content_type?: string;
+        }>;
+      };
+      const apk = release.assets?.find(
+        (asset) => asset.name === "dar-al-hikayat.apk"
       );
+      const tag = release.tag_name || "";
+      const versionMatch = tag.match(/^(?:v)?(\d+(?:\.\d+)*)$/i);
+      const versionName = versionMatch?.[1] || tag.replace(/^v/i, "");
+      const versionParts = versionName.split(".");
+      const versionCode = Number(versionParts[versionParts.length - 1]);
+      const digest = apk?.digest?.replace(/^sha256:/i, "");
+      if (
+        !apk?.browser_download_url ||
+        !Number.isInteger(versionCode) ||
+        versionCode <= 0
+      ) {
+        throw new Error("لا توجد حزمة APK رسمية صالحة في آخر إصدار منشور.");
+      }
+
+      updateData = {
+        versionCode,
+        versionName,
+        downloadUrl: apk.browser_download_url,
+        directDownloadUrl: apk.browser_download_url,
+        sha256: digest,
+        fileSizeBytes: apk.size,
+        mandatory: false,
+        releaseNotes: release.body
+          ? release.body
+              .split("\n")
+              .map((line) => line.replace(/^[-*]\s*/, "").trim())
+              .filter(Boolean)
+          : [],
+        publishedAt: release.published_at || undefined,
+      };
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (
