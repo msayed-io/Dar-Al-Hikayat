@@ -261,7 +261,7 @@ export async function initializeStoryAssistant(
           body: JSON.stringify({
             systemInstruction: fullSystemInstruction,
             contents: [{ role: "user", parts: [{ text: userInitialPrompt }] }],
-            model: "gemini-2.5-flash",
+            model: "gemini-3.8-flash",
           }),
         });
 
@@ -351,7 +351,7 @@ export async function streamLiteraryAssistantResponse(
             body: JSON.stringify({
               systemInstruction: fullSystemInstruction,
               contents,
-              model: "gemini-2.5-flash",
+              model: "gemini-3.8-flash",
             }),
           });
 
@@ -435,7 +435,7 @@ export async function streamLiteraryAssistantResponse(
             body: JSON.stringify({
               systemInstruction: fullSystemInstruction,
               contents,
-              model: "gemini-2.5-flash",
+              model: "gemini-3.8-flash",
             }),
           });
 
@@ -490,7 +490,7 @@ export async function streamLiteraryAssistantResponse(
 
 /**
  * دالة طلب القرار التنفيذي للوكيل الأدبي (Executive Decision Request)
- * تستخدم النمط الصارم والدقيق: حرارة 0.2 ونموذج gemini-2.5-flash حصراً لضمان حتمية العقد،
+ * تستخدم النمط الصارم والدقيق: حرارة 0.2 ونموذج gemini-3.8-flash حصراً لضمان حتمية العقد،
  * مع التحقق الشامل من مطابقة مخططات الاستدعاء الأربع.
  */
 export async function requestExecutiveDecision({
@@ -534,7 +534,7 @@ export async function requestExecutiveDecision({
           body: JSON.stringify({
             systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
             contents,
-            model: "gemini-2.5-flash",
+            model: "gemini-3.8-flash",
             temperature: 0.2,
             tools: tools || AGENTIC_TOOL_DECLARATIONS,
           }),
@@ -554,7 +554,7 @@ export async function requestExecutiveDecision({
         rawData = {
           text: data.text || "",
           functionCalls: data.functionCalls || [],
-          model: data.model || "gemini-2.5-flash",
+          model: data.model || "gemini-3.8-flash",
         };
       }
 
@@ -640,7 +640,7 @@ export async function requestExecutiveDecision({
       return {
         text: rawData.text || "",
         functionCalls: validatedCalls,
-        model: rawData.model || "gemini-2.5-flash",
+        model: rawData.model || "gemini-3.8-flash",
       };
     });
   } catch (err: any) {
@@ -667,7 +667,7 @@ export async function requestExecutiveDecision({
     return {
       text: "",
       functionCalls: [],
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
       error: friendlyError,
     };
   }
@@ -748,7 +748,7 @@ ${stepsSummary}
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
-            model: "gemini-2.5-flash",
+            model: "gemini-3.8-flash",
             temperature: 0.3,
           }),
         });

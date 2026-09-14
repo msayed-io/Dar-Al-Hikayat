@@ -22,6 +22,7 @@ import {
   checkExactAlarmPermission,
   openNativeNotificationSettings,
   autoDetectLocation,
+  checkOrRequestLocationPermissionSmartly,
   schedulePrayerAlarms,
 } from "../lib/prayer-alarms";
 
@@ -54,7 +55,7 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
       const notif = await checkNotificationPermission();
       const alarm = await checkExactAlarmPermission();
       const geoPerm = await Geolocation.checkPermissions();
-      const loc = geoPerm.location === "granted";
+      const loc = geoPerm.location === "granted" || geoPerm.coarseLocation === "granted";
 
       return {
         notifications: notif,
@@ -227,8 +228,8 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
   const handleActivateLocation = async () => {
     setIsProcessing(true);
     try {
-      const geoPerm = await Geolocation.requestPermissions();
-      if (geoPerm.location === "granted") {
+      const isGranted = await checkOrRequestLocationPermissionSmartly();
+      if (isGranted) {
         try {
           const loc = await autoDetectLocation();
           updatePrayerState({ location: loc });

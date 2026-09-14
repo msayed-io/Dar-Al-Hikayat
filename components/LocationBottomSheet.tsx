@@ -10,7 +10,11 @@ import {
   X,
 } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
-import { autoDetectLocation, schedulePrayerAlarms } from "../lib/prayer-alarms";
+import {
+  autoDetectLocation,
+  schedulePrayerAlarms,
+  LOCATION_ACTIONABLE_ERROR_MESSAGE,
+} from "../lib/prayer-alarms";
 
 export const LocationBottomSheet: React.FC = () => {
   const {
@@ -53,7 +57,7 @@ export const LocationBottomSheet: React.FC = () => {
       }, 700);
     } catch (err) {
       console.warn("GPS detection failed:", err);
-      setDetectError(err instanceof Error ? err.message : "تعذر تحديد موقع موثوق. اختر موقعك يدويًا على الخريطة.");
+      setDetectError(err instanceof Error ? err.message : LOCATION_ACTIONABLE_ERROR_MESSAGE);
     } finally {
       setIsDetecting(false);
     }
@@ -115,97 +119,124 @@ export const LocationBottomSheet: React.FC = () => {
                 borderColor: currentTheme.border,
                 color: currentTheme.text,
               }}
-              title="إغلاق"
               aria-label="إغلاق"
             >
               <X className="w-4 h-4" />
             </button>
 
-            {/* Modal Title */}
-            <h2
-              className="font-zain-xbold text-lg leading-tight"
-              style={{ color: currentTheme.text }}
-            >
-              تحديد موقع الصلاة
-            </h2>
+            <div className="flex flex-col items-center">
+              <h3
+                className="font-zain-bold text-lg leading-tight"
+                style={{ color: currentTheme.accent }}
+              >
+                تحديد الموقع
+              </h3>
+              <p
+                className="font-zain-reg text-xs opacity-65 leading-none mt-0.5"
+                style={{ color: currentTheme.secondary }}
+              >
+                لدقة مواقيت الصلاة واتجاه القبلة
+              </p>
+            </div>
 
-            {/* Symmetrical placeholder */}
-            <div className="w-8 h-8" />
+            {/* Symmetrical placeholder for visual optical balance */}
+            <div className="w-8 h-8 opacity-0 pointer-events-none" />
           </div>
 
-          {/* Micro-Capsule: Tiny, Minimal, Exactly the Place Name Only */}
-          <div className="flex justify-center pb-3">
+          {/* Current Active Location Capsule */}
+          <div className="px-5 pt-1 pb-2.5">
             <div
-              className="rounded-full border text-xs sm:text-sm font-zain-bold shadow-2xs"
+              className="h-12 px-3.5 rounded-full border flex items-center justify-between gap-2 shadow-xs"
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
-                padding: "4px 12px",
-                whiteSpace: "nowrap",
-                backgroundColor: `${currentTheme.accent}15`,
-                borderColor: `${currentTheme.accent}30`,
-                color: currentTheme.accent,
+                borderRadius: "9999px",
+                backgroundColor: currentTheme.isDark
+                  ? "rgba(255,255,255,0.05)"
+                  : "rgba(0,0,0,0.03)",
+                borderColor: currentTheme.border,
               }}
             >
-              <MapPin style={{ width: "16px", height: "16px", flexShrink: 0, marginTop: "-2px" }} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px", lineHeight: 1 }}>{currentCity}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center border shrink-0"
+                  style={{
+                    backgroundColor: `${currentTheme.accent}18`,
+                    borderColor: `${currentTheme.accent}35`,
+                    color: currentTheme.accent,
+                  }}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="font-zain-reg text-[11px] opacity-65 shrink-0 whitespace-nowrap"
+                    style={{ color: currentTheme.secondary }}
+                  >
+                    الموقع المعتمد:
+                  </span>
+                  <span
+                    className="font-zain-bold text-xs sm:text-sm truncate whitespace-nowrap"
+                    style={{ color: currentTheme.text }}
+                  >
+                    {currentCity}
+                  </span>
+                </div>
+              </div>
+
+              <span
+                className="px-2.5 py-0.5 rounded-full text-[10px] font-zain-bold border shrink-0 whitespace-nowrap"
+                style={{
+                  borderRadius: "9999px",
+                  backgroundColor: isAuto
+                    ? "rgba(34, 197, 94, 0.14)"
+                    : "rgba(59, 130, 246, 0.14)",
+                  borderColor: isAuto
+                    ? "rgba(34, 197, 94, 0.35)"
+                    : "rgba(59, 130, 246, 0.35)",
+                  color: isAuto ? "#16a34a" : "#2563eb",
+                }}
+              >
+                {isAuto ? "تلقائي (GPS)" : "مخصص (خريطة)"}
+              </span>
             </div>
           </div>
-          {prayerState.location?.isAutoDetected && (
-            <div
-              className="mx-5 mb-3 rounded-2xl border px-3 py-2 text-center text-[11px] font-zain-reg leading-relaxed"
-              style={{ borderColor: currentTheme.border, color: currentTheme.secondary }}
-            >
-              <div>
-                دقة GPS المسجلة: {prayerState.location.accuracyMeters != null
-                  ? `${Math.round(prayerState.location.accuracyMeters)} متر`
-                  : "غير معروفة"}
+
+          {/* Error / Feedback Notice */}
+          {detectError && (
+            <div className="px-5 pb-2.5">
+              <div
+                className="px-4 py-2 rounded-full border text-center text-xs font-zain-bold truncate shadow-xs"
+                style={{
+                  borderRadius: "9999px",
+                  backgroundColor: "rgba(245, 158, 11, 0.15)",
+                  borderColor: "rgba(245, 158, 11, 0.35)",
+                  color: "#d97706",
+                }}
+              >
+                تعذر تحديد الموقع تلقائياً، يمكنك الاختيار بدقة من الخريطة
               </div>
-              {prayerState.location.displayAddress && (
-                <div className="mt-0.5 opacity-75">{prayerState.location.displayAddress}</div>
-              )}
             </div>
           )}
 
-          <div className="px-4 sm:px-5 pb-5 pt-1">
-            {/* Error or Success notification */}
-            {detectError && (
-              <div
-                className="mb-3 p-2.5 rounded-2xl text-xs font-zain-bold text-center border"
-                style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.1)",
-                  borderColor: "rgba(239, 68, 68, 0.3)",
-                  color: "#ef4444",
-                }}
-              >
-                {detectError}
-              </div>
-            )}
-
-            {/* Options List: Compact, Refined, Rounded-2xl Cards */}
-            <div className="space-y-2.5">
-              {/* Option 1: تحديد الموقع تلقائياً */}
+          {/* Options List */}
+          <div className="px-5 pb-4">
+            <div className="space-y-2">
+              {/* Option 1: التحديد التلقائي عبر GPS */}
               <button
                 type="button"
                 onClick={handleTriggerAutoDetect}
                 disabled={isDetecting}
-                className="w-full text-right p-3 sm:p-3.5 rounded-[22px] border transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center justify-between group"
+                className="w-full h-12 px-3.5 rounded-full border transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center justify-between gap-3 group shadow-xs"
                 style={{
-                  backgroundColor: isAuto
-                    ? `${currentTheme.accent}12`
-                    : currentTheme.isDark
-                    ? "rgba(255,255,255,0.03)"
-                    : "rgba(0,0,0,0.02)",
-                  borderColor: isAuto
-                    ? `${currentTheme.accent}45`
-                    : currentTheme.border,
+                  borderRadius: "9999px",
+                  backgroundColor: currentTheme.isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.03)",
+                  borderColor: currentTheme.border,
                 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center border shadow-2xs shrink-0 transition-transform group-hover:scale-105"
+                    className="w-7 h-7 rounded-full flex items-center justify-center border shrink-0 transition-transform group-hover:scale-105"
                     style={{
                       backgroundColor: `${currentTheme.accent}18`,
                       borderColor: `${currentTheme.accent}35`,
@@ -213,115 +244,84 @@ export const LocationBottomSheet: React.FC = () => {
                     }}
                   >
                     {isDetecting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : detectSuccess ? (
-                      <Check className="w-4 h-4 text-green-600" />
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
                     ) : (
-                      <Navigation className="w-4 h-4" />
+                      <Navigation className="w-3.5 h-3.5" />
                     )}
                   </div>
 
-                  <div className="flex flex-col">
-                    <span
-                      className="font-zain-bold text-sm leading-snug"
-                      style={{ color: currentTheme.text }}
-                    >
-                      تحديد الموقع تلقائياً
-                    </span>
-                    <span
-                      className="font-zain-reg text-xs opacity-65 leading-tight"
-                      style={{ color: currentTheme.secondary }}
-                    >
-                      {isDetecting
-                        ? "جارٍ استشعار الموقع عبر الأقمار الصناعية..."
-                        : "تفعيل GPS لحساب المواقيت بدقة حسب موقعك الفعلي"}
-                    </span>
-                  </div>
+                  <span
+                    className="font-zain-bold text-xs sm:text-sm truncate whitespace-nowrap"
+                    style={{ color: currentTheme.text }}
+                  >
+                    {isDetecting
+                      ? "جارٍ استشعار الموقع عبر GPS..."
+                      : detectSuccess
+                      ? "تم تحديد موقعك بدقة!"
+                      : "تحديد موقعي تلقائياً (GPS)"}
+                  </span>
                 </div>
 
-                {/* Compact Toggle Switch */}
                 <div
-                  className="w-10 h-6 rounded-full p-0.5 transition-all duration-300 flex items-center border shrink-0"
+                  className="w-6 h-6 rounded-full flex items-center justify-center border shrink-0 transition-transform group-hover:-translate-x-0.5"
                   style={{
-                    backgroundColor: isAuto
-                      ? currentTheme.accent
-                      : currentTheme.isDark
-                      ? "rgba(255, 255, 255, 0.15)"
-                      : "rgba(0, 0, 0, 0.12)",
-                    borderColor: isAuto
-                      ? currentTheme.accent
-                      : currentTheme.border,
-                    justifyContent: isAuto ? "flex-start" : "flex-end",
+                    backgroundColor: `${currentTheme.accent}10`,
+                    borderColor: `${currentTheme.accent}20`,
+                    color: currentTheme.accent,
                   }}
                 >
-                  <motion.div
-                    layout
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    className="w-5 h-5 rounded-full bg-white shadow-xs flex items-center justify-center"
-                  >
-                    {isDetecting && (
-                      <Loader2 className="w-2.5 h-2.5 animate-spin text-gray-700" />
-                    )}
-                  </motion.div>
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </div>
               </button>
 
-              {/* Option 2: تحديد يدوياً (الخريطة والبحث) */}
+              {/* Option 2: الخريطة التفاعلية */}
               <button
                 type="button"
                 onClick={() => {
                   closeLocationSheet();
                   openLocationPicker();
                 }}
-                className="w-full text-right p-3 sm:p-3.5 rounded-[22px] border transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center justify-between group"
+                disabled={isDetecting}
+                className="w-full h-12 px-3.5 rounded-full border transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center justify-between gap-3 group shadow-xs"
                 style={{
-                  backgroundColor: !isAuto
-                    ? `${currentTheme.accent}12`
-                    : currentTheme.isDark
-                    ? "rgba(255,255,255,0.03)"
-                    : "rgba(0,0,0,0.02)",
-                  borderColor: !isAuto
-                    ? `${currentTheme.accent}45`
-                    : currentTheme.border,
+                  borderRadius: "9999px",
+                  backgroundColor: currentTheme.isDark
+                    ? "rgba(255,255,255,0.06)"
+                    : "rgba(0,0,0,0.03)",
+                  borderColor: currentTheme.border,
                 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center border shadow-2xs shrink-0 transition-transform group-hover:scale-105"
+                    className="w-7 h-7 rounded-full flex items-center justify-center border shrink-0 transition-transform group-hover:scale-105"
                     style={{
                       backgroundColor: `${currentTheme.accent}18`,
                       borderColor: `${currentTheme.accent}35`,
                       color: currentTheme.accent,
                     }}
                   >
-                    <Map className="w-4 h-4" />
+                    <Map className="w-3.5 h-3.5" />
                   </div>
 
-                  <div className="flex flex-col">
-                    <span
-                      className="font-zain-bold text-sm leading-snug"
-                      style={{ color: currentTheme.text }}
-                    >
-                      تحديد يدوياً (الخريطة والبحث)
-                    </span>
-                    <span
-                      className="font-zain-reg text-xs opacity-65 leading-tight"
-                      style={{ color: currentTheme.secondary }}
-                    >
-                      اختيار أي مدينة أو قرية أو عزبة من الخريطة المباشرة
-                    </span>
-                  </div>
+                  <span
+                    className="font-zain-bold text-xs sm:text-sm truncate whitespace-nowrap"
+                    style={{ color: currentTheme.text }}
+                  >
+                    تحديد من الخريطة التفاعلية
+                  </span>
                 </div>
 
                 <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center border shadow-2xs shrink-0 transition-transform group-hover:-translate-x-1"
+                  className="w-6 h-6 rounded-full flex items-center justify-center border shrink-0 transition-transform group-hover:-translate-x-0.5"
                   style={{
-                    backgroundColor: `${currentTheme.accent}12`,
-                    borderColor: `${currentTheme.accent}25`,
+                    backgroundColor: `${currentTheme.accent}10`,
+                    borderColor: `${currentTheme.accent}20`,
                     color: currentTheme.accent,
                   }}
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5" />
                 </div>
               </button>
             </div>
@@ -331,6 +331,5 @@ export const LocationBottomSheet: React.FC = () => {
     </AnimatePresence>
   );
 };
-
 
 export default LocationBottomSheet;

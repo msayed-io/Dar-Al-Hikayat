@@ -54,6 +54,20 @@ export const UpdateDialog: React.FC = () => {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [downloadedFilePath, setDownloadedFilePath] = useState<string | null>(null);
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    let element = document.getElementById("dar-update-dialog-root");
+    if (!element) {
+      element = document.createElement("div");
+      element.id = "dar-update-dialog-root";
+      element.style.position = "relative";
+      element.style.zIndex = "2147483647";
+      document.body.appendChild(element);
+    }
+    setPortalNode(element);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToUpdateDialog((state) => {
@@ -143,8 +157,14 @@ export const UpdateDialog: React.FC = () => {
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      id="dar-update-dialog-overlay"
       dir="rtl"
+      className="fixed inset-0 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      style={{
+        zIndex: 2147483647,
+        isolation: "isolate",
+        pointerEvents: "auto",
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget && !isMandatory && step === "prompt") {
           handleIgnore();
@@ -160,7 +180,7 @@ export const UpdateDialog: React.FC = () => {
           padding: "24px 20px",
           backgroundColor: currentTheme.bg,
           borderColor: currentTheme.border,
-          boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.35)"}`,
+          boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -534,8 +554,14 @@ export const UpdateDialog: React.FC = () => {
     </div>
   );
 
-  if (typeof document !== "undefined") {
-    return createPortal(modalContent, document.body);
+  const targetNode =
+    portalNode ||
+    (typeof document !== "undefined"
+      ? document.getElementById("dar-update-dialog-root") || document.body
+      : null);
+
+  if (targetNode) {
+    return createPortal(modalContent, targetNode);
   }
 
   return modalContent;

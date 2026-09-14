@@ -299,3 +299,35 @@
   min-height: 0;
 }
 
+/* ============================================================
+   إصلاح وتثبيت خريطة جوجل التفاعلية (Leaflet RTL & Rendering Fix)
+   ============================================================ */
+.leaflet-container {
+  direction: ltr !important;
+  text-align: left !important;
+  background-color: #121A1B !important;
+  font-family: inherit !important;
+  width: 100% !important;
+  height: 100% !important;
+  outline: none !important;
+}
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+  direction: ltr !important;
+  left: 0;
+  top: 0;
+}
+
+.leaflet-tile-loaded {
+  opacity: 1 !important;
+}
+

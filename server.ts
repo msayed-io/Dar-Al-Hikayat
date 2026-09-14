@@ -20,7 +20,7 @@ async function startServer() {
     return key;
   }
 
-  const CANDIDATE_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"];
+  const CANDIDATE_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"];
 
   // Key validation endpoint for Settings Page
   app.post("/api/gemini/validate-key", async (req, res) => {
@@ -46,7 +46,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.8-flash",
         contents: [{ role: "user", parts: [{ text: "ping" }] }],
         config: {
           maxOutputTokens: 5,
@@ -117,7 +117,7 @@ async function startServer() {
       });
 
       const modelsToTry = Array.from(
-        new Set([model || "gemini-2.5-flash", ...CANDIDATE_MODELS])
+        new Set([model || "gemini-3.8-flash", ...CANDIDATE_MODELS])
       );
 
       let streamStarted = false;
@@ -267,7 +267,7 @@ async function startServer() {
       });
 
       const modelsToTry = Array.from(
-        new Set([model || "gemini-2.5-flash", ...CANDIDATE_MODELS])
+        new Set([model || "gemini-3.8-flash", ...CANDIDATE_MODELS])
       );
 
       let lastError: any = null;

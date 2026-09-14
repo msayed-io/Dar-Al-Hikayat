@@ -9,13 +9,20 @@ import type {
   PrayerState,
   PrayerLocation,
 } from "../lib/prayer-config";
-import { schedulePrayerAlarms } from "../lib/prayer-alarms";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
+import {
+  schedulePrayerAlarms,
+  performSilentResumeLocationRefresh,
+  clearAllLocationCache,
+  getLastSavedLocation,
+  saveSavedLocation,
+} from "../lib/prayer-alarms";
 
-// --- Shared Type Definitions ---
 export interface NoteStyles {
   fontSize: number;
   fontWeight: number;
-  textAlign: "right" | "center" | "left" | "justify"; // <-- إضافة الضبط هنا
+  textAlign: "right" | "center" | "left" | "justify";
   textColor: string;
   paperStyleIndex: number;
 }
@@ -28,8 +35,8 @@ export interface Note {
   date: string;
   category: string;
   styles: NoteStyles;
-  isLocked?: boolean; // هل الحكاية مغلقة؟
-  password?: string; // كلمة المرور (تعمل محلياً)
+  isLocked?: boolean;
+  password?: string;
 }
 
 export interface NoteSaveData {
@@ -42,36 +49,25 @@ export interface NoteSaveData {
 }
 
 // --- Theme Definitions ---
-export type ThemeMode = "modern_studio" | "royal_classic" | "night_whisper";
+export type ThemeMode = "royal_classic" | "night_whisper";
 
 export interface ThemeColors {
   mode: ThemeMode;
-  bg: string; // Main Background
-  text: string; // Main Text
-  accent: string; // Golden/Highlight
-  secondary: string; // Faded text
-  glass: string; // Glass background color
-  border: string; // Border color
-  shadow: string; // Shadow color
+  bg: string;
+  text: string;
+  accent: string;
+  secondary: string;
+  glass: string;
+  border: string;
+  shadow: string;
   isDark: boolean;
 }
 
 const themes: Record<ThemeMode, ThemeColors> = {
-  modern_studio: {
-    mode: "modern_studio",
-    bg: "#F4F1EA", // Porcelain
-    text: "#2C3E30", // Greyish Olive
-    accent: "#A7AA63", // Gold
-    secondary: "#5A6A5E",
-    glass: "rgba(244, 241, 234, 0.85)",
-    border: "rgba(44, 62, 48, 0.1)",
-    shadow: "rgba(44, 62, 48, 0.05)",
-    isDark: false,
-  },
   royal_classic: {
     mode: "royal_classic",
-    bg: "#EAE6D2", // Classic Cream
-    text: "#121A1B", // Deep Oil/Black
+    bg: "#EAE6D2",
+    text: "#121A1B",
     accent: "#A7AA63",
     secondary: "#4A5556",
     glass: "rgba(234, 230, 210, 0.9)",
@@ -81,10 +77,10 @@ const themes: Record<ThemeMode, ThemeColors> = {
   },
   night_whisper: {
     mode: "night_whisper",
-    bg: "#111718", // Deep warm charcoal slate - matte, zero glare, soothing for long reading/writing
-    text: "#E2DFD2", // Warm ivory parchment text - soft on retinas
-    accent: "#9FA365", // Muted matte antique olive-gold - non-glowing
-    secondary: "#7F8C8E", // Muted slate secondary text
+    bg: "#111718",
+    text: "#E2DFD2",
+    accent: "#9FA365",
+    secondary: "#7F8C8E",
     glass: "rgba(17, 23, 24, 0.88)",
     border: "rgba(226, 223, 210, 0.08)",
     shadow: "rgba(0, 0, 0, 0.45)",
@@ -97,8 +93,8 @@ interface AppContextType {
   notes: Note[];
   currentView: "home" | "editor" | "settings" | "prayer" | "locationPicker";
   selectedNote: Note | null;
-  currentTheme: ThemeColors; // Added Theme
-  isSelectionMode: boolean; // Deletion / selection mode active
+  currentTheme: ThemeColors;
+  isSelectionMode: boolean;
   setIsSelectionMode: (active: boolean) => void;
   prayerState: import("../lib/prayer-config").PrayerState;
   updatePrayerState: (
@@ -115,7 +111,8 @@ interface AppContextType {
   closeLocationSheet: () => void;
   saveNote: (noteData: NoteSaveData) => void;
   deleteNotes: (idsToDelete: number[]) => void;
-  toggleTheme: (mode: ThemeMode) => void; // Added Theme Toggle
+  toggleTheme: (mode: ThemeMode) => void;
+  clearLocationCache: () => void;
 }
 
 export type { PrayerLocation, PrayerState, CalculationMethodId } from "../lib/prayer-config";
@@ -158,37 +155,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         return savedTheme;
       }
     }
-    return "modern_studio";
+    return "royal_classic";
   });
 
-  // Initialize Prayer State from LocalStorage (with safe default location)
+  // تهيئة حالة الصلاة: الاعتماد الدقيق على الطبقة 2 (آخر موقع تم استشعاره بنجاح وحفظه من الـ GPS)
   const [prayerState, setPrayerState] = useState<PrayerState>(() => {
-    const DEFAULT_INIT_LOCATION: PrayerLocation = {
-      latitude: 30.0444,
-      longitude: 31.2357,
-      cityName: "القاهرة",
-      cityNameAr: "القاهرة",
-      countryNameAr: "مصر",
-      timezoneId: "Africa/Cairo",
-      isAutoDetected: false,
-    };
-
     if (typeof window !== "undefined") {
       try {
-        const savedLocation = localStorage.getItem("dar_prayer_location");
         const savedSettings = localStorage.getItem("dar_prayer_settings");
-        const location = savedLocation ? JSON.parse(savedLocation) : DEFAULT_INIT_LOCATION;
         const settings = savedSettings ? JSON.parse(savedSettings) : {};
+        const savedLoc = getLastSavedLocation();
+
         return {
-          location,
+          location: savedLoc || null,
           method: settings.method || "egyptian",
           isInitialized: settings.isInitialized || false,
         };
       } catch {
-        return { location: DEFAULT_INIT_LOCATION, method: "egyptian", isInitialized: false };
+        return { location: null, method: "egyptian", isInitialized: false };
       }
     }
-    return { location: DEFAULT_INIT_LOCATION, method: "egyptian", isInitialized: false };
+    return { location: null, method: "egyptian", isInitialized: false };
   });
 
   const currentTheme = themes[themeMode];
@@ -210,17 +197,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [themeMode, currentTheme.isDark]);
 
-  // تحديث حالة المواقيت + التخزين المستمر (كما في الإنتاج)
+  // تحديث حالة المواقيت + التخزين المستمر وتغذية الطبقة 2
   const updatePrayerState = (
     partial: Partial<import("../lib/prayer-config").PrayerState>
   ) => {
     setPrayerState((prev) => {
-      const next = { ...prev, ...partial };
-      if (partial.location) {
-        localStorage.setItem(
-          "dar_prayer_location",
-          JSON.stringify(next.location)
-        );
+      const locationToSave = partial.location !== undefined ? partial.location : prev.location;
+
+      const next = {
+        ...prev,
+        ...partial,
+        location: locationToSave,
+      };
+
+      if (locationToSave) {
+        saveSavedLocation(locationToSave);
       }
       if (partial.method || partial.isInitialized !== undefined) {
         localStorage.setItem(
@@ -235,6 +226,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
+  // تفريغ كاش وبيانات الموقع بالكامل
+  const clearLocationCache = () => {
+    clearAllLocationCache();
+    updatePrayerState({
+      location: null,
+    });
+  };
+
   // جدولة منبهات الصلاة تلقائياً عند بدء تشغيل التطبيق أو تحديث الموقع أو طريقة الحساب
   useEffect(() => {
     if (prayerState.location) {
@@ -243,6 +242,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       });
     }
   }, [prayerState.location?.latitude, prayerState.location?.longitude, prayerState.method]);
+
+  // طبقة إضافية: تحديث هادئ عند عودة التطبيق للواجهة (Resume)
+  useEffect(() => {
+    let appListenerHandle: { remove: () => Promise<void> } | null = null;
+
+    const runSilentResumeUpdate = async () => {
+      // فقط إذا كان الموقع تم تحديده تلقائياً مسبقاً
+      if (!prayerState.location?.isAutoDetected) return;
+      try {
+        const freshLocation = await performSilentResumeLocationRefresh();
+        if (freshLocation) {
+          updatePrayerState({ location: freshLocation });
+        }
+      } catch {
+        // بدون إظهار أي خطأ للمستخدم إن فشل — لأن لديه أصلاً موقعاً سابقاً معروضاً
+      }
+    };
+
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener("appStateChange", (state) => {
+        if (state.isActive) {
+          void runSilentResumeUpdate();
+        }
+      }).then((h) => {
+        appListenerHandle = h;
+      }).catch(() => {});
+    }
+
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void runSilentResumeUpdate();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
+    return () => {
+      appListenerHandle?.remove();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+    };
+  }, [prayerState.location?.isAutoDetected]);
 
   const openEditor = (note: Note | null) => {
     setIsSelectionMode(false);
@@ -299,7 +343,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       month: "long",
       year: "numeric",
     });
-    // Strip HTML tags so the home list previews are pristine and text-only
     const cleanContent = noteData.content.replace(/<[^>]*>/g, " ").trim();
     const previewText =
       cleanContent.substring(0, 100) +
@@ -319,7 +362,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
                 isLocked:
                   noteData.isLocked !== undefined
                     ? noteData.isLocked
-                    : n.isLocked, // Keep existing lock state if not provided
+                    : n.isLocked,
                 password:
                   noteData.password !== undefined
                     ? noteData.password
@@ -379,6 +422,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     saveNote,
     deleteNotes,
     toggleTheme,
+    clearLocationCache,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

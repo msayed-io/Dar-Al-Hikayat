@@ -111,9 +111,9 @@ const inkColors = [
 const paperStyles = [
   {
     id: "minimalist",
-    name: "استوديو حديث",
+    name: "ورق كلاسيكي صافٍ",
     icon: FileText,
-    defaultTextColor: "#2C3E30",
+    defaultTextColor: "#121A1B",
     darkTextColor: "#E2DFD2",
     isDark: false,
   },
@@ -606,7 +606,7 @@ const DarAlHikayatMaster: React.FC = () => {
       }
       return initialStyles.textColor;
     }
-    return currentTheme.isDark ? currentTheme.text : "#2C3E30";
+    return currentTheme.isDark ? currentTheme.text : "#121A1B";
   });
   const [activePaperStyleIndex, setActivePaperStyleIndex] = useState(
     initialStyles?.paperStyleIndex || 0,
@@ -1030,7 +1030,7 @@ const DarAlHikayatMaster: React.FC = () => {
       setTextColor(noteTextColor);
       setActivePaperStyleIndex(sIndex);
     } else {
-      setTextColor(currentTheme.isDark ? currentTheme.text : "#2C3E30");
+      setTextColor(currentTheme.isDark ? currentTheme.text : "#121A1B");
       setActivePaperStyleIndex(0);
     }
     // Set Lock State
@@ -1322,7 +1322,7 @@ const DarAlHikayatMaster: React.FC = () => {
           paperStyleIndex: activePaperStyleIndex,
         },
         {
-          bg: currentTheme.isDark ? "#0F1617" : "#F4F1EA",
+          bg: currentTheme.isDark ? "#0F1617" : "#EAE6D2",
           text: currentTheme.isDark ? "#EAE6D2" : "#121A1B",
           secondary: currentTheme.secondary,
         }
@@ -1978,7 +1978,7 @@ const DarAlHikayatMaster: React.FC = () => {
     }
 
     // Light theme backgrounds: comfortable paper textures without aggressive glows
-    if (styleId === "minimalist") return { backgroundColor: "#F4F1EA" };
+    if (styleId === "minimalist") return { backgroundColor: "#EAE6D2" };
     if (styleId === "classic")
       return {
         backgroundColor: "#fdfbf7",
@@ -2061,7 +2061,7 @@ const DarAlHikayatMaster: React.FC = () => {
           'url("https://www.transparenttextures.com/patterns/blueprint.png"), url("https://www.transparenttextures.com/patterns/worn-dots.png")',
         backgroundBlendMode: "multiply",
       };
-    return { backgroundColor: "#F4F1EA" };
+    return { backgroundColor: "#EAE6D2" };
   };
 
   const wordCount = isNovelMode
@@ -3540,18 +3540,12 @@ const DarAlHikayatMaster: React.FC = () => {
                 >
                   {paperStyles[activePaperStyleIndex].name}
                 </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => toggleTheme("modern_studio")}
-                    className={`w-6 h-6 rounded-full border ${currentTheme.mode === "modern_studio" ? "ring-1 ring-offset-1 ring-[#b88a4f]" : ""}`}
-                    style={{
-                      backgroundColor: "#F4F1EA",
-                      borderColor: "#2C3E30",
-                    }}
-                  />
+                <div className="flex gap-1.5 items-center">
                   <button
                     onClick={() => toggleTheme("royal_classic")}
-                    className={`w-6 h-6 rounded-full border ${currentTheme.mode === "royal_classic" ? "ring-1 ring-offset-1 ring-[#b88a4f]" : ""}`}
+                    className={`w-6 h-6 rounded-full border transition-transform cursor-pointer ${currentTheme.mode === "royal_classic" ? "ring-2 ring-offset-1 ring-[#A7AA63] scale-110" : "opacity-75 hover:opacity-100"}`}
+                    title="كلاسيكي ملكي"
+                    aria-label="كلاسيكي ملكي"
                     style={{
                       backgroundColor: "#EAE6D2",
                       borderColor: "#121A1B",
@@ -3559,7 +3553,9 @@ const DarAlHikayatMaster: React.FC = () => {
                   />
                   <button
                     onClick={() => toggleTheme("night_whisper")}
-                    className={`w-6 h-6 rounded-full border flex items-center justify-center ${currentTheme.mode === "night_whisper" ? "ring-1 ring-offset-1 ring-[#b88a4f]" : ""}`}
+                    className={`w-6 h-6 rounded-full border flex items-center justify-center transition-transform cursor-pointer ${currentTheme.mode === "night_whisper" ? "ring-2 ring-offset-1 ring-[#9FA365] scale-110" : "opacity-75 hover:opacity-100"}`}
+                    title="همس الليالي"
+                    aria-label="همس الليالي"
                     style={{
                       backgroundColor: "#111718",
                       borderColor: "#9FA365",

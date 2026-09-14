@@ -407,166 +407,20 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
 }
 
 /**
- * الحصول على موقع موثوق من الجهاز فقط.
- * لا يتم تحويل IP أو المنطقة الزمنية إلى إحداثية تلقائية، لأن ذلك قد يرسل
- * مواقيت الصلاة لمكان مختلف تمامًا عن مكان المستخدم.
+ * نظام تحديد الموقع المرجعي المتقدم (The 5-Layer GPS System)
+ * مُعاد تصميمه بالكامل بـ 5 طبقات حماية تضمن أعلى موثوقية وتحديث هادئ في الخلفية.
  */
-export async function autoDetectLocation(): Promise<PrayerLocation> {
-  type Fix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
-  const fixes: Fix[] = [];
-  const MAX_ACCEPTABLE_ACCURACY_METERS = 150;
-  const REQUIRED_ACCURACY_METERS = 100;
-
-  const distanceMeters = (a: Fix, b: Fix): number => {
-    const earthRadius = 6_371_000;
-    const lat1 = (a.latitude * Math.PI) / 180;
-    const lat2 = (b.latitude * Math.PI) / 180;
-    const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-    const dLng = ((b.longitude - a.longitude) * Math.PI) / 180;
-    const h =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-    return 2 * earthRadius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-  };
-
-  const addFix = (position: { coords: { latitude: number; longitude: number; accuracy?: number | null }; timestamp?: number }) => {
-    const { latitude, longitude, accuracy } = position.coords;
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-    if (!Number.isFinite(accuracy) || (accuracy as number) <= 0) return;
-    if ((accuracy as number) > MAX_ACCEPTABLE_ACCURACY_METERS) return;
-    fixes.push({ latitude, longitude, accuracy: accuracy as number, timestamp: position.timestamp || Date.now() });
-  };
-
-  if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Geolocation")) {
-    const permissions = await Geolocation.checkPermissions();
-    if (permissions.location !== "granted") {
-      const requested = await Geolocation.requestPermissions();
-      if (requested.location !== "granted") {
-        throw new Error("لم يتم منح صلاحية الموقع");
-      }
-    }
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        const position = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-        addFix(position);
-        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= REQUIRED_ACCURACY_METERS) break;
-      } catch (error) {
-        console.warn(`Location measurement ${attempt + 1} failed`, error);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  } else if (typeof navigator !== "undefined" && "geolocation" in navigator) {
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0,
-          });
-        });
-        addFix(position);
-        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= REQUIRED_ACCURACY_METERS) break;
-      } catch (error) {
-        console.warn(`Browser location measurement ${attempt + 1} failed`, error);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-
-  if (fixes.length === 0) {
-    throw new Error("قراءة GPS غير كافية لتحديد العزبة بدقة. فعّل الموقع الدقيق أو اختر المكان على الخريطة.");
-  }
-
-  const bestFix = fixes.reduce((best, current) =>
-    current.accuracy < best.accuracy ? current : best,
-  );
-  const stableFixes = fixes.filter(
-    (fix) => distanceMeters(fix, bestFix) <= Math.max(100, bestFix.accuracy),
-  );
-  if (bestFix.accuracy > REQUIRED_ACCURACY_METERS && stableFixes.length < 2) {
-    throw new Error("لم تثبت قراءات GPS مكانًا واحدًا بدقة كافية. تحرك إلى مكان مفتوح وأعد المحاولة.");
-  }
-  const timezoneId = guessTimezone(bestFix.latitude, bestFix.longitude);
-  let cityName = "موقعي الحالي";
-  let countryName = "";
-  let displayAddress: string | undefined;
-
-  try {
-    const geocode = await reverseGeocodeCoordinates(bestFix.latitude, bestFix.longitude);
-    if (geocode) {
-      cityName = geocode.placeName || cityName;
-      countryName = geocode.countryName || countryName;
-      displayAddress = geocode.displayAddress;
-    }
-  } catch (error) {
-    console.warn("Reverse geocoding failed; keeping the verified coordinates", error);
-  }
-
-  return {
-    latitude: bestFix.latitude,
-    longitude: bestFix.longitude,
-    cityName,
-    cityNameAr: cityName,
-    countryNameAr: countryName || undefined,
-    timezoneId,
-    isAutoDetected: true,
-    accuracyMeters: bestFix.accuracy,
-    capturedAt: bestFix.timestamp,
-    source: bestFix.accuracy <= 100 ? "gps_precise" : "gps_approximate",
-    displayAddress,
-  };
-}
-
-/** أقرب مدينة من قاعدة البيانات */
-export function findNearestCity(lat: number, lng: number): CityData | null {
-  let best: CityData | null = null;
-  let bestDist = Infinity;
-  for (const city of CITIES) {
-    const d = Math.hypot(city.latitude - lat, city.longitude - lng);
-    if (d < bestDist) {
-      bestDist = d;
-      best = city;
-    }
-  }
-  return best;
-}
-
-/** تخمين المنطقة الزمنية من الإحداثيات (خريطة الإنتاج الحرفية) */
-export function guessTimezone(lat: number, lng: number): string {
-  return (
-    (lat >= 22 && lat <= 32 && lng >= 24 && lng <= 37) ? "Africa/Cairo" :
-    (lat >= 16 && lat <= 32 && lng >= 35 && lng <= 55) ? "Asia/Riyadh" :
-    (lat >= 22 && lat <= 27 && lng >= 51 && lng <= 57) ? "Asia/Dubai" :
-    (lat >= 28 && lat <= 31 && lng >= 46 && lng <= 49) ? "Asia/Kuwait" :
-    (lat >= 24 && lat <= 27 && lng >= 50 && lng <= 52) ? "Asia/Qatar" :
-    (lat >= 25 && lat <= 27 && lng >= 50 && lng <= 51) ? "Asia/Bahrain" :
-    (lat >= 16 && lat <= 26 && lng >= 51 && lng <= 60) ? "Asia/Muscat" :
-    (lat >= 29 && lat <= 34 && lng >= 34 && lng <= 40) ? "Asia/Amman" :
-    (lat >= 31 && lat <= 33 && lng >= 34 && lng <= 36) ? "Asia/Hebron" :
-    (lat >= 33 && lat <= 35 && lng >= 35 && lng <= 37) ? "Asia/Beirut" :
-    (lat >= 32 && lat <= 37 && lng >= 35 && lng <= 42) ? "Asia/Damascus" :
-    (lat >= 29 && lat <= 38 && lng >= 38 && lng <= 49) ? "Asia/Baghdad" :
-    (lat >= 27 && lat <= 36 && lng >= -13 && lng <= -1) ? "Africa/Casablanca" :
-    (lat >= 30 && lat <= 38 && lng >= 8 && lng <= 12) ? "Africa/Tunis" :
-    (lat >= 19 && lat <= 37 && lng >= -2 && lng <= 9) ? "Africa/Algiers" :
-    (lat >= 19 && lat <= 33 && lng >= 9 && lng <= 25) ? "Africa/Tripoli" :
-    (lat >= 3 && lat <= 23 && lng >= 21 && lng <= 39) ? "Africa/Khartoum" :
-    (lat >= 36 && lat <= 42 && lng >= 26 && lng <= 45) ? "Europe/Istanbul" :
-    (lat >= 23 && lat <= 37 && lng >= 60 && lng <= 78) ? "Asia/Karachi" :
-    (lat >= -11 && lat <= 6 && lng >= 95 && lng <= 141) ? "Asia/Jakarta" :
-    (lat >= 1 && lat <= 7 && lng >= 99 && lng <= 119) ? "Asia/Kuala_Lumpur" :
-    (lat >= 49 && lat <= 61 && lng >= -8 && lng <= 2) ? "Europe/London" :
-    (lat >= 42 && lat <= 51 && lng >= -5 && lng <= 8) ? "Europe/Paris" :
-    (lat >= 25 && lat <= 49 && lng >= -125 && lng <= -66) ? "America/New_York" :
-    "Africa/Cairo"
-  );
-}
+export {
+  autoDetectLocation,
+  performSilentResumeLocationRefresh,
+  checkOrRequestLocationPermissionSmartly,
+  getLastSavedLocation,
+  saveSavedLocation,
+  LOCATION_ACTIONABLE_ERROR_MESSAGE,
+  guessTimezone,
+  findNearestCity,
+  clearAllLocationCache,
+} from "./gps-location";
 
 /* ─────────────── التخزين ─────────────── */
 
