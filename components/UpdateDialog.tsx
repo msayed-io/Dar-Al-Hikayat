@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
 import {
   Sparkles,
   Download,
   CheckCircle2,
   AlertTriangle,
-  ShieldCheck,
   Loader2,
   RefreshCw,
   ExternalLink,
@@ -31,7 +29,6 @@ import { Capacitor } from "@capacitor/core";
 
 export const UpdateDialog: React.FC = () => {
   const { currentTheme } = useApp();
-  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
 
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
@@ -57,25 +54,6 @@ export const UpdateDialog: React.FC = () => {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [downloadedFilePath, setDownloadedFilePath] = useState<string | null>(null);
-
-  useEffect(() => {
-    const host = document.createElement("div");
-    host.id = "dar-update-dialog-root";
-    host.setAttribute("role", "presentation");
-    Object.assign(host.style, {
-      position: "fixed",
-      inset: "0",
-      zIndex: "2147483647",
-      pointerEvents: "none",
-      isolation: "isolate",
-    });
-    document.body.appendChild(host);
-    setPortalHost(host);
-    return () => {
-      host.remove();
-      setPortalHost(null);
-    };
-  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToUpdateDialog((state) => {
@@ -142,7 +120,6 @@ export const UpdateDialog: React.FC = () => {
 
   const handleGrantPermission = async () => {
     await openInstallSettings();
-    // After user returns from settings, resume download
     setStep("prompt");
   };
 
@@ -155,424 +132,411 @@ export const UpdateDialog: React.FC = () => {
 
   const formatMB = (bytes: number) => {
     if (!bytes || bytes <= 0) return "";
-    return (bytes / (1024 * 1024)).toFixed(1) + " ميجابايت";
+    return (bytes / (1024 * 1024)).toFixed(1) + " م.ب";
   };
 
-  if (!portalHost || !dialogState.isOpen || !dialogState.updateInfo) {
+  if (!dialogState.isOpen || !dialogState.updateInfo) {
     return null;
   }
 
-  const { updateInfo, currentVersion, isMandatory } = dialogState;
+  const { updateInfo, isMandatory } = dialogState;
 
-  return createPortal(
-    (
-    <AnimatePresence>
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      dir="rtl"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isMandatory && step === "prompt") {
+          handleIgnore();
+        }
+      }}
+    >
       <div
-        className="fixed inset-0 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
-        style={{ zIndex: 2147483647, pointerEvents: "auto" }}
-        dir="rtl"
+        className="unlock-modal border shadow-2xl text-center animate-in zoom-in-95 duration-200 relative flex flex-col items-center select-none"
+        style={{
+          width: "290px",
+          maxWidth: "calc(100vw - 32px)",
+          borderRadius: "28px",
+          padding: "24px 20px",
+          backgroundColor: currentTheme.bg,
+          borderColor: currentTheme.border,
+          boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.35)"}`,
+        }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          transition={{ type: "spring", stiffness: 260, damping: 25 }}
-          className="relative w-full max-w-sm border shadow-2xl overflow-hidden rounded-[28px] p-6 flex flex-col items-center text-center"
-          style={{
-            backgroundColor: currentTheme.bg,
-            borderColor: currentTheme.border,
-            boxShadow: `0 24px 48px -12px ${currentTheme.shadow || "rgba(0,0,0,0.35)"}`,
-          }}
-        >
-          {/* Close button for non-mandatory updates */}
-          {!isMandatory && step === "prompt" && (
-            <button
-              onClick={handleIgnore}
-              className="absolute top-4 left-4 w-8 h-8 rounded-full border flex items-center justify-center opacity-60 hover:opacity-100 transition-all cursor-pointer active:scale-90"
-              style={{
-                backgroundColor: `${currentTheme.bg}80`,
-                borderColor: currentTheme.border,
-                color: currentTheme.text,
-              }}
-              title="إغلاق"
-              aria-label="إغلاق"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* ─── STEP 1: Prompt & Release Notes ─── */}
-          {step === "prompt" && (
-            <div className="w-full flex flex-col items-center">
-              {/* Badge Icon */}
-              <div
-                className="w-16 h-16 rounded-3xl border flex items-center justify-center mb-4 shadow-md transition-all"
-                style={{
-                  backgroundColor: `${currentTheme.accent}18`,
-                  borderColor: `${currentTheme.accent}35`,
-                }}
-              >
-                <Sparkles
-                  className="w-8 h-8 animate-pulse"
-                  style={{ color: currentTheme.accent }}
-                  strokeWidth={2.2}
-                />
-              </div>
-
-              {/* Title & Version */}
-              <h2
-                className="text-xl font-zain-xbold mb-1.5 leading-snug"
-                style={{ color: currentTheme.text }}
-              >
-                يوجد تحديث جديد لدار الحكايات
-              </h2>
-
-              <div className="flex items-center gap-2 mb-4">
-                <span
-                  className="px-3 py-0.5 rounded-full text-xs font-zain-bold border"
-                  style={{
-                    backgroundColor: `${currentTheme.accent}15`,
-                    borderColor: `${currentTheme.accent}30`,
-                    color: currentTheme.accent,
-                  }}
-                >
-                  الإصدار الجديد: {updateInfo.versionName}
-                </span>
-
-                {currentVersion && (
-                  <span
-                    className="text-[11px] font-zain-reg opacity-60"
-                    style={{ color: currentTheme.text }}
-                  >
-                    (الحالي: {currentVersion.versionName})
-                  </span>
-                )}
-              </div>
-
-              {/* Release Notes Card */}
-              {updateInfo.releaseNotes && updateInfo.releaseNotes.length > 0 && (
-                <div
-                  className="w-full text-right p-3.5 rounded-2xl border mb-5 max-h-48 overflow-y-auto"
-                  style={{
-                    backgroundColor: `${currentTheme.glass}`,
-                    borderColor: currentTheme.border,
-                  }}
-                >
-                  <p
-                    className="text-xs font-zain-bold mb-2 flex items-center gap-1.5"
-                    style={{ color: currentTheme.accent }}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>أبرز التحسينات والمستجدات:</span>
-                  </p>
-                  <ul className="space-y-1.5 pr-2">
-                    {updateInfo.releaseNotes.map((note, index) => (
-                      <li
-                        key={index}
-                        className="text-xs font-zain-reg opacity-85 leading-relaxed flex items-start gap-1.5"
-                        style={{ color: currentTheme.text }}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                          style={{ backgroundColor: currentTheme.accent }}
-                        />
-                        <span>{note}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Security guarantee note */}
-              <div
-                className="flex items-center justify-center gap-1.5 text-[11px] font-zain-reg opacity-65 mb-5"
-                style={{ color: currentTheme.text }}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>نسخة رسمية وموقعة • تبقى كافة رواياتك وبياناتك آمنة</span>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-center gap-3 w-full">
-                <button
-                  onClick={handleStartUpdate}
-                  className="flex-1 h-11 rounded-full font-zain-bold text-sm text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  style={{
-                    backgroundColor: currentTheme.accent,
-                    boxShadow: `0 8px 20px -4px ${currentTheme.accent}40`,
-                  }}
-                >
-                  <Download className="w-4 h-4" />
-                  <span>تحديث الآن</span>
-                </button>
-
-                {!isMandatory && (
-                  <button
-                    onClick={handleIgnore}
-                    className="h-11 px-5 rounded-full font-zain-bold text-xs border active:scale-95 transition-all opacity-70 hover:opacity-100 cursor-pointer flex items-center justify-center"
-                    style={{
-                      backgroundColor: `${currentTheme.bg}90`,
-                      borderColor: currentTheme.border,
-                      color: currentTheme.text,
-                    }}
-                  >
-                    لاحقًا
-                  </button>
-                )}
-              </div>
+        {/* ─── STEP 1: Prompt & Release Notes ─── */}
+        {step === "prompt" && (
+          <>
+            {/* Top Pure Icon - Pure & Standing on its own without extra circles */}
+            <div className="flex justify-center mb-3">
+              <Sparkles
+                className="w-7 h-7"
+                style={{ color: currentTheme.accent }}
+                strokeWidth={2}
+              />
             </div>
-          )}
 
-          {/* ─── STEP 2: Downloading Progress ─── */}
-          {step === "downloading" && (
-            <div className="w-full flex flex-col items-center py-2">
-              <div
-                className="w-16 h-16 rounded-3xl border flex items-center justify-center mb-4 relative"
+            {/* Dialog Title */}
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              تحديث دار الحكايات
+            </h2>
+
+            {/* Version Badge */}
+            <div className="flex justify-center mb-2.5">
+              <span
+                className="px-3 py-0.5 rounded-full text-[11px] font-zain-bold border leading-tight"
                 style={{
-                  backgroundColor: `${currentTheme.accent}15`,
+                  backgroundColor: `${currentTheme.accent}12`,
                   borderColor: `${currentTheme.accent}30`,
+                  color: currentTheme.accent,
                 }}
               >
-                <ArrowDownToLine
-                  className="w-8 h-8 animate-bounce"
-                  style={{ color: currentTheme.accent }}
-                  strokeWidth={2.2}
-                />
-              </div>
+                الإصدار الجديد {updateInfo.versionName}
+              </span>
+            </div>
 
-              <h2
-                className="text-lg font-zain-xbold mb-1 leading-snug"
-                style={{ color: currentTheme.text }}
-              >
-                جاري تنزيل التحديث...
-              </h2>
-
-              <p
-                className="text-xs font-zain-reg opacity-70 mb-4 leading-normal"
-                style={{ color: currentTheme.text }}
-              >
-                يرجى الانتظار بينما يتم تنزيل حزمة التحديث الرسمية
-              </p>
-
-              {/* Percentage & Sizes */}
-              <div className="w-full flex items-center justify-between text-xs font-zain-bold mb-1.5 px-1">
-                <span style={{ color: currentTheme.accent }}>
-                  {progress.progress}%
-                </span>
-                {progress.totalBytes > 0 && (
-                  <span
-                    className="font-mono text-[11px] opacity-60"
-                    dir="ltr"
-                    style={{ color: currentTheme.text }}
-                  >
-                    {formatMB(progress.bytesDownloaded)} / {formatMB(progress.totalBytes)}
-                  </span>
-                )}
-              </div>
-
-              {/* Progress Track */}
+            {/* Release Notes (if any) */}
+            {updateInfo.releaseNotes && updateInfo.releaseNotes.length > 0 ? (
               <div
-                className="w-full h-3 rounded-full border overflow-hidden p-0.5 mb-6"
+                className="w-full text-right p-2.5 rounded-2xl border mb-3 max-h-32 overflow-y-auto"
                 style={{
-                  backgroundColor: `${currentTheme.border}40`,
+                  backgroundColor: `${currentTheme.accent}0a`,
                   borderColor: currentTheme.border,
                 }}
               >
-                <motion.div
-                  className="h-full rounded-full transition-all duration-200"
-                  style={{
-                    width: `${Math.max(5, progress.progress)}%`,
-                    backgroundColor: currentTheme.accent,
-                  }}
-                />
+                <ul className="space-y-1">
+                  {updateInfo.releaseNotes.map((note, index) => (
+                    <li
+                      key={index}
+                      className="text-[11px] font-zain-reg leading-relaxed opacity-85 flex items-start gap-1.5"
+                      style={{ color: currentTheme.text }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
+                        style={{ backgroundColor: currentTheme.accent }}
+                      />
+                      <span>{note}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
+            ) : (
+              <p
+                className="text-xs font-zain-reg mb-3 opacity-70 leading-relaxed text-center px-1"
+                style={{ color: currentTheme.text }}
+              >
+                يتوفر إصدار أحدث يضم تحسينات للأداء وميزات جديدة.
+              </p>
+            )}
 
-              {/* Cancel Button */}
+            {/* Subtext reassurance */}
+            <p
+              className="text-[10.5px] font-zain-reg opacity-60 mb-4 text-center leading-tight"
+              style={{ color: currentTheme.text }}
+            >
+              نسخة رسمية وموقعة • بياناتك وحكاياتك آمنة
+            </p>
+
+            {/* Action Buttons - Capsule Pill Buttons matching Story Lock Dialog */}
+            <div className="flex items-center justify-center gap-2.5">
+              <button
+                onClick={handleStartUpdate}
+                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
+                style={{
+                  height: "34px",
+                  padding: "0 22px",
+                  borderRadius: "9999px",
+                  backgroundColor: currentTheme.accent,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>تحديث الآن</span>
+              </button>
+
               {!isMandatory && (
                 <button
-                  onClick={closeUpdateDialog}
-                  className="h-9 px-6 rounded-full text-xs font-zain-bold border opacity-60 hover:opacity-100 transition-all cursor-pointer active:scale-95"
+                  onClick={handleIgnore}
+                  className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
                   style={{
-                    backgroundColor: `${currentTheme.bg}90`,
-                    borderColor: currentTheme.border,
-                    color: currentTheme.text,
+                    height: "34px",
+                    padding: "0 16px",
+                    borderRadius: "9999px",
+                    color: currentTheme.secondary,
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  إلغاء التنزيل
+                  لاحقًا
                 </button>
               )}
             </div>
-          )}
+          </>
+        )}
 
-          {/* ─── STEP 3: Verifying SHA-256 Checksum ─── */}
-          {step === "verifying" && (
-            <div className="w-full flex flex-col items-center py-4">
-              <Loader2
-                className="w-12 h-12 animate-spin mb-4"
+        {/* ─── STEP 2: Downloading Progress ─── */}
+        {step === "downloading" && (
+          <>
+            <div className="flex justify-center mb-3">
+              <ArrowDownToLine
+                className="w-7 h-7 animate-bounce"
                 style={{ color: currentTheme.accent }}
+                strokeWidth={2}
               />
-              <h2
-                className="text-base font-zain-xbold mb-1.5 leading-snug"
-                style={{ color: currentTheme.text }}
-              >
-                التحقق الأمني من سلامة الحزمة...
-              </h2>
-              <p
-                className="text-xs font-zain-reg opacity-70 leading-relaxed text-center px-4"
-                style={{ color: currentTheme.text }}
-              >
-                فحص البصمة الرقمية (SHA-256) للتأكد من سلامة الملف ومطابقته للأصل
-              </p>
             </div>
-          )}
 
-          {/* ─── STEP 4: Ready To Install ─── */}
-          {step === "ready_to_install" && (
-            <div className="w-full flex flex-col items-center py-2">
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              جاري تنزيل التحديث
+            </h2>
+
+            <p
+              className="text-xs font-zain-reg mb-3 opacity-70 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              يرجى الانتظار لحين اكتمال تنزيل حزمة التحديث
+            </p>
+
+            {/* Progress Percentage & Sizes */}
+            <div className="w-full flex items-center justify-between text-xs font-zain-bold mb-1 px-1">
+              <span style={{ color: currentTheme.accent }}>
+                {progress.progress}%
+              </span>
+              {progress.totalBytes > 0 && (
+                <span
+                  className="font-mono text-[10px] opacity-60"
+                  dir="ltr"
+                  style={{ color: currentTheme.text }}
+                >
+                  {formatMB(progress.bytesDownloaded)} / {formatMB(progress.totalBytes)}
+                </span>
+              )}
+            </div>
+
+            {/* Capsule Progress Bar */}
+            <div
+              className="w-full h-2 rounded-full border overflow-hidden p-0.5 mb-4"
+              style={{
+                backgroundColor: `${currentTheme.accent}0a`,
+                borderColor: currentTheme.border,
+              }}
+            >
               <div
-                className="w-16 h-16 rounded-3xl border flex items-center justify-center mb-4"
+                className="h-full rounded-full transition-all duration-200"
                 style={{
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  borderColor: "rgba(16, 185, 129, 0.35)",
+                  width: `${Math.max(5, progress.progress)}%`,
+                  backgroundColor: currentTheme.accent,
+                }}
+              />
+            </div>
+
+            {!isMandatory && (
+              <button
+                onClick={closeUpdateDialog}
+                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
+                style={{
+                  height: "34px",
+                  padding: "0 18px",
+                  borderRadius: "9999px",
+                  color: currentTheme.secondary,
+                  whiteSpace: "nowrap",
                 }}
               >
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-              </div>
+                إلغاء التنزيل
+              </button>
+            )}
+          </>
+        )}
 
-              <h2
-                className="text-lg font-zain-xbold mb-1.5 leading-snug"
-                style={{ color: currentTheme.text }}
-              >
-                اكتمل تنزيل التحديث بنجاح!
-              </h2>
+        {/* ─── STEP 3: Verifying SHA-256 Checksum ─── */}
+        {step === "verifying" && (
+          <>
+            <div className="flex justify-center mb-3">
+              <Loader2
+                className="w-7 h-7 animate-spin"
+                style={{ color: currentTheme.accent }}
+                strokeWidth={2}
+              />
+            </div>
 
-              <p
-                className="text-xs font-zain-reg opacity-75 mb-6 leading-relaxed"
-                style={{ color: currentTheme.text }}
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              فحص سلامة الحزمة
+            </h2>
+
+            <p
+              className="text-xs font-zain-reg mb-2 opacity-70 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              جاري التحقق من البصمة الرقمية (SHA-256) للتأكد من سلامة الملف ومطابقته للأصل...
+            </p>
+          </>
+        )}
+
+        {/* ─── STEP 4: Ready To Install ─── */}
+        {step === "ready_to_install" && (
+          <>
+            <div className="flex justify-center mb-3">
+              <CheckCircle2
+                className="w-7 h-7 text-emerald-600 dark:text-emerald-400"
+                strokeWidth={2}
+              />
+            </div>
+
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              اكتمل التنزيل بنجاح
+            </h2>
+
+            <p
+              className="text-xs font-zain-reg mb-4 opacity-75 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              اضغط على تثبيت للمتابعة وتحديث التطبيق فورًا.
+            </p>
+
+            <button
+              onClick={handleStartUpdate}
+              className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
+              style={{
+                height: "34px",
+                padding: "0 22px",
+                borderRadius: "9999px",
+                backgroundColor: currentTheme.accent,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>تثبيت التحديث</span>
+            </button>
+          </>
+        )}
+
+        {/* ─── STEP 5: Unknown App Sources Permission Required ─── */}
+        {step === "permission_required" && (
+          <>
+            <div className="flex justify-center mb-3">
+              <ShieldAlert
+                className="w-7 h-7 text-amber-500"
+                strokeWidth={2}
+              />
+            </div>
+
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              style={{ color: currentTheme.text }}
+            >
+              إذن تثبيت التحديثات
+            </h2>
+
+            <p
+              className="text-xs font-zain-reg mb-4 opacity-75 leading-relaxed text-center px-1"
+              style={{ color: currentTheme.text }}
+            >
+              يتطلب نظام أندرويد تفعيل خيار <strong>"السماح بتثبيت التطبيقات من هذا المصدر"</strong> لمرة واحدة.
+            </p>
+
+            <div className="flex items-center justify-center gap-2.5">
+              <button
+                onClick={handleGrantPermission}
+                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                style={{
+                  height: "34px",
+                  padding: "0 18px",
+                  borderRadius: "9999px",
+                  backgroundColor: currentTheme.accent,
+                  whiteSpace: "nowrap",
+                }}
               >
-                اضغط على زر التثبيت أدناه، ثم اختر <strong>"تثبيت"</strong> في نافذة أندرويد لإتمام التحديث فورًا.
-              </p>
+                تفعيل الإذن
+              </button>
 
               <button
-                onClick={handleStartUpdate}
-                className="w-full h-11 rounded-full font-zain-bold text-sm text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => setStep("prompt")}
+                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
                 style={{
-                  backgroundColor: currentTheme.accent,
-                  boxShadow: `0 8px 20px -4px ${currentTheme.accent}40`,
+                  height: "34px",
+                  padding: "0 14px",
+                  borderRadius: "9999px",
+                  color: currentTheme.secondary,
+                  whiteSpace: "nowrap",
                 }}
               >
-                <ExternalLink className="w-4 h-4" />
-                <span>فتح شاشة التثبيت الآن</span>
+                رجوع
               </button>
             </div>
-          )}
+          </>
+        )}
 
-          {/* ─── STEP 5: Unknown App Sources Permission Required ─── */}
-          {step === "permission_required" && (
-            <div className="w-full flex flex-col items-center py-2">
-              <div
-                className="w-16 h-16 rounded-3xl border flex items-center justify-center mb-4"
+        {/* ─── STEP 6: Error State ─── */}
+        {step === "error" && (
+          <>
+            <div className="flex justify-center mb-3">
+              <AlertTriangle
+                className="w-7 h-7 text-red-500"
+                strokeWidth={2}
+              />
+            </div>
+
+            <h2
+              className="text-base font-zain-xbold mb-1 leading-tight text-center text-red-500"
+            >
+              تعذر إتمام التحديث
+            </h2>
+
+            <p
+              className="text-xs font-zain-reg mb-4 opacity-80 leading-relaxed text-center px-1 text-red-500"
+            >
+              {errorMessage}
+            </p>
+
+            <div className="flex items-center justify-center gap-2.5">
+              <button
+                onClick={handleStartUpdate}
+                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
                 style={{
-                  backgroundColor: "rgba(245, 158, 11, 0.15)",
-                  borderColor: "rgba(245, 158, 11, 0.35)",
+                  height: "34px",
+                  padding: "0 18px",
+                  borderRadius: "9999px",
+                  backgroundColor: currentTheme.accent,
+                  whiteSpace: "nowrap",
                 }}
               >
-                <ShieldAlert className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-              </div>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>إعادة المحاولة</span>
+              </button>
 
-              <h2
-                className="text-base font-zain-xbold mb-1.5 leading-snug"
-                style={{ color: currentTheme.text }}
-              >
-                إذن تثبيت التحديثات
-              </h2>
-
-              <p
-                className="text-xs font-zain-reg opacity-75 mb-6 leading-relaxed"
-                style={{ color: currentTheme.text }}
-              >
-                لتثبيت التحديثات مباشرة من داخل دار الحكايات، يتطلب نظام أندرويد تفعيل خيار <strong>"السماح بتثبيت التطبيقات من هذا المصدر"</strong> لمرة واحدة فقط.
-              </p>
-
-              <div className="flex items-center justify-center gap-3 w-full">
-                <button
-                  onClick={handleGrantPermission}
-                  className="flex-1 h-11 rounded-full font-zain-bold text-xs text-white shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  style={{ backgroundColor: currentTheme.accent }}
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>تفعيل الإذن في الإعدادات</span>
-                </button>
-
-                <button
-                  onClick={() => setStep("prompt")}
-                  className="h-11 px-4 rounded-full font-zain-bold text-xs border opacity-70 hover:opacity-100 transition-all cursor-pointer active:scale-95"
-                  style={{
-                    backgroundColor: `${currentTheme.bg}90`,
-                    borderColor: currentTheme.border,
-                    color: currentTheme.text,
-                  }}
-                >
-                  رجوع
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ─── STEP 6: Error State ─── */}
-          {step === "error" && (
-            <div className="w-full flex flex-col items-center py-2">
-              <div
-                className="w-16 h-16 rounded-3xl border flex items-center justify-center mb-4"
+              <button
+                onClick={closeUpdateDialog}
+                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
                 style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.15)",
-                  borderColor: "rgba(239, 68, 68, 0.35)",
+                  height: "34px",
+                  padding: "0 14px",
+                  borderRadius: "9999px",
+                  color: currentTheme.secondary,
+                  whiteSpace: "nowrap",
                 }}
               >
-                <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
-              </div>
-
-              <h2
-                className="text-base font-zain-xbold mb-1 leading-snug"
-                style={{ color: currentTheme.text }}
-              >
-                تعذر إتمام التحديث
-              </h2>
-
-              <p
-                className="text-xs font-zain-reg opacity-80 mb-6 leading-relaxed text-red-600 dark:text-red-400 px-2"
-              >
-                {errorMessage}
-              </p>
-
-              <div className="flex items-center justify-center gap-3 w-full">
-                <button
-                  onClick={handleStartUpdate}
-                  className="flex-1 h-11 rounded-full font-zain-bold text-xs text-white shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  style={{ backgroundColor: currentTheme.accent }}
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>إعادة المحاولة</span>
-                </button>
-
-                <button
-                  onClick={closeUpdateDialog}
-                  className="h-11 px-5 rounded-full font-zain-bold text-xs border opacity-70 hover:opacity-100 transition-all cursor-pointer active:scale-95"
-                  style={{
-                    backgroundColor: `${currentTheme.bg}90`,
-                    borderColor: currentTheme.border,
-                    color: currentTheme.text,
-                  }}
-                >
-                  إغلاق
-                </button>
-              </div>
+                إغلاق
+              </button>
             </div>
-          )}
-        </motion.div>
+          </>
+        )}
       </div>
-    </AnimatePresence>
-    ),
-    document.body,
+    </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 };
