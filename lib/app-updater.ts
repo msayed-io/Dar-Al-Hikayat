@@ -47,6 +47,7 @@ export type UpdateCheckResult =
 
 interface NativeAppUpdatePlugin {
   getAppVersionInfo(): Promise<AppVersion>;
+  showUpdateNotification(options: { versionName: string; versionCode: number }): Promise<{ shown: boolean }>;
   checkInstallPermission(): Promise<{ canInstall: boolean }>;
   openInstallPermissionSettings(): Promise<{ success: boolean }>;
   downloadUpdate(options: {
@@ -76,7 +77,25 @@ const STORAGE_KEYS = {
   LAST_CHECK_TIME: "dar_app_last_update_check_time",
   IGNORED_VERSION: "dar_app_ignored_update_version_code",
   AUTO_CHECK_ENABLED: "dar_app_auto_update_check_enabled",
+  LAST_NOTIFIED_VERSION: "dar_app_last_notified_update_version_code",
 };
+
+export async function notifyUpdateAvailable(updateInfo: UpdateInfo): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const lastNotified = Number(localStorage.getItem(STORAGE_KEYS.LAST_NOTIFIED_VERSION) || "0");
+  if (lastNotified === updateInfo.versionCode) return;
+  try {
+    const result = await NativeAppUpdate.showUpdateNotification({
+      versionName: updateInfo.versionName,
+      versionCode: updateInfo.versionCode,
+    });
+    if (result?.shown) {
+      localStorage.setItem(STORAGE_KEYS.LAST_NOTIFIED_VERSION, String(updateInfo.versionCode));
+    }
+  } catch (error) {
+    console.warn("Could not show update notification:", error);
+  }
+}
 
 /**
  * الحصول على بيانات الإصدار الحالي المثبت على الجهاز

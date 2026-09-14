@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Sparkles,
@@ -143,10 +144,11 @@ export const UpdateDialog: React.FC = () => {
 
   const { updateInfo, currentVersion, isMandatory } = dialogState;
 
-  return (
+  return createPortal(
+    (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
+        className="fixed inset-0 z-[2147483000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
         dir="rtl"
       >
         <motion.div
@@ -549,5 +551,7 @@ export const UpdateDialog: React.FC = () => {
         </motion.div>
       </div>
     </AnimatePresence>
+    ),
+    document.body,
   );
 };

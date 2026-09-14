@@ -491,36 +491,42 @@ export async function autoDetectLocation(): Promise<PrayerLocation> {
   if (bestFix.accuracy > REQUIRED_ACCURACY_METERS && stableFixes.length < 2) {
     throw new Error("لم تثبت قراءات GPS مكانًا واحدًا بدقة كافية. تحرك إلى مكان مفتوح وأعد المحاولة.");
   }
-  const timezoneId = Intl.DateTimeFormat().resolvedOptions().timeZone || "Africa/Cairo";
+  const timezoneId = guessTimezone(bestFix.latitude, bestFix.longitude);
   let cityName = "موقعي الحالي";
   let countryName = "";
   let displayAddress: string | undefined;
 
   try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${bestFix.latitude}&lon=${bestFix.longitude}&zoom=18&accept-language=ar&addressdetails=1`,
-      {
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${bestFix.latitude}&lon=${bestFix.longitude}&zoom=18&accept-language=ar&addressdetails=1`;
+    const arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${bestFix.longitude},${bestFix.latitude}&f=json&langCode=ARA`;
+    const [nominatimResult, arcgisResult] = await Promise.allSettled([
+      fetch(nominatimUrl, {
         headers: { "Accept-Language": "ar" },
         signal: AbortSignal.timeout(5000),
-      },
-    );
-    if (response.ok) {
-      const data = await response.json();
-      const address = data.address || {};
-      cityName =
-        address.hamlet ||
-        address.village ||
-        address.suburb ||
-        address.town ||
-        address.neighbourhood ||
-        address.city ||
-        address.district ||
-        address.county ||
-        data.name ||
-        cityName;
-      countryName = address.country || countryName;
-      displayAddress = data.display_name || undefined;
+      }).then((response) => (response.ok ? response.json() : null)),
+      fetch(arcgisUrl, { signal: AbortSignal.timeout(5000) }).then((response) =>
+        response.ok ? response.json() : null,
+      ),
+    ]);
+    const nominatim = nominatimResult.status === "fulfilled" ? nominatimResult.value : null;
+    const arcgis = arcgisResult.status === "fulfilled" ? arcgisResult.value : null;
+    const address = nominatim?.address || {};
+    const nominatimName =
+      address.hamlet || address.village || address.suburb || address.town ||
+      address.neighbourhood || address.city || address.district || address.county ||
+      nominatim?.name;
+    const arcgisAddress = arcgis?.address || {};
+    const arcgisName =
+      arcgisAddress.Village || arcgisAddress.City || arcgisAddress.Subregion ||
+      arcgisAddress.Region || arcgisAddress.Address;
+    // Prefer a specific locality, but only use the second provider to confirm
+    // it when both providers return the same locality. Never invent a village.
+    cityName = nominatimName || arcgisName || cityName;
+    if (nominatimName && arcgisName && nominatimName !== arcgisName) {
+      cityName = nominatimName;
     }
+    countryName = address.country || arcgisAddress.Country || countryName;
+    displayAddress = nominatim?.display_name || arcgisAddress.Match_addr || undefined;
   } catch (error) {
     console.warn("Reverse geocoding failed; keeping the verified coordinates", error);
   }

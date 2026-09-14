@@ -2,6 +2,9 @@ package com.daralhikayat.app;
 
 import android.content.Context;
 import android.content.Intent;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -9,6 +12,7 @@ import android.os.Build;
 import android.provider.Settings;
 import androidx.core.content.FileProvider;
 import androidx.core.content.pm.PackageInfoCompat;
+import androidx.core.app.NotificationCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -24,6 +28,65 @@ import java.util.Locale;
 
 @CapacitorPlugin(name = "AppUpdate")
 public class AppUpdatePlugin extends Plugin {
+
+    private static final String UPDATE_CHANNEL_ID = "app_updates";
+    private static final int UPDATE_NOTIFICATION_ID = 5101;
+
+    @PluginMethod
+    public void showUpdateNotification(PluginCall call) {
+        try {
+            Context context = getContext();
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager == null || (Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED)) {
+                JSObject unavailable = new JSObject();
+                unavailable.put("shown", false);
+                call.resolve(unavailable);
+                return;
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(
+                    UPDATE_CHANNEL_ID,
+                    "تحديثات التطبيق",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                );
+                channel.setDescription("تنبيهات توفر تحديث جديد لدار الحكايات");
+                manager.createNotificationChannel(channel);
+            }
+
+            String versionName = call.getString("versionName", "جديد");
+            Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+            if (launchIntent == null) {
+                call.reject("تعذر فتح التطبيق من إشعار التحديث");
+                return;
+            }
+            launchIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            PendingIntent pendingIntent = PendingIntent.getActivity(
+                context,
+                UPDATE_NOTIFICATION_ID,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, UPDATE_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("تحديث جديد لدار الحكايات")
+                .setContentText("الإصدار " + versionName + " متاح — اضغط للتحديث")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText("الإصدار " + versionName + " متاح — اضغط لفتح التطبيق وتثبيته."))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION);
+            manager.notify(UPDATE_NOTIFICATION_ID, builder.build());
+
+            JSObject result = new JSObject();
+            result.put("shown", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("تعذر إرسال إشعار التحديث: " + e.getMessage(), e);
+        }
+    }
 
     @PluginMethod
     public void getAppVersionInfo(PluginCall call) {

@@ -17,8 +17,6 @@ import { useApp } from "../contexts/AppContext";
 import { schedulePrayerAlarms, guessTimezone } from "../lib/prayer-alarms";
 import {
   ARAB_INDEXED_PLACES,
-  findNearestIndexedPlace,
-  IndexedPlace,
 } from "../lib/egypt-places";
 
 interface LocationResult {
@@ -76,49 +74,37 @@ export const LocationPickerPage: React.FC = () => {
   const reverseGeocode = useCallback(async (lat: number, lng: number) => {
     setIsReverseGeocoding(true);
 
-    // البديل المحلي الفوري لضمان عدم حدوث أي خطأ أو بطء
-    const nearest = findNearestIndexedPlace(lat, lng);
-
     try {
-      // محاولة عبر OpenStreetMap مع AbortSignal مهلة 3 ثوانٍ
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ar`,
-        {
-          headers: { "Accept-Language": "ar" },
-          signal: AbortSignal.timeout(3000),
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        const addr = data.address || {};
-        const placeName =
-          addr.hamlet ||
-          addr.village ||
-          addr.suburb ||
-          addr.town ||
-          addr.neighbourhood ||
-          addr.city ||
-          addr.district ||
-          addr.county ||
-          addr.road ||
-          data.name ||
-          (data.display_name
-            ? data.display_name.split(",")[0].trim()
-            : nearest.name);
-
-        const country = addr.country || nearest.country;
-        setCityNameOnly(placeName);
-        setCountryNameOnly(country);
-        setIsReverseGeocoding(false);
-        return;
-      }
+      const [nominatimResult, arcgisResult] = await Promise.allSettled([
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=18&accept-language=ar&addressdetails=1`,
+          { headers: { "Accept-Language": "ar" }, signal: AbortSignal.timeout(5000) },
+        ).then((response) => (response.ok ? response.json() : null)),
+        fetch(
+          `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${lng},${lat}&f=json&langCode=ARA`,
+          { signal: AbortSignal.timeout(5000) },
+        ).then((response) => (response.ok ? response.json() : null)),
+      ]);
+      const nominatim = nominatimResult.status === "fulfilled" ? nominatimResult.value : null;
+      const arcgis = arcgisResult.status === "fulfilled" ? arcgisResult.value : null;
+      const addr = nominatim?.address || {};
+      const arcgisAddr = arcgis?.address || {};
+      const placeName =
+        addr.hamlet || addr.village || addr.suburb || addr.town || addr.neighbourhood ||
+        addr.city || addr.district || addr.county ||
+        arcgisAddr.Village || arcgisAddr.City || arcgisAddr.Subregion ||
+        arcgisAddr.Region || arcgisAddr.Address || "موقع محدد على الخريطة";
+      const country = addr.country || arcgisAddr.Country || "";
+      setCityNameOnly(placeName);
+      setCountryNameOnly(country);
+      setIsReverseGeocoding(false);
+      return;
     } catch {
-      // إذا حدث حظر أو مهلة، نستخدم أقرب مكان مفهرس فورا بدقة تامة
+      // لا نستبدل الإحداثيات باسم مكان مفترض عند تعذر مزودي العنوان.
     }
 
-    setCityNameOnly(nearest.name);
-    setCountryNameOnly(nearest.country);
+    setCityNameOnly("موقع محدد على الخريطة");
+    setCountryNameOnly("");
     setIsReverseGeocoding(false);
   }, []);
 

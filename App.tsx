@@ -9,7 +9,7 @@ import PrayerPage from "./components/PrayerPage";
 import LocationPickerPage from "./components/LocationPickerPage";
 import LocationBottomSheet from "./components/LocationBottomSheet";
 import { UpdateDialog } from "./components/UpdateDialog";
-import { checkForUpdates, openUpdateDialog } from "./lib/app-updater";
+import { checkForUpdates, notifyUpdateAvailable, openUpdateDialog } from "./lib/app-updater";
 import { AppProvider, useApp } from "./contexts/AppContext";
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
@@ -420,19 +420,34 @@ function App() {
 
   useEffect(() => {
     if (!showSplash) {
-      // Check for updates silently after 2.5s on app launch
-      const timer = setTimeout(async () => {
+      const checkAndPresentUpdate = async (force = false) => {
         try {
-          const result = await checkForUpdates({ manual: false });
+          const result = await checkForUpdates({ manual: false, force });
           if (result.hasUpdate && result.latestInfo && result.currentVersion) {
+            await notifyUpdateAvailable(result.latestInfo);
             openUpdateDialog(result.latestInfo, result.currentVersion, result.isMandatory);
           }
         } catch (err) {
           console.log("Silent background update check:", err);
         }
-      }, 2500);
+      };
 
-      return () => clearTimeout(timer);
+      // Check after the first screen is ready, then re-check when the user taps
+      // the Android update notification and the app becomes active again.
+      const timer = setTimeout(() => checkAndPresentUpdate(false), 1200);
+      let appStateHandle: { remove: () => Promise<void> } | null = null;
+      if (Capacitor.isNativePlatform()) {
+        CapApp.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) void checkAndPresentUpdate(true);
+        }).then((handle) => {
+          appStateHandle = handle;
+        }).catch(() => {});
+      }
+
+      return () => {
+        clearTimeout(timer);
+        appStateHandle?.remove();
+      };
     }
   }, [showSplash]);
 
