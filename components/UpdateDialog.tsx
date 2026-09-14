@@ -31,6 +31,7 @@ import { Capacitor } from "@capacitor/core";
 
 export const UpdateDialog: React.FC = () => {
   const { currentTheme } = useApp();
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
 
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
@@ -56,6 +57,25 @@ export const UpdateDialog: React.FC = () => {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [downloadedFilePath, setDownloadedFilePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    const host = document.createElement("div");
+    host.id = "dar-update-dialog-root";
+    host.setAttribute("role", "presentation");
+    Object.assign(host.style, {
+      position: "fixed",
+      inset: "0",
+      zIndex: "2147483647",
+      pointerEvents: "none",
+      isolation: "isolate",
+    });
+    document.body.appendChild(host);
+    setPortalHost(host);
+    return () => {
+      host.remove();
+      setPortalHost(null);
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToUpdateDialog((state) => {
@@ -138,7 +158,7 @@ export const UpdateDialog: React.FC = () => {
     return (bytes / (1024 * 1024)).toFixed(1) + " ميجابايت";
   };
 
-  if (!dialogState.isOpen || !dialogState.updateInfo) {
+  if (!portalHost || !dialogState.isOpen || !dialogState.updateInfo) {
     return null;
   }
 
@@ -148,7 +168,8 @@ export const UpdateDialog: React.FC = () => {
     (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-[2147483000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
+        className="fixed inset-0 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
+        style={{ zIndex: 2147483647, pointerEvents: "auto" }}
         dir="rtl"
       >
         <motion.div
