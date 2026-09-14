@@ -281,18 +281,14 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                     }
                     PendingIntent pendingIntent = PendingIntent.getBroadcast(context, id, intent, pendingFlags);
 
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
-                        } else {
-                            alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
-                        }
-                    } catch (SecurityException se) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
-                        } else {
-                            alarmManager.set(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
-                        }
+                    if (Build.VERSION.SDK_INT >= 31 && !alarmManager.canScheduleExactAlarms()) {
+                        sharedPreferences.edit().putBoolean("needs_reschedule", true).apply();
+                        continue;
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
+                    } else {
+                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, pendingIntent);
                     }
                 }
             }

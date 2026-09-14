@@ -10,7 +10,8 @@ public class TimezoneChangedReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
-        if ("android.intent.action.TIMEZONE_CHANGED".equals(action) ||
+        if ("android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED".equals(action) ||
+            "android.intent.action.TIMEZONE_CHANGED".equals(action) ||
             "android.intent.action.TIME_SET".equals(action) ||
             "android.intent.action.DATE_CHANGED".equals(action)) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean("needs_reschedule", true).apply();

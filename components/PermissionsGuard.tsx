@@ -213,9 +213,15 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
         try {
           const loc = await autoDetectLocation();
           updatePrayerState({ location: loc });
-          await schedulePrayerAlarms(loc, prayerState.method);
+          const scheduled = await schedulePrayerAlarms(loc, prayerState.method);
+          if (!scheduled) {
+            setNeedsManualSettings(true);
+            return;
+          }
         } catch (gpsErr) {
-          console.warn("GPS lookup fallback:", gpsErr);
+          console.warn("GPS lookup failed:", gpsErr);
+          setNeedsManualSettings(true);
+          return;
         }
         setStepSuccessPulse(true);
         setTimeout(() => {
@@ -224,12 +230,11 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
           handleFinishOnboarding();
         }, 600);
       } else {
-        // إذا رفض المستخدم إذن الموقع، نكمل مع الموقع الافتراضي الحالي
-        handleFinishOnboarding();
+        setNeedsManualSettings(true);
       }
     } catch (e) {
       console.error("Activate location error:", e);
-      handleFinishOnboarding();
+      setNeedsManualSettings(true);
     } finally {
       setIsProcessing(false);
     }

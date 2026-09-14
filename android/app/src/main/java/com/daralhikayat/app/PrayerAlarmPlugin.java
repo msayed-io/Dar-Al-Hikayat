@@ -47,6 +47,10 @@ public class PrayerAlarmPlugin extends Plugin {
                 pluginCall.reject("AlarmManager not available");
                 return;
             }
+            if (Build.VERSION.SDK_INT >= 31 && !alarmManager.canScheduleExactAlarms()) {
+                pluginCall.reject("Exact alarm permission is not granted");
+                return;
+            }
 
             cancelAllAlarmsInternal();
 
@@ -75,6 +79,7 @@ public class PrayerAlarmPlugin extends Plugin {
 
             JSObject res = new JSObject();
             res.put("scheduled", scheduledCount);
+            res.put("exact", true);
             pluginCall.resolve(res);
         } catch (JSONException e) {
             pluginCall.reject("Failed to parse alarms: " + e.getMessage());
@@ -97,21 +102,10 @@ public class PrayerAlarmPlugin extends Plugin {
         }
         PendingIntent broadcast = PendingIntent.getBroadcast(getContext(), id, intent, pendingFlags);
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
-            }
-        } catch (SecurityException se) {
-            // Fallback for Doze mode when exact alarm permission is restricted
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
-            } else {
-                alarmManager.set(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
         }
     }
 

@@ -39,9 +39,40 @@ function methodParams(method: CalculationMethodId) {
   }
 }
 
-/** دقائق من منتصف الليل */
-function minutesFromMidnight(d: Date): number {
-  return d.getHours() * 60 + d.getMinutes();
+/** دقائق من منتصف الليل في المنطقة الزمنية التي اختارها المستخدم. */
+function minutesFromMidnight(d: Date, timezoneId: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezoneId,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return (hour === 24 ? 0 : hour) * 60 + minute;
+}
+
+function datePartsInTimezone(date: Date, timezoneId: string): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezoneId,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  return {
+    year: Number(parts.find((part) => part.type === "year")?.value),
+    month: Number(parts.find((part) => part.type === "month")?.value),
+    day: Number(parts.find((part) => part.type === "day")?.value),
+  };
+}
+
+/** يمرر إلى adhan تاريخًا محليًا يحمل اليوم المدني لمنطقة الموقع. */
+function calendarDateInTimezone(date: Date, timezoneId: string): Date {
+  const { year, month, day } = datePartsInTimezone(date, timezoneId);
+  const result = new Date(0);
+  result.setHours(12, 0, 0, 0);
+  result.setFullYear(year, month - 1, day);
+  return result;
 }
 
 /** منتصف الوقت بين الشروق والظهر = الضحى (كما في الإنتاج) */
@@ -55,25 +86,27 @@ export function getDayPrayers(
   longitude: number,
   date: Date,
   method: CalculationMethodId = "egyptian",
-  _timezoneId: string = "Africa/Cairo"
+  timezoneId: string = "Africa/Cairo"
 ): DailyPrayers {
+  const calendarDate = calendarDateInTimezone(date, timezoneId);
   const coordinates = new Coordinates(latitude, longitude);
   const params = methodParams(method);
-  const pt = new AdhanPrayerTimes(coordinates, date, params);
+  const pt = new AdhanPrayerTimes(coordinates, calendarDate, params);
 
   const duha = midpoint(pt.sunrise, pt.dhuhr);
 
   const prayers: TimedPrayer[] = [
-    { prayerId: "fajr", time: pt.fajr, minutesFromMidnight: minutesFromMidnight(pt.fajr) },
-    { prayerId: "sunrise", time: pt.sunrise, minutesFromMidnight: minutesFromMidnight(pt.sunrise) },
-    { prayerId: "duha", time: duha, minutesFromMidnight: minutesFromMidnight(duha) },
-    { prayerId: "dhuhr", time: pt.dhuhr, minutesFromMidnight: minutesFromMidnight(pt.dhuhr) },
-    { prayerId: "asr", time: pt.asr, minutesFromMidnight: minutesFromMidnight(pt.asr) },
-    { prayerId: "maghrib", time: pt.maghrib, minutesFromMidnight: minutesFromMidnight(pt.maghrib) },
-    { prayerId: "isha", time: pt.isha, minutesFromMidnight: minutesFromMidnight(pt.isha) },
+    { prayerId: "fajr", time: pt.fajr, minutesFromMidnight: minutesFromMidnight(pt.fajr, timezoneId) },
+    { prayerId: "sunrise", time: pt.sunrise, minutesFromMidnight: minutesFromMidnight(pt.sunrise, timezoneId) },
+    { prayerId: "duha", time: duha, minutesFromMidnight: minutesFromMidnight(duha, timezoneId) },
+    { prayerId: "dhuhr", time: pt.dhuhr, minutesFromMidnight: minutesFromMidnight(pt.dhuhr, timezoneId) },
+    { prayerId: "asr", time: pt.asr, minutesFromMidnight: minutesFromMidnight(pt.asr, timezoneId) },
+    { prayerId: "maghrib", time: pt.maghrib, minutesFromMidnight: minutesFromMidnight(pt.maghrib, timezoneId) },
+    { prayerId: "isha", time: pt.isha, minutesFromMidnight: minutesFromMidnight(pt.isha, timezoneId) },
   ];
 
-  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const dateParts = datePartsInTimezone(date, timezoneId);
+  const dateStr = `${dateParts.year}-${String(dateParts.month).padStart(2, "0")}-${String(dateParts.day).padStart(2, "0")}`;
 
   return { date: dateStr, prayers };
 }
@@ -200,4 +233,3 @@ export function calculateSecondaryTimes(
     lastThird: formatPrayerTime(lastThirdTime, timezoneId),
   };
 }
-

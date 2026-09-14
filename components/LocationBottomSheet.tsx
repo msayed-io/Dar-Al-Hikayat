@@ -49,23 +49,8 @@ export const LocationBottomSheet: React.FC = () => {
         closeLocationSheet();
       }, 700);
     } catch (err) {
-      console.warn("GPS detection fallback:", err);
-      // Fallback to safe default
-      const fallbackLoc = {
-        latitude: 30.0444,
-        longitude: 31.2357,
-        cityName: "القاهرة",
-        cityNameAr: "القاهرة",
-        countryNameAr: "مصر",
-        timezoneId: "Africa/Cairo",
-        isAutoDetected: true,
-      };
-      updatePrayerState({ location: fallbackLoc });
-      setDetectSuccess(true);
-      setTimeout(() => {
-        setDetectSuccess(false);
-        closeLocationSheet();
-      }, 700);
+      console.warn("GPS detection failed:", err);
+      setDetectError(err instanceof Error ? err.message : "تعذر تحديد موقع موثوق. اختر موقعك يدويًا على الخريطة.");
     } finally {
       setIsDetecting(false);
     }

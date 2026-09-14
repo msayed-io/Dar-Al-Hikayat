@@ -401,13 +401,19 @@ export const LocationPickerPage: React.FC = () => {
         countryNameAr: countryNameOnly,
         timezoneId: finalTimezone,
         isAutoDetected: false,
+        source: "manual_map" as const,
+        capturedAt: Date.now(),
+        accuracyMeters: null,
       };
 
       // 1. تحديث حالة الصلاة فوراً
       updatePrayerState({ location: finalLocation });
 
       // 2. جدولة تنبيهات الصلاة على الإحداثيات الجديدة بدقة الثواني
-      await schedulePrayerAlarms(finalLocation, prayerState.method);
+      const scheduled = await schedulePrayerAlarms(finalLocation, prayerState.method);
+      if (!scheduled) {
+        throw new Error("لم يتم تفعيل صلاحية الإشعارات الدقيقة بعد");
+      }
 
       // 3. العودة إلى الصفحة
       setTimeout(() => {

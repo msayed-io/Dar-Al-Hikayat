@@ -21,7 +21,7 @@ interface PrayerAlarmPlugin {
   canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
   openNotificationSettings?(): Promise<void>;
   openAppSettings?(): Promise<void>;
-  scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<{ scheduled: number }>;
+  scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<{ scheduled: number; exact: boolean }>;
   cancelAllAlarms(): Promise<void>;
   sendImmediateTestNotification(options?: {
     title?: string;
@@ -56,6 +56,7 @@ const SCHEDULED_ALARMS_KEY = "dar_scheduled_alarms_data";
 
 let nativeTimezoneId: string | null = null;
 let nativeTimezoneOffset: number | null = null;
+let scheduleChain: Promise<boolean> = Promise.resolve(true);
 
 /** تحميل معلومات المنطقة الزمنية الأصلية (على أندرويد فقط) */
 export async function ensureNativeTime(): Promise<void> {
@@ -113,7 +114,7 @@ export async function checkNotificationPermission(): Promise<boolean> {
     return granted;
   } catch (e) {
     console.error("Check notification permission error:", e);
-    return true;
+    return false;
   }
 }
 
@@ -149,7 +150,7 @@ export async function checkExactAlarmPermission(): Promise<boolean> {
     return canSchedule;
   } catch (e) {
     console.error("Check exact alarm permission error:", e);
-    return true;
+    return false;
   }
 }
 
@@ -174,12 +175,21 @@ export async function openNativeAppSettings(): Promise<void> {
 }
 
 /**
- * جدولة مواقيت الصلاة لمدة 7 أيام متتالية بدقة تامة باستخدام AlarmManager.setExactAndAllowWhileIdle():
+ * جدولة مواقيت الصلاة لمدة 30 يومًا متتالية بدقة تامة باستخدام AlarmManager.setExactAndAllowWhileIdle():
  * - منبه دقيق لكل صلاة في موعدها تماماً (لا يختفي إلا بمسحه يدوياً)
  * - منبه مسبق قبل الصلاة بـ 10 دقائق (يُحذف تلقائياً عند انتهاء مدته ومجيء وقت الصلاة)
- * - جدولة متجددة لـ 7 أيام مقبلة لضمان استمرار المنبهات حتى وإن ظل التطبيق مغلقاً
+ * - جدولة نافذة مستقبلية ممتدة لضمان الاستمرار عند غياب المستخدم عن التطبيق
  */
 export async function schedulePrayerAlarms(
+  location: PrayerLocation,
+  method: CalculationMethodId
+): Promise<boolean> {
+  const run = scheduleChain.then(() => schedulePrayerAlarmsInternal(location, method));
+  scheduleChain = run.catch(() => false);
+  return run;
+}
+
+async function schedulePrayerAlarmsInternal(
   location: PrayerLocation,
   method: CalculationMethodId
 ): Promise<boolean> {
@@ -189,12 +199,21 @@ export async function schedulePrayerAlarms(
   }
   try {
     await ensureNativeTime();
+    const notificationsGranted = await checkNotificationPermission();
+    const exactGranted = await checkExactAlarmPermission();
+    if (!notificationsGranted || !exactGranted) {
+      console.warn("Prayer notifications are not scheduled: required Android permission is missing", {
+        notificationsGranted,
+        exactGranted,
+      });
+      return false;
+    }
     await PrayerAlarm.cancelAllAlarms();
 
-    const tz = currentTimezoneId() || location.timezoneId;
+    const tz = location.timezoneId || currentTimezoneId();
     const alarms: AlarmEntry[] = [];
     const now = Date.now();
-    const DAYS_TO_SCHEDULE = 7;
+    const DAYS_TO_SCHEDULE = 30;
 
     for (let dayOffset = 0; dayOffset < DAYS_TO_SCHEDULE; dayOffset++) {
       const targetDate = new Date(now);
@@ -240,7 +259,10 @@ export async function schedulePrayerAlarms(
     }
 
     if (alarms.length > 0) {
-      await PrayerAlarm.scheduleAlarms({ alarms });
+      const result = await PrayerAlarm.scheduleAlarms({ alarms });
+      if (!result.exact || result.scheduled !== alarms.length) {
+        throw new Error(`Exact alarm scheduling incomplete: ${result.scheduled}/${alarms.length}`);
+      }
     }
 
     const { today, tomorrow } = getTodayAndTomorrow(
@@ -271,7 +293,7 @@ export async function schedulePrayerAlarms(
     settings.lastScheduleDate = new Date().toISOString();
     savePrayerSettings(settings);
 
-    console.log(`Prayer notifications scheduled: ${alarms.length} alarms (7-day exact rolling window)`);
+    console.log(`Prayer notifications scheduled: ${alarms.length} alarms (30-day exact window)`);
     return true;
   } catch (e) {
     console.error("Failed to schedule prayer notifications:", e);
@@ -299,6 +321,13 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
           message: "إذن الإشعارات غير مفعّل. يرجى تفعيله من الإعدادات.",
         };
       }
+      const exactGranted = await checkExactAlarmPermission();
+      if (!exactGranted) {
+        return {
+          success: false,
+          message: "صلاحية المنبهات الدقيقة غير مفعلة. يرجى تفعيلها من إعدادات أندرويد.",
+        };
+      }
 
       // 1. إرسال إشعار تجريبي فوري يظهر ويصدر صوتاً واهتزازاً لحظياً
       try {
@@ -312,7 +341,7 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
       }
 
       // 2. جدولة منبه تجريبي لاختبار خوارزمية المنبهات الدقيقة (AlarmManager) بعد 5 ثوانٍ
-      await PrayerAlarm.scheduleAlarms({
+      const scheduled = await PrayerAlarm.scheduleAlarms({
         alarms: [
           {
             timestamp: Date.now() + 5000,
@@ -324,6 +353,9 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
           },
         ],
       });
+      if (!scheduled.exact || scheduled.scheduled !== 1) {
+        throw new Error("لم يتم تسجيل المنبه التجريبي كمنبه دقيق");
+      }
 
       return {
         success: true,
@@ -373,168 +405,117 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
   };
 }
 
-/** الكشف التلقائي عن الموقع بدقة متناهية مع دعم البدائل الذكية (GPS -> IP -> Timezone) لمنع أي أخطاء */
+/**
+ * الحصول على موقع موثوق من الجهاز فقط.
+ * لا يتم تحويل IP أو المنطقة الزمنية إلى إحداثية تلقائية، لأن ذلك قد يرسل
+ * مواقيت الصلاة لمكان مختلف تمامًا عن مكان المستخدم.
+ */
 export async function autoDetectLocation(): Promise<PrayerLocation> {
-  let lat: number | null = null;
-  let lng: number | null = null;
-  let resolvedName = "موقعي الحالي";
-  let resolvedCountry = "مصر";
+  type Fix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
+  const fixes: Fix[] = [];
+  const MAX_ACCEPTABLE_ACCURACY_METERS = 1000;
 
-  // 1. المحاولة أولاً عبر Capacitor Geolocation إن وُجد (تطبيقات أندرويد وiOS)
-  if (Capacitor.isPluginAvailable("Geolocation")) {
-    try {
-      const perm = await Geolocation.checkPermissions();
-      if (perm.location !== "granted") {
-        await Geolocation.requestPermissions();
+  const addFix = (position: { coords: { latitude: number; longitude: number; accuracy?: number | null }; timestamp?: number }) => {
+    const { latitude, longitude, accuracy } = position.coords;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    if (!Number.isFinite(accuracy) || (accuracy as number) <= 0) return;
+    if ((accuracy as number) > MAX_ACCEPTABLE_ACCURACY_METERS) return;
+    fixes.push({ latitude, longitude, accuracy: accuracy as number, timestamp: position.timestamp || Date.now() });
+  };
+
+  if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Geolocation")) {
+    const permissions = await Geolocation.checkPermissions();
+    if (permissions.location !== "granted") {
+      const requested = await Geolocation.requestPermissions();
+      if (requested.location !== "granted") {
+        throw new Error("لم يتم منح صلاحية الموقع");
       }
-      const pos = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: true,
-        timeout: 6000,
-      });
-      if (pos && pos.coords) {
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      }
-    } catch (e) {
-      console.warn("Capacitor Geolocation unavailable, trying browser navigator...", e);
     }
-  }
 
-  // 2. المحاولة عبر navigator.geolocation القياسي (متصفحات الجوال والويب)
-  if (lat === null && typeof navigator !== "undefined" && "geolocation" in navigator) {
-    try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 6000,
-          maximumAge: 10000,
-        });
-      });
-      lat = pos.coords.latitude;
-      lng = pos.coords.longitude;
-    } catch (e) {
-      console.warn("High-accuracy browser GPS timed out or denied, trying standard accuracy...", e);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const fallbackPos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+        addFix(position);
+        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= 50) break;
+      } catch (error) {
+        console.warn(`Location measurement ${attempt + 1} failed`, error);
+      }
+    }
+  } else if (typeof navigator !== "undefined" && "geolocation" in navigator) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: false,
-            timeout: 4000,
-            maximumAge: 60000,
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
           });
         });
-        lat = fallbackPos.coords.latitude;
-        lng = fallbackPos.coords.longitude;
-      } catch (err2) {
-        console.warn("Browser GPS permission not granted or unavailable, switching to network IP / timezone fallback:", err2);
+        addFix(position);
+        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= 50) break;
+      } catch (error) {
+        console.warn(`Browser location measurement ${attempt + 1} failed`, error);
       }
     }
   }
 
-  // 3. المحاولة عبر IP Geolocation إذا كان مستشعر GPS محظوراً بالمتصفح أو في بيئة iframe
-  if (lat === null || lng === null) {
-    try {
-      const ipRes = await fetch("https://ipwho.is/?lang=ar", {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(4000),
-      });
-      if (ipRes.ok) {
-        const ipData = await ipRes.json();
-        if (ipData && ipData.success !== false && ipData.latitude && ipData.longitude) {
-          lat = ipData.latitude;
-          lng = ipData.longitude;
-          if (ipData.city) resolvedName = ipData.city;
-          if (ipData.country) resolvedCountry = ipData.country;
-        }
-      }
-    } catch (ipErr) {
-      console.warn("IP Geolocation fallback note:", ipErr);
-    }
+  if (fixes.length === 0) {
+    throw new Error("تعذر الحصول على قراءة GPS موثوقة. اختر الموقع يدويًا على الخريطة.");
   }
 
-  // 4. المحاولة عبر المنطقة الزمنية للنظام (Intl Timezone Mapping) كضمان نهائي
-  if (lat === null || lng === null) {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Africa/Cairo";
-    const tzMap: Record<string, { lat: number; lng: number; city: string; country: string }> = {
-      "Africa/Cairo": { lat: 30.0444, lng: 31.2357, city: "القاهرة", country: "مصر" },
-      "Africa/Alexandria": { lat: 31.2001, lng: 29.9187, city: "الإسكندرية", country: "مصر" },
-      "Asia/Riyadh": { lat: 24.7136, lng: 46.6753, city: "الرياض", country: "السعودية" },
-      "Asia/Dubai": { lat: 25.2048, lng: 55.2708, city: "دبي", country: "الإمارات" },
-      "Asia/Kuwait": { lat: 29.3759, lng: 47.9774, city: "الكويت", country: "الكويت" },
-      "Asia/Qatar": { lat: 25.2854, lng: 51.531, city: "الدوحة", country: "قطر" },
-      "Asia/Bahrain": { lat: 26.2285, lng: 50.586, city: "المنامة", country: "البحرين" },
-      "Asia/Muscat": { lat: 23.588, lng: 58.3829, city: "مسقط", country: "عمان" },
-      "Asia/Amman": { lat: 31.9454, lng: 35.9284, city: "عمان", country: "الأردن" },
-      "Asia/Jerusalem": { lat: 31.7683, lng: 35.2137, city: "القدس", country: "فلسطين" },
-      "Asia/Gaza": { lat: 31.5, lng: 34.4667, city: "غزة", country: "فلسطين" },
-      "Asia/Baghdad": { lat: 33.3152, lng: 44.3661, city: "بغداد", country: "العراق" },
-      "Asia/Damascus": { lat: 33.5138, lng: 36.2765, city: "دمشق", country: "سوريا" },
-      "Asia/Beirut": { lat: 33.8938, lng: 35.5018, city: "بيروت", country: "لبنان" },
-      "Africa/Tripoli": { lat: 32.8872, lng: 13.1913, city: "طرابلس", country: "ليبيا" },
-      "Africa/Tunis": { lat: 36.8065, lng: 10.1815, city: "تونس", country: "تونس" },
-      "Africa/Algiers": { lat: 36.7538, lng: 3.0588, city: "الجزائر", country: "الجزائر" },
-      "Africa/Casablanca": { lat: 33.5731, lng: -7.5898, city: "الدار البيضاء", country: "المغرب" },
-      "Africa/Khartoum": { lat: 15.5007, lng: 32.5599, city: "الخرطوم", country: "السودان" },
-      "Asia/Aden": { lat: 12.7855, lng: 45.0187, city: "عدن", country: "اليمن" },
-    };
+  const bestFix = fixes.reduce((best, current) =>
+    current.accuracy < best.accuracy ? current : best,
+  );
+  const timezoneId = Intl.DateTimeFormat().resolvedOptions().timeZone || "Africa/Cairo";
+  let cityName = "موقعي الحالي";
+  let countryName = "";
+  let displayAddress: string | undefined;
 
-    const match = tzMap[tz] || tzMap["Africa/Cairo"];
-    lat = match.lat;
-    lng = match.lng;
-    resolvedName = match.city;
-    resolvedCountry = match.country;
-  }
-
-  // 5. قراءة اسم المكان الحقيقي بدقة متناهية (قرية / عزبة / مركز / مدينة) باللغة العربية
   try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&accept-language=ar&addressdetails=1`,
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${bestFix.latitude}&lon=${bestFix.longitude}&zoom=18&accept-language=ar&addressdetails=1`,
       {
         headers: { "Accept-Language": "ar" },
-        signal: AbortSignal.timeout(4000),
-      }
+        signal: AbortSignal.timeout(5000),
+      },
     );
-    if (res.ok) {
-      const data = await res.json();
-      const addr = data.address || {};
-      const primaryLocality =
-        addr.village ||
-        addr.hamlet ||
-        addr.suburb ||
-        addr.town ||
-        addr.neighbourhood ||
-        addr.city ||
-        addr.district ||
-        addr.county ||
-        addr.road ||
+    if (response.ok) {
+      const data = await response.json();
+      const address = data.address || {};
+      cityName =
+        address.hamlet ||
+        address.village ||
+        address.suburb ||
+        address.town ||
+        address.neighbourhood ||
+        address.city ||
+        address.district ||
+        address.county ||
         data.name ||
-        (data.display_name ? data.display_name.split(",")[0].trim() : null);
-
-      if (primaryLocality) {
-        resolvedName = primaryLocality;
-      }
-      if (addr.country) {
-        resolvedCountry = addr.country;
-      }
+        cityName;
+      countryName = address.country || countryName;
+      displayAddress = data.display_name || undefined;
     }
-  } catch (err) {
-    console.warn("Reverse geocode in autoDetect note:", err);
-    const nearest = findNearestCity(lat, lng);
-    if (nearest) {
-      resolvedName = nearest.nameAr;
-      resolvedCountry = nearest.countryAr;
-    }
+  } catch (error) {
+    console.warn("Reverse geocoding failed; keeping the verified coordinates", error);
   }
 
-  const timezone = guessTimezone(lat, lng);
-
   return {
-    latitude: lat,
-    longitude: lng,
-    cityName: resolvedName,
-    cityNameAr: resolvedName,
-    countryNameAr: resolvedCountry,
-    timezoneId: timezone,
+    latitude: bestFix.latitude,
+    longitude: bestFix.longitude,
+    cityName,
+    cityNameAr: cityName,
+    countryNameAr: countryName || undefined,
+    timezoneId,
     isAutoDetected: true,
+    accuracyMeters: bestFix.accuracy,
+    capturedAt: bestFix.timestamp,
+    source: bestFix.accuracy <= 100 ? "gps_precise" : "gps_approximate",
+    displayAddress,
   };
 }
 

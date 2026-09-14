@@ -113,6 +113,10 @@ export interface PrayerLocation {
   countryNameAr?: string;
   timezoneId: string;
   isAutoDetected?: boolean;
+  accuracyMeters?: number | null;
+  capturedAt?: number;
+  source?: "gps_precise" | "gps_approximate" | "network" | "manual_map" | "manual_city" | "legacy";
+  displayAddress?: string;
 }
 
 /** حالة المواقيت في التطبيق */
