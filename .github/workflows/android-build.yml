@@ -74,7 +74,40 @@ jobs:
           cd android
           ./gradlew --no-daemon assembleRelease bundleRelease assembleDebug
 
-      - name: Upload APKs and AAB as workflow artifacts
+      - name: Generate Release Metadata and SHA-256 Checksum (latest.json)
+        run: |
+          set -euo pipefail
+          RELEASE_APK="android/app/build/outputs/apk/release/dar-al-hikayat.apk"
+          if [ ! -f "$RELEASE_APK" ]; then
+            RELEASE_APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          fi
+          
+          APK_SHA256=$(sha256sum "$RELEASE_APK" | awk '{print $1}')
+          FILE_SIZE=$(wc -c < "$RELEASE_APK" | tr -d ' ')
+          
+          cat <<EOF > latest.json
+          {
+            "versionCode": ${{ github.run_number }},
+            "versionName": "1.0.${{ github.run_number }}",
+            "downloadUrl": "https://github.com/msayed-io/Dar-Al-Hikayat/releases/latest/download/dar-al-hikayat.apk",
+            "directDownloadUrl": "https://github.com/msayed-io/Dar-Al-Hikayat/releases/download/v1.0.${{ github.run_number }}/dar-al-hikayat.apk",
+            "sha256": "$APK_SHA256",
+            "fileSizeBytes": $FILE_SIZE,
+            "mandatory": false,
+            "releaseNotes": [
+              "تحسينات عامة على الأداء وسرعة الاستجابة",
+              "تطوير وتحديث محراب الحكايات وأدوات التحرير الإبداعي",
+              "تعزيز دقة حساب مواقيت الصلاة والأذكار والتنبيهات الموقوتة",
+              "تحسين آلية التحديث التلقائي المباشر من داخل التطبيق"
+            ],
+            "publishedAt": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          }
+          EOF
+          
+          echo "Generated latest.json:"
+          cat latest.json
+
+      - name: Upload APKs, AAB, and Metadata as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dar-al-hikayat-builds-${{ github.run_number }}
@@ -82,6 +115,7 @@ jobs:
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/apk/debug/*.apk
             android/app/build/outputs/bundle/release/*.aab
+            latest.json
           if-no-files-found: error
           retention-days: 30
 
@@ -91,14 +125,16 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: دار الحكايات - الإصدار الرسمي والتجريبي v1.0.${{ github.run_number }}
           body: |
-            ### ملفات التطبيق
+            ### ملفات التطبيق الرسمية
             - Release APK: النسخة النهائية الموقعة.
             - Release AAB: حزمة Android الرسمية.
-            - Debug APK: نسخة التجربة.
+            - Debug APK: نسخة التجربة والاختبار.
+            - Metadata: ملف معلومات الإصدار والتحقق الرقمي (latest.json).
           prerelease: false
           files: |
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/debug/*.apk
+            latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -20,6 +20,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Wifi,
+  Sparkles,
+  RefreshCw,
+  ArrowUpCircle,
+  Smartphone,
 } from "lucide-react";
 import { CITIES, type CityData } from "../lib/prayer-cities";
 import {
@@ -30,6 +34,12 @@ import {
 } from "../lib/prayer-alarms";
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
+import {
+  checkForUpdates,
+  getCurrentAppVersion,
+  openUpdateDialog,
+  type AppVersion,
+} from "../lib/app-updater";
 import {
   loadManagedKeysAsync,
   addManagedKey,
@@ -81,6 +91,55 @@ const SettingsPage: React.FC = () => {
     success: boolean;
     message: string;
   } | null>(null);
+
+  // ─── إدارة وتحديثات إصدار التطبيق (OTA In-App Updates) ───
+  const [appVersion, setAppVersion] = useState<AppVersion | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateFeedback, setUpdateFeedback] = useState<{
+    success: boolean;
+    message: string;
+    isLatest?: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    getCurrentAppVersion().then((ver) => {
+      setAppVersion(ver);
+    });
+  }, []);
+
+  const handleCheckUpdateNow = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateFeedback(null);
+    try {
+      const result = await checkForUpdates({ manual: true, force: true });
+      if (result.hasUpdate && result.latestInfo && result.currentVersion) {
+        setUpdateFeedback({
+          success: true,
+          message: `يوجد إصدار أحدث متوفر للتحميل (${result.latestInfo.versionName})`,
+          isLatest: false,
+        });
+        openUpdateDialog(result.latestInfo, result.currentVersion, result.isMandatory);
+      } else if ("error" in result && result.error) {
+        setUpdateFeedback({
+          success: false,
+          message: result.message || "تعذر التحقق من التحديثات. تحقق من اتصال الإنترنت.",
+        });
+      } else {
+        setUpdateFeedback({
+          success: true,
+          message: `أنت تستخدم أحدث إصدار من دار الحكايات (v${result.currentVersion?.versionName || "1.0"}) ✓`,
+          isLatest: true,
+        });
+      }
+    } catch (err: any) {
+      setUpdateFeedback({
+        success: false,
+        message: err?.message || "حدث خطأ أثناء فحص التحديثات",
+      });
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   useEffect(() => {
     loadManagedKeysAsync().then((loaded) => {
@@ -1070,6 +1129,110 @@ const SettingsPage: React.FC = () => {
               }}
             >
               {importStatus}
+            </div>
+          )}
+        </div>
+
+        {/* ─── قسم تحديثات التطبيق والإصدار (OTA In-App Updates) ─── */}
+        <div
+          className="border shadow-sm transition-all flex flex-col gap-3"
+          style={{
+            backgroundColor: currentTheme.glass,
+            borderColor: currentTheme.border,
+            borderRadius: "20px",
+            padding: "14px 16px",
+            boxShadow: `0 4px 16px -2px ${currentTheme.shadow}`,
+          }}
+        >
+          {/* Header & Current Version Badge */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-1.5">
+              <Smartphone
+                className="w-3.5 h-3.5"
+                style={{ color: currentTheme.accent }}
+              />
+              <span
+                className="font-zain-bold text-xs"
+                style={{ color: currentTheme.accent }}
+              >
+                تحديثات التطبيق والإصدار
+              </span>
+            </div>
+
+            {appVersion && (
+              <span
+                className="text-[11px] font-mono px-2.5 py-0.5 rounded-full border opacity-80"
+                style={{
+                  backgroundColor: `${currentTheme.accent}12`,
+                  borderColor: `${currentTheme.accent}25`,
+                  color: currentTheme.text,
+                }}
+              >
+                v{appVersion.versionName}
+              </span>
+            )}
+          </div>
+
+          <p
+            className="text-[11px] font-zain-reg opacity-70 leading-relaxed px-1"
+            style={{ color: currentTheme.text }}
+          >
+            يتم فحص وتحميل التحديثات الموقعة والآمنة تلقائيًا وبشكل مباشر من داخل التطبيق دون الحاجة للمتجر.
+          </p>
+
+          {/* Action Button */}
+          <button
+            onClick={handleCheckUpdateNow}
+            disabled={isCheckingUpdate}
+            className="w-full h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer shadow-2xs gap-1.5 disabled:opacity-50"
+            style={{
+              backgroundColor: `${currentTheme.accent}15`,
+              borderColor: `${currentTheme.accent}30`,
+              color: currentTheme.accent,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {isCheckingUpdate ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>جاري البحث عن تحديثات...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>التحقق من وجود تحديث جديد</span>
+              </>
+            )}
+          </button>
+
+          {/* Feedback Banner */}
+          {updateFeedback && (
+            <div
+              className="py-1.5 px-3 rounded-xl text-[11px] font-zain-bold text-center border animate-in fade-in flex items-center justify-center gap-1.5"
+              style={{
+                backgroundColor: updateFeedback.success
+                  ? updateFeedback.isLatest
+                    ? "rgba(16, 185, 129, 0.12)"
+                    : `${currentTheme.accent}15`
+                  : "rgba(239, 68, 68, 0.12)",
+                borderColor: updateFeedback.success
+                  ? updateFeedback.isLatest
+                    ? "rgba(16, 185, 129, 0.3)"
+                    : `${currentTheme.accent}30`
+                  : "rgba(239, 68, 68, 0.3)",
+                color: updateFeedback.success
+                  ? updateFeedback.isLatest
+                    ? "#059669"
+                    : currentTheme.accent
+                  : "#dc2626",
+              }}
+            >
+              {updateFeedback.success ? (
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span>{updateFeedback.message}</span>
             </div>
           )}
         </div>

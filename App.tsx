@@ -8,6 +8,8 @@ import SettingsPage from "./components/SettingsPage";
 import PrayerPage from "./components/PrayerPage";
 import LocationPickerPage from "./components/LocationPickerPage";
 import LocationBottomSheet from "./components/LocationBottomSheet";
+import { UpdateDialog } from "./components/UpdateDialog";
+import { checkForUpdates, openUpdateDialog } from "./lib/app-updater";
 import { AppProvider, useApp } from "./contexts/AppContext";
 import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
@@ -36,6 +38,9 @@ const AppContent = () => {
 
       {/* ── Global Location Bottom Action Sheet ── */}
       <LocationBottomSheet />
+
+      {/* ── Global In-App Update Dialog ── */}
+      <UpdateDialog />
 
       {/* ── Unified Persistent Floating Bottom Navigation (Centered with Adjacent Circular FAB) ── */}
       <AnimatePresence>
@@ -412,6 +417,24 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
 // The root component that wraps everything with the provider
 function App() {
   const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    if (!showSplash) {
+      // Check for updates silently after 2.5s on app launch
+      const timer = setTimeout(async () => {
+        try {
+          const result = await checkForUpdates({ manual: false });
+          if (result.hasUpdate && result.latestInfo && result.currentVersion) {
+            openUpdateDialog(result.latestInfo, result.currentVersion, result.isMandatory);
+          }
+        } catch (err) {
+          console.log("Silent background update check:", err);
+        }
+      }, 2500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [showSplash]);
 
   return (
     <AppProvider>
