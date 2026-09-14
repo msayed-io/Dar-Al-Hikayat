@@ -88,11 +88,30 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
     const initCheck = async () => {
       const alreadyDone = localStorage.getItem("dar_onboarding_completed") === "true";
       if (alreadyDone) {
-        setShowSheet(false);
+        // Completing the first-run setup does not mean notification permission
+        // is still granted: the user may have denied it or revoked it later.
+        // Re-check this permission on every launch so update notifications can
+        // be enabled through the official Android prompt when needed.
+        let notificationsGranted = await checkNotificationPermission();
+        if (!notificationsGranted && sessionStorage.getItem("dar_notification_prompt_attempted") !== "true") {
+          sessionStorage.setItem("dar_notification_prompt_attempted", "true");
+          notificationsGranted = await requestNotificationPermission();
+        }
+        if (!notificationsGranted) {
+          setCurrentStep("notifications");
+          setShowSheet(true);
+        } else {
+          setShowSheet(false);
+        }
         return;
       }
 
-      const perms = await evaluatePermissions();
+      let perms = await evaluatePermissions();
+      if (!perms.notifications && sessionStorage.getItem("dar_notification_prompt_attempted") !== "true") {
+        sessionStorage.setItem("dar_notification_prompt_attempted", "true");
+        await requestNotificationPermission();
+        perms = await evaluatePermissions();
+      }
       const nextStep = resolveActiveStep(perms);
 
       if (nextStep === "completed") {
@@ -425,14 +444,14 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                         className="font-zain-xbold text-lg mb-1.5"
                         style={{ color: currentTheme.text }}
                       >
-                        إشعارات الصلوات والأذكار
+                        إشعارات الصلوات والتحديثات
                       </h3>
 
                       <p
                         className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
                         style={{ color: currentTheme.secondary }}
                       >
-                        تفعيل إشعارات الأذان المكتوب والتذكيرات لتنبيهك بمواقيت الصلاة بدقة.
+                        تفعيل إشعارات الأذان والتذكيرات، والتنبيه عند توفر تحديث جديد للتطبيق.
                       </p>
 
                       <button
@@ -456,7 +475,7 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                         <span>
                           {stepSuccessPulse
                             ? "تم تفعيل الإشعارات بنجاح"
-                            : "تفعيل إشعارات الصلوات"}
+                            : "تفعيل إشعارات التطبيق"}
                         </span>
                       </button>
 
