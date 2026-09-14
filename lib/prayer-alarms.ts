@@ -413,7 +413,20 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
 export async function autoDetectLocation(): Promise<PrayerLocation> {
   type Fix = { latitude: number; longitude: number; accuracy: number; timestamp: number };
   const fixes: Fix[] = [];
-  const MAX_ACCEPTABLE_ACCURACY_METERS = 1000;
+  const MAX_ACCEPTABLE_ACCURACY_METERS = 150;
+  const REQUIRED_ACCURACY_METERS = 100;
+
+  const distanceMeters = (a: Fix, b: Fix): number => {
+    const earthRadius = 6_371_000;
+    const lat1 = (a.latitude * Math.PI) / 180;
+    const lat2 = (b.latitude * Math.PI) / 180;
+    const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+    const dLng = ((b.longitude - a.longitude) * Math.PI) / 180;
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * earthRadius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  };
 
   const addFix = (position: { coords: { latitude: number; longitude: number; accuracy?: number | null }; timestamp?: number }) => {
     const { latitude, longitude, accuracy } = position.coords;
@@ -432,7 +445,7 @@ export async function autoDetectLocation(): Promise<PrayerLocation> {
       }
     }
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
         const position = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
@@ -440,13 +453,14 @@ export async function autoDetectLocation(): Promise<PrayerLocation> {
           maximumAge: 0,
         });
         addFix(position);
-        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= 50) break;
+        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= REQUIRED_ACCURACY_METERS) break;
       } catch (error) {
         console.warn(`Location measurement ${attempt + 1} failed`, error);
       }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   } else if (typeof navigator !== "undefined" && "geolocation" in navigator) {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
         const position = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -456,20 +470,27 @@ export async function autoDetectLocation(): Promise<PrayerLocation> {
           });
         });
         addFix(position);
-        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= 50) break;
+        if (fixes.length > 0 && fixes[fixes.length - 1].accuracy <= REQUIRED_ACCURACY_METERS) break;
       } catch (error) {
         console.warn(`Browser location measurement ${attempt + 1} failed`, error);
       }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 
   if (fixes.length === 0) {
-    throw new Error("تعذر الحصول على قراءة GPS موثوقة. اختر الموقع يدويًا على الخريطة.");
+    throw new Error("قراءة GPS غير كافية لتحديد العزبة بدقة. فعّل الموقع الدقيق أو اختر المكان على الخريطة.");
   }
 
   const bestFix = fixes.reduce((best, current) =>
     current.accuracy < best.accuracy ? current : best,
   );
+  const stableFixes = fixes.filter(
+    (fix) => distanceMeters(fix, bestFix) <= Math.max(100, bestFix.accuracy),
+  );
+  if (bestFix.accuracy > REQUIRED_ACCURACY_METERS && stableFixes.length < 2) {
+    throw new Error("لم تثبت قراءات GPS مكانًا واحدًا بدقة كافية. تحرك إلى مكان مفتوح وأعد المحاولة.");
+  }
   const timezoneId = Intl.DateTimeFormat().resolvedOptions().timeZone || "Africa/Cairo";
   let cityName = "موقعي الحالي";
   let countryName = "";

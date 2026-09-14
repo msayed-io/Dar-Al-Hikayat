@@ -42,7 +42,10 @@ export const LocationBottomSheet: React.FC = () => {
     try {
       const loc = await autoDetectLocation();
       updatePrayerState({ location: loc });
-      await schedulePrayerAlarms(loc, prayerState.method);
+      const scheduled = await schedulePrayerAlarms(loc, prayerState.method);
+      if (!scheduled) {
+        throw new Error("تم تحديد الموقع، لكن صلاحيات إشعارات الصلاة غير مكتملة.");
+      }
       setDetectSuccess(true);
       setTimeout(() => {
         setDetectSuccess(false);
@@ -150,6 +153,21 @@ export const LocationBottomSheet: React.FC = () => {
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px", lineHeight: 1 }}>{currentCity}</span>
             </div>
           </div>
+          {prayerState.location?.isAutoDetected && (
+            <div
+              className="mx-5 mb-3 rounded-2xl border px-3 py-2 text-center text-[11px] font-zain-reg leading-relaxed"
+              style={{ borderColor: currentTheme.border, color: currentTheme.secondary }}
+            >
+              <div>
+                دقة GPS المسجلة: {prayerState.location.accuracyMeters != null
+                  ? `${Math.round(prayerState.location.accuracyMeters)} متر`
+                  : "غير معروفة"}
+              </div>
+              {prayerState.location.displayAddress && (
+                <div className="mt-0.5 opacity-75">{prayerState.location.displayAddress}</div>
+              )}
+            </div>
+          )}
 
           <div className="px-4 sm:px-5 pb-5 pt-1">
             {/* Error or Success notification */}
