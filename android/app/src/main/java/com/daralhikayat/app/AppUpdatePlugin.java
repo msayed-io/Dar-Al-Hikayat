@@ -87,8 +87,12 @@ public class AppUpdatePlugin extends Plugin {
         String expectedSha256 = call.getString("sha256");
         int targetVersionCode = call.getInt("versionCode", 0);
 
-        if (downloadUrl == null || downloadUrl.trim().isEmpty()) {
-            call.reject("Download URL cannot be empty");
+        if (downloadUrl == null || !downloadUrl.startsWith("https://")) {
+            call.reject("رابط التحديث يجب أن يكون HTTPS");
+            return;
+        }
+        if (expectedSha256 == null || !expectedSha256.matches("(?i)^[a-f0-9]{64}$")) {
+            call.reject("بصمة SHA-256 للتحديث غير موجودة أو غير صالحة");
             return;
         }
 

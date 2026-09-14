@@ -70,7 +70,6 @@ const NativeAppUpdate = registerPlugin<NativeAppUpdatePlugin>("AppUpdate");
 
 const GITHUB_LATEST_JSON_URL =
   "https://github.com/msayed-io/Dar-Al-Hikayat/releases/latest/download/latest.json";
-const LOCAL_FALLBACK_JSON_URL = "/latest.json";
 
 const STORAGE_KEYS = {
   LAST_CHECK_TIME: "dar_app_last_update_check_time",
@@ -145,7 +144,7 @@ export async function checkForUpdates(options?: {
     let updateData: UpdateInfo | null = null;
     let fetchError: Error | null = null;
 
-    // Try primary GitHub Releases latest.json first with cache buster
+    // Read only the immutable metadata published with the latest GitHub Release.
     try {
       const response = await fetch(
         `${GITHUB_LATEST_JSON_URL}?_t=${Date.now()}`,
@@ -161,29 +160,23 @@ export async function checkForUpdates(options?: {
       fetchError = e;
     }
 
-    // Fallback to local / public latest.json if primary fails
     if (!updateData) {
-      try {
-        const fallbackRes = await fetch(
-          `${LOCAL_FALLBACK_JSON_URL}?_t=${Date.now()}`,
-          {
-            headers: { Accept: "application/json" },
-            cache: "no-store",
-          }
-        );
-        if (fallbackRes.ok) {
-          updateData = (await fallbackRes.json()) as UpdateInfo;
-        }
-      } catch (fallbackErr) {
-        console.warn("Fallback latest.json fetch failed:", fallbackErr);
-      }
-    }
-
-    if (!updateData || typeof updateData.versionCode !== "number") {
       throw (
         fetchError ||
         new Error("تعذر قراءة بيانات ملف التحديث. يرجى التحقق من اتصال الإنترنت.")
       );
+    }
+
+    if (
+      !Number.isInteger(updateData.versionCode) ||
+      updateData.versionCode <= 0 ||
+      typeof updateData.versionName !== "string" ||
+      !/^https:\/\//i.test(updateData.downloadUrl || "") ||
+      !/^[a-f0-9]{64}$/i.test(updateData.sha256 || "") ||
+      !Number.isInteger(updateData.fileSizeBytes) ||
+      updateData.fileSizeBytes <= 0
+    ) {
+      throw new Error("بيانات التحديث المنشورة غير مكتملة أو غير آمنة.");
     }
 
     // Record last successful check time
@@ -276,7 +269,7 @@ export async function openInstallSettings(): Promise<void> {
 /**
  * تنزيل وتثبيت التحديث مع تتبع التقدم والتحقق الأمني
  */
-export async function downloadAndInstallUpdate(
+export async function downloadUpdate(
   updateInfo: UpdateInfo,
   onProgress?: (progress: DownloadProgress) => void
 ): Promise<{ success: boolean; filePath?: string }> {
@@ -307,11 +300,6 @@ export async function downloadAndInstallUpdate(
       if (!downloadResult || !downloadResult.success || !downloadResult.filePath) {
         throw new Error("فشل تنزيل ملف التحديث");
       }
-
-      // 2. Trigger native APK install intent via FileProvider
-      await NativeAppUpdate.installApk({
-        filePath: downloadResult.filePath,
-      });
 
       return { success: true, filePath: downloadResult.filePath };
     } finally {
@@ -348,6 +336,12 @@ export async function downloadAndInstallUpdate(
 
     return { success: true };
   }
+}
+
+export async function installDownloadedUpdate(filePath: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  if (!filePath) throw new Error("ملف التحديث غير موجود");
+  await NativeAppUpdate.installApk({ filePath });
 }
 
 // ─── Global State & Event Dispatcher for in-app Update Prompts ───

@@ -20,7 +20,8 @@ import {
   type DownloadProgress,
   subscribeToUpdateDialog,
   closeUpdateDialog,
-  downloadAndInstallUpdate,
+  downloadUpdate,
+  installDownloadedUpdate,
   ignoreUpdateVersion,
   checkInstallPermission,
   openInstallSettings,
@@ -71,6 +72,16 @@ export const UpdateDialog: React.FC = () => {
   const handleStartUpdate = async () => {
     if (!dialogState.updateInfo) return;
 
+    if (step === "ready_to_install" && downloadedFilePath) {
+      try {
+        await installDownloadedUpdate(downloadedFilePath);
+      } catch (err: any) {
+        setErrorMessage(err?.message || "تعذر فتح شاشة تثبيت التحديث.");
+        setStep("error");
+      }
+      return;
+    }
+
     // Check Android unknown sources permission first if native
     if (Capacitor.isNativePlatform()) {
       const hasPermission = await checkInstallPermission();
@@ -85,7 +96,7 @@ export const UpdateDialog: React.FC = () => {
     setProgress({ progress: 0, bytesDownloaded: 0, totalBytes: 0 });
 
     try {
-      const result = await downloadAndInstallUpdate(
+      const result = await downloadUpdate(
         dialogState.updateInfo,
         (p) => {
           setProgress(p);
