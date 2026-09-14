@@ -14,45 +14,6 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  // Optional Google Geocoding proxy. GOOGLE_GEOCODING_API_KEY stays server-side.
-  app.get("/api/geocoding/reverse", async (req, res) => {
-    const key = process.env.GOOGLE_GEOCODING_API_KEY;
-    const lat = Number(req.query.lat);
-    const lng = Number(req.query.lng);
-    if (!key || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-      res.status(503).json({ enabled: false });
-      return;
-    }
-    try {
-      const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-      url.searchParams.set("latlng", `${lat},${lng}`);
-      url.searchParams.set("language", "ar");
-      url.searchParams.set("region", "eg");
-      url.searchParams.set("key", key);
-      const response = await fetch(url);
-      const data = await response.json() as any;
-      if (!response.ok || data.status !== "OK" || !data.results?.[0]) {
-        res.status(502).json({ enabled: true, status: data.status || "ERROR" });
-        return;
-      }
-      const components = data.results[0].address_components || [];
-      const find = (types: string[]) =>
-        components.find((component: any) => types.some((type) => component.types?.includes(type)))?.long_name || "";
-      res.json({
-        enabled: true,
-        formattedAddress: data.results[0].formatted_address || "",
-        locality: find(["locality", "postal_town"]),
-        village: find(["sublocality", "sublocality_level_1", "administrative_area_level_3"]),
-        district: find(["administrative_area_level_2"]),
-        region: find(["administrative_area_level_1"]),
-        country: find(["country"]),
-      });
-    } catch (error: any) {
-      console.warn("[Google Reverse Geocoding Error]:", error?.message || error);
-      res.status(502).json({ enabled: true, status: "NETWORK_ERROR" });
-    }
-  });
-
   // Helper function to resolve API key
   function resolveApiKey(providedKey?: string): string {
     const key = (providedKey && providedKey.trim()) || process.env.GEMINI_API_KEY || "";

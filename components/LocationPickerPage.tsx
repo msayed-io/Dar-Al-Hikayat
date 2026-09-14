@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 import { schedulePrayerAlarms, guessTimezone } from "../lib/prayer-alarms";
+import { reverseGeocodeCoordinates } from "../lib/reverse-geocoding";
 import {
   ARAB_INDEXED_PLACES,
 } from "../lib/egypt-places";
@@ -75,28 +76,9 @@ export const LocationPickerPage: React.FC = () => {
     setIsReverseGeocoding(true);
 
     try {
-      const [nominatimResult, arcgisResult] = await Promise.allSettled([
-        fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=18&accept-language=ar&addressdetails=1`,
-          { headers: { "Accept-Language": "ar" }, signal: AbortSignal.timeout(5000) },
-        ).then((response) => (response.ok ? response.json() : null)),
-        fetch(
-          `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${lng},${lat}&f=json&langCode=ARA`,
-          { signal: AbortSignal.timeout(5000) },
-        ).then((response) => (response.ok ? response.json() : null)),
-      ]);
-      const nominatim = nominatimResult.status === "fulfilled" ? nominatimResult.value : null;
-      const arcgis = arcgisResult.status === "fulfilled" ? arcgisResult.value : null;
-      const addr = nominatim?.address || {};
-      const arcgisAddr = arcgis?.address || {};
-      const placeName =
-        addr.hamlet || addr.village || addr.suburb || addr.town || addr.neighbourhood ||
-        addr.city || addr.district || addr.county ||
-        arcgisAddr.Village || arcgisAddr.City || arcgisAddr.Subregion ||
-        arcgisAddr.Region || arcgisAddr.Address || "موقع محدد على الخريطة";
-      const country = addr.country || arcgisAddr.Country || "";
-      setCityNameOnly(placeName);
-      setCountryNameOnly(country);
+      const geocode = await reverseGeocodeCoordinates(lat, lng);
+      setCityNameOnly(geocode?.placeName || "موقع محدد على الخريطة");
+      setCountryNameOnly(geocode?.countryName || "");
       setIsReverseGeocoding(false);
       return;
     } catch {

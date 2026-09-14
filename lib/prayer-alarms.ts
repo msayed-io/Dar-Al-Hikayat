@@ -13,6 +13,7 @@ import {
 } from "./prayer-config";
 import { getDayPrayers, getTodayAndTomorrow } from "./prayer-times";
 import { CITIES, type CityData } from "./prayer-cities";
+import { reverseGeocodeCoordinates } from "./reverse-geocoding";
 
 interface PrayerAlarmPlugin {
   checkNotificationPermission(): Promise<{ granted: boolean }>;
@@ -497,44 +498,12 @@ export async function autoDetectLocation(): Promise<PrayerLocation> {
   let displayAddress: string | undefined;
 
   try {
-    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${bestFix.latitude}&lon=${bestFix.longitude}&zoom=18&accept-language=ar&addressdetails=1`;
-    const arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?location=${bestFix.longitude},${bestFix.latitude}&f=json&langCode=ARA`;
-    const googleUrl = `/api/geocoding/reverse?lat=${bestFix.latitude}&lng=${bestFix.longitude}`;
-    const [nominatimResult, arcgisResult, googleResult] = await Promise.allSettled([
-      fetch(nominatimUrl, {
-        headers: { "Accept-Language": "ar" },
-        signal: AbortSignal.timeout(5000),
-      }).then((response) => (response.ok ? response.json() : null)),
-      fetch(arcgisUrl, { signal: AbortSignal.timeout(5000) }).then((response) =>
-        response.ok ? response.json() : null,
-      ),
-      fetch(googleUrl, { signal: AbortSignal.timeout(3500) }).then((response) =>
-        response.ok ? response.json() : null,
-      ),
-    ]);
-    const nominatim = nominatimResult.status === "fulfilled" ? nominatimResult.value : null;
-    const arcgis = arcgisResult.status === "fulfilled" ? arcgisResult.value : null;
-    const google = googleResult.status === "fulfilled" ? googleResult.value : null;
-    const address = nominatim?.address || {};
-    const nominatimName =
-      address.hamlet || address.village || address.suburb || address.town ||
-      address.neighbourhood || address.city || address.district || address.county ||
-      nominatim?.name;
-    const arcgisAddress = arcgis?.address || {};
-    const arcgisName =
-      arcgisAddress.Village || arcgisAddress.City || arcgisAddress.Subregion ||
-      arcgisAddress.Region || arcgisAddress.Address;
-    const googleName = google?.enabled
-      ? (google.village || google.locality || google.district || google.region || "")
-      : "";
-    // Prefer a specific locality, but only use the second provider to confirm
-    // it when both providers return the same locality. Never invent a village.
-    cityName = googleName || nominatimName || arcgisName || cityName;
-    if (nominatimName && arcgisName && nominatimName !== arcgisName) {
-      cityName = nominatimName;
+    const geocode = await reverseGeocodeCoordinates(bestFix.latitude, bestFix.longitude);
+    if (geocode) {
+      cityName = geocode.placeName || cityName;
+      countryName = geocode.countryName || countryName;
+      displayAddress = geocode.displayAddress;
     }
-    countryName = google?.country || address.country || arcgisAddress.Country || countryName;
-    displayAddress = google?.formattedAddress || nominatim?.display_name || arcgisAddress.Match_addr || undefined;
   } catch (error) {
     console.warn("Reverse geocoding failed; keeping the verified coordinates", error);
   }
