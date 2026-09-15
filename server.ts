@@ -93,7 +93,7 @@ async function startServer() {
   // Stream route for AI Assistant
   app.post("/api/gemini/stream", async (req, res) => {
     try {
-      const { contents, systemInstruction, model, apiKey } = req.body;
+      const { contents, systemInstruction, model, apiKey, thinkingLevel } = req.body;
       const resolvedKey = resolveApiKey(apiKey);
 
       if (!resolvedKey) {
@@ -125,15 +125,36 @@ async function startServer() {
 
       for (const currentModel of modelsToTry) {
         try {
-          const streamResponse = await ai.models.generateContentStream({
-            model: currentModel,
-            contents,
-            config: {
-              systemInstruction: systemInstruction || undefined,
-              temperature: 0.7,
-              topP: 0.9,
-            },
-          });
+          const config: any = {
+            systemInstruction: systemInstruction || undefined,
+            temperature: 0.7,
+            topP: 0.9,
+          };
+          if (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") {
+            config.thinkingConfig = { thinkingLevel };
+          }
+
+          let streamResponse;
+          try {
+            streamResponse = await ai.models.generateContentStream({
+              model: currentModel,
+              contents,
+              config,
+            });
+          } catch (initialErr: any) {
+            const msg = `${initialErr?.message || ""} ${JSON.stringify(initialErr?.data || {})}`;
+            if (config.thinkingConfig && /thinking|THINKING_LEVEL|Enterprise/i.test(msg)) {
+              console.warn("Thinking level stream rejected by API, falling back to temperature only.");
+              delete config.thinkingConfig;
+              streamResponse = await ai.models.generateContentStream({
+                model: currentModel,
+                contents,
+                config,
+              });
+            } else {
+              throw initialErr;
+            }
+          }
 
           for await (const chunk of streamResponse) {
             const text = chunk.text || "";
@@ -243,7 +264,7 @@ async function startServer() {
   // Non-streaming generate content route with model fallback
   app.post("/api/gemini/generate", async (req, res) => {
     try {
-      const { contents, systemInstruction, model, apiKey, tools, temperature } = req.body;
+      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel } = req.body;
       const resolvedKey = resolveApiKey(apiKey);
 
       if (!resolvedKey) {
@@ -279,16 +300,35 @@ async function startServer() {
             temperature: typeof temperature === "number" ? temperature : 0.7,
             topP: 0.9,
           };
+          if (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") {
+            config.thinkingConfig = { thinkingLevel };
+          }
 
           if (tools && Array.isArray(tools) && tools.length > 0) {
             config.tools = [{ functionDeclarations: tools }];
           }
 
-          const response = await ai.models.generateContent({
-            model: currentModel,
-            contents,
-            config,
-          });
+          let response;
+          try {
+            response = await ai.models.generateContent({
+              model: currentModel,
+              contents,
+              config,
+            });
+          } catch (initialErr: any) {
+            const msg = `${initialErr?.message || ""} ${JSON.stringify(initialErr?.data || {})}`;
+            if (config.thinkingConfig && /thinking|THINKING_LEVEL|Enterprise/i.test(msg)) {
+              console.warn("Thinking level generation rejected by API, falling back to temperature only.");
+              delete config.thinkingConfig;
+              response = await ai.models.generateContent({
+                model: currentModel,
+                contents,
+                config,
+              });
+            } else {
+              throw initialErr;
+            }
+          }
 
           const rawCalls = (response as any).functionCalls;
           const functionCalls = Array.isArray(rawCalls)

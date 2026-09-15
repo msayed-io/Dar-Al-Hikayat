@@ -2,6 +2,28 @@ import { Capacitor } from "@capacitor/core";
 
 export const GEMINI_PRIMARY_MODEL = "gemini-3.8-flash";
 
+export type ThinkingLevelName = "LOW" | "MEDIUM" | "HIGH";
+export const THINKING_FOR_PATH = {
+  executive: "LOW",
+  summary: "LOW",
+  advisory: "MEDIUM",
+  init: "MEDIUM",
+} as const;
+
+export interface ReasoningConfig {
+  temperature: number;
+  thinkingConfig?: { thinkingLevel: ThinkingLevelName };
+}
+
+export function buildReasoningConfig(path: keyof typeof THINKING_FOR_PATH, temperature: number): ReasoningConfig {
+  return { temperature, thinkingConfig: { thinkingLevel: THINKING_FOR_PATH[path] } };
+}
+
+export function isThinkingRejection(err: any): boolean {
+  const msg = `${err?.message || ""} ${JSON.stringify(err?.data || {})}`;
+  return /thinking|THINKING_LEVEL|Enterprise/i.test(msg);
+}
+
 /**
  * Determines whether the app is running in a native mobile environment (Capacitor/Android/iOS)
  * or standalone local WebView without an Express server backend.
@@ -156,6 +178,7 @@ export interface DirectGeminiGenerateParams {
     topP?: number;
     topK?: number;
     maxOutputTokens?: number;
+    thinkingLevel?: ThinkingLevelName;
   };
   signal?: AbortSignal;
 }
@@ -201,26 +224,47 @@ export async function generateGeminiDirectly(
   }
 
   if (params.generationConfig) {
-    bodyPayload.generationConfig = params.generationConfig;
+    const { thinkingLevel, ...restConfig } = params.generationConfig;
+    bodyPayload.generationConfig = restConfig;
+    if (thinkingLevel) {
+      bodyPayload.generationConfig.thinkingConfig = { thinkingLevel };
+    }
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(bodyPayload),
-    signal: params.signal,
-  });
+  const makeRequest = async (payload: any) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: params.signal,
+    });
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    const err: any = new Error(
-      errData?.error?.message || `Direct Gemini API generation error (${res.status})`
-    );
-    err.status = res.status;
-    err.data = errData;
-    throw err;
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const err: any = new Error(
+        errData?.error?.message || `Direct Gemini API generation error (${res.status})`
+      );
+      err.status = res.status;
+      err.data = errData;
+      throw err;
+    }
+
+    return res;
+  };
+
+  let res;
+  try {
+    res = await makeRequest(bodyPayload);
+  } catch (err: any) {
+    if (bodyPayload.generationConfig?.thinkingConfig && isThinkingRejection(err)) {
+      console.warn("Thinking level rejected by API, falling back to temperature only.");
+      delete bodyPayload.generationConfig.thinkingConfig;
+      res = await makeRequest(bodyPayload);
+    } else {
+      throw err;
+    }
   }
 
   const data = await res.json();
@@ -262,6 +306,7 @@ export interface DirectGeminiStreamParams {
     topP?: number;
     topK?: number;
     maxOutputTokens?: number;
+    thinkingLevel?: ThinkingLevelName;
   };
   onChunk: (text: string) => void;
   signal?: AbortSignal;
@@ -297,26 +342,47 @@ export async function streamGeminiDirectly(
   }
 
   if (params.generationConfig) {
-    bodyPayload.generationConfig = params.generationConfig;
+    const { thinkingLevel, ...restConfig } = params.generationConfig;
+    bodyPayload.generationConfig = restConfig;
+    if (thinkingLevel) {
+      bodyPayload.generationConfig.thinkingConfig = { thinkingLevel };
+    }
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(bodyPayload),
-    signal: params.signal,
-  });
+  const makeRequest = async (payload: any) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: params.signal,
+    });
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    const err: any = new Error(
-      errData?.error?.message || `Direct Gemini API stream error (${res.status})`
-    );
-    err.status = res.status;
-    err.data = errData;
-    throw err;
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const err: any = new Error(
+        errData?.error?.message || `Direct Gemini API stream error (${res.status})`
+      );
+      err.status = res.status;
+      err.data = errData;
+      throw err;
+    }
+
+    return res;
+  };
+
+  let res;
+  try {
+    res = await makeRequest(bodyPayload);
+  } catch (err: any) {
+    if (bodyPayload.generationConfig?.thinkingConfig && isThinkingRejection(err)) {
+      console.warn("Thinking level stream rejected by API, falling back to temperature only.");
+      delete bodyPayload.generationConfig.thinkingConfig;
+      res = await makeRequest(bodyPayload);
+    } else {
+      throw err;
+    }
   }
 
   const reader = res.body?.getReader();

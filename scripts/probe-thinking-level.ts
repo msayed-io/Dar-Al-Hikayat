@@ -1,0 +1,116 @@
+import { GoogleGenAI } from "@google/genai";
+import { generateGeminiDirectly, streamGeminiDirectly } from "../lib/gemini-direct-client";
+
+async function main() {
+  const apiKey = process.env.GEMINI_PROBE_KEY;
+  if (!apiKey) {
+    console.error("المفتاح مطلوب");
+    process.exit(2);
+  }
+
+  console.log("=== بدء المسبار الحي لـ thinkingLevel ===");
+
+  let allPassed = true;
+
+  // Test 1: Direct REST Generate (LOW)
+  try {
+    console.log("\n[اختبار 1] REST توليد مباشر (LOW)");
+    const res = await generateGeminiDirectly({
+      apiKey,
+      contents: [{ role: "user", parts: [{ text: "Hello, just reply with 'Hi'" }] }],
+      generationConfig: {
+        temperature: 0.2,
+        thinkingLevel: "LOW",
+      },
+    });
+    console.log("-> نجاح: تم التوليد بنجاح.");
+    // We can't directly inspect thoughtsTokenCount from generateGeminiDirectly 
+    // unless we modified it to return usageMetadata. We will just report success.
+  } catch (err: any) {
+    console.error("-> فشل:", err?.message || err);
+    allPassed = false;
+  }
+
+  // Test 2: Direct REST Stream (MEDIUM)
+  try {
+    console.log("\n[اختبار 2] REST بث مباشر (MEDIUM)");
+    let firstChunkReceived = false;
+    await streamGeminiDirectly({
+      apiKey,
+      contents: [{ role: "user", parts: [{ text: "Hello, reply with 3 words" }] }],
+      generationConfig: {
+        temperature: 0.2,
+        thinkingLevel: "MEDIUM",
+      },
+      onChunk: (text) => {
+        if (!firstChunkReceived && text) {
+          firstChunkReceived = true;
+          console.log("-> نجاح: وصلت أول قطعة.");
+        }
+      },
+    });
+    if (!firstChunkReceived) {
+      console.log("-> تحذير: اكتمل البث دون استلام قطع نصية.");
+    }
+  } catch (err: any) {
+    console.error("-> فشل:", err?.message || err);
+    allPassed = false;
+  }
+
+  // Test 3: Server SDK simulation (LOW)
+  try {
+    console.log("\n[اختبار 3] شكل كونفيج الخادم (SDK) بمستوى LOW");
+    const ai = new GoogleGenAI({ apiKey });
+    const config: any = {
+      temperature: 0.2,
+      thinkingConfig: { thinkingLevel: "LOW" },
+    };
+
+    let response;
+    let fallbackTriggered = false;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+        config,
+      });
+    } catch (initialErr: any) {
+      const msg = `${initialErr?.message || ""} ${JSON.stringify(initialErr?.data || {})}`;
+      if (config.thinkingConfig && /thinking|THINKING_LEVEL|Enterprise/i.test(msg)) {
+        console.warn("-> تدخل التراجع (Fallback) بعد الرفض.");
+        fallbackTriggered = true;
+        delete config.thinkingConfig;
+        response = await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+          config,
+        });
+      } else {
+        throw initialErr;
+      }
+    }
+
+    console.log(`-> نجاح: تم التوليد. (هل تدخّل التراجع؟ ${fallbackTriggered ? "نعم" : "لا"})`);
+    const metadata = (response as any)?.usageMetadata;
+    if (metadata?.promptTokenCount !== undefined) {
+       console.log(`-> tokens: prompt=${metadata.promptTokenCount}, candidates=${metadata.candidatesTokenCount}`);
+    }
+  } catch (err: any) {
+    console.error("-> فشل:", err?.message || err);
+    allPassed = false;
+  }
+
+  console.log("\n=== النتيجة النهائية ===");
+  if (allPassed) {
+    console.log("جميع الاختبارات اجتازت بنجاح (خروج 0).");
+    process.exit(0);
+  } else {
+    console.error("بعض الاختبارات فشلت (خروج 1).");
+    process.exit(1);
+  }
+}
+
+main().catch((err) => {
+  console.error("Unhandled error:", err);
+  process.exit(1);
+});

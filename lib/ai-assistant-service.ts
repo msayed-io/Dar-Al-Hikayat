@@ -9,6 +9,7 @@ import {
 import {
   generateGeminiDirectly,
   streamGeminiDirectly,
+  buildReasoningConfig,
 } from "./gemini-direct-client";
 
 // ── SYSTEM PROMPT FOR RAHMA EL SAYED MOWAFI ──
@@ -250,7 +251,7 @@ export async function initializeStoryAssistant(
           apiKey,
           systemInstruction: fullSystemInstruction,
           contents: [{ role: "user", parts: [{ text: userInitialPrompt }] }],
-          generationConfig: { temperature: 0.7 },
+          generationConfig: { ...buildReasoningConfig("init", 0.7) },
         });
         if (directRes.text) return directRes.text;
       } else {
@@ -319,7 +320,7 @@ ${newMessagesText}
           systemInstruction: SUMMARIZE_PROMPT,
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
           generationConfig: {
-            temperature: 0.3,
+            ...buildReasoningConfig("summary", 0.3),
             maxOutputTokens: 300,
           },
         });
@@ -333,6 +334,7 @@ ${newMessagesText}
             contents: [{ role: "user", parts: [{ text: userPrompt }] }],
             model: "gemini-3.8-flash",
             temperature: 0.3,
+            thinkingLevel: "LOW",
           }),
         });
 
@@ -434,6 +436,7 @@ export async function streamLiteraryAssistantResponse(
             systemInstruction: enrichedSystemInstruction,
             contents,
             onChunk,
+            generationConfig: { ...buildReasoningConfig("advisory", 0.7) },
           });
           return candidateAccumulated;
         } catch (streamErr: any) {
@@ -449,6 +452,7 @@ export async function streamLiteraryAssistantResponse(
             apiKey,
             systemInstruction: enrichedSystemInstruction,
             contents,
+            generationConfig: { ...buildReasoningConfig("advisory", 0.7) },
           });
           if (genResult.text) {
             onChunk(genResult.text);
@@ -466,6 +470,8 @@ export async function streamLiteraryAssistantResponse(
               systemInstruction: enrichedSystemInstruction,
               contents,
               model: "gemini-3.8-flash",
+              temperature: 0.7,
+              thinkingLevel: "MEDIUM",
             }),
           });
 
@@ -636,9 +642,7 @@ export async function requestExecutiveDecision({
           systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
           contents,
           tools: tools || AGENTIC_TOOL_DECLARATIONS,
-          generationConfig: {
-            temperature: 0.2,
-          },
+          generationConfig: { ...buildReasoningConfig("executive", 0.2) },
         });
       } else {
         // Server proxy endpoint (Web with environment variable GEMINI_API_KEY)
@@ -650,6 +654,7 @@ export async function requestExecutiveDecision({
             contents,
             model: "gemini-3.8-flash",
             temperature: 0.2,
+            thinkingLevel: "LOW",
             tools: tools || AGENTIC_TOOL_DECLARATIONS,
           }),
         });
@@ -853,7 +858,7 @@ ${stepsSummary}
         const directResult = await generateGeminiDirectly({
           apiKey,
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3 },
+          generationConfig: { ...buildReasoningConfig("summary", 0.3) },
         });
         return directResult.text.trim() || generateDefaultAgentSummary(executedSteps);
       } else {
@@ -864,6 +869,7 @@ ${stepsSummary}
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             model: "gemini-3.8-flash",
             temperature: 0.3,
+            thinkingLevel: "LOW",
           }),
         });
 
