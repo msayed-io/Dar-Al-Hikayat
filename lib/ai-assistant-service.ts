@@ -279,6 +279,76 @@ export async function initializeStoryAssistant(
   }
 }
 
+interface SummaryCacheEntry {
+  summary: string;
+  lastSummarizedId: string;
+}
+
+const summaryCache = new Map<string, SummaryCacheEntry>();
+
+const SUMMARIZE_PROMPT = `أنت مساعد تلخيص أدبي احترافي وموجز للغاية.
+مهمتك هي مراجعة تاريخ المحادثة السابقة بين المساعد الأدبي والكاتبة "رحمة السيد موافي" وتحديث الملخص التراكمي للمحادثة بدقة بالغة.
+يجب أن تركز حصرياً على:
+1. القرارات الفنية والأدبية التي اتفقت عليها الكاتبة مع المساعد (مثل اتجاه الحبكة، مصير الشخصيات، الأسلوب).
+2. التفاصيل والحقائق والخطوط العريضة الجديدة المعتمدة للحكاية.
+3. التوجيهات أو القواعد الفنية الخاصة التي طلبت الكاتبة الالتزام بها في الكتابة.
+
+اكتب الملخص باللغة العربية الفصحى بأسلوب مكثف ومركّز جداً في شكل نقاط محددة وسرد موجز لا يتجاوز 200 كلمة.`;
+
+async function generateCumulativeSummary(
+  oldSummary: string,
+  newMessages: AIMessage[]
+): Promise<string> {
+  const newMessagesText = newMessages
+    .map((m) => `${m.role === "user" ? "الكاتبة" : "المساعد"}: ${m.content}`)
+    .join("\n");
+
+  const userPrompt = `الملخص التراكمي السابق (إن وجد):
+${oldSummary || "لا يوجد ملخص سابق بعد."}
+
+الرسائل الجديدة المراد إضافتها للملخص:
+${newMessagesText}
+
+الملخص التراكمي الجديد والمحدّث بالكامل:`;
+
+  try {
+    return await executeWithSmartRotation(async (apiKey) => {
+      if (apiKey) {
+        const directRes = await generateGeminiDirectly({
+          apiKey,
+          systemInstruction: SUMMARIZE_PROMPT,
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 300,
+          },
+        });
+        return directRes.text || "";
+      } else {
+        const res = await fetch("/api/gemini/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: SUMMARIZE_PROMPT,
+            contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+            model: "gemini-3.8-flash",
+            temperature: 0.3,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          return data.text || "";
+        }
+        throw new Error(`Server generate summary failed with status ${res.status}`);
+      }
+    });
+  } catch (error) {
+    console.error("Error in generateCumulativeSummary:", error);
+    return oldSummary;
+  }
+}
+
 /**
  * Send interactive user message to Gemini, maintaining conversation history & story context.
  * Uses the SmartKeyRotator to seamlessly and transparently rotate keys if a rate-limit error occurs.
@@ -291,12 +361,56 @@ export async function streamLiteraryAssistantResponse(
   mentionsContext?: string
 ): Promise<string> {
   const contextBlock = formatStoryContextForAI(storyContext);
-  const fullSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}${
+  const baseSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}${
     mentionsContext ? `\n\n${mentionsContext}` : ""
   }`;
 
-  // Build full contents payload with conversation history
-  const contents = history
+  let enrichedSystemInstruction = baseSystemInstruction;
+  let activeHistory = history;
+
+  // Apply Sliding Window & Smart Cumulative Summarization if history is long
+  if (history.length > 12) {
+    const sessionKey = history[0].id || "temp-session";
+    const limitIndex = history.length - 8;
+    const messagesToSummarize = history.slice(0, limitIndex);
+    activeHistory = history.slice(limitIndex);
+
+    let cached = summaryCache.get(sessionKey);
+    if (!cached) {
+      cached = { summary: "", lastSummarizedId: "" };
+    }
+
+    const lastMsgToSummarize = messagesToSummarize[messagesToSummarize.length - 1];
+    if (cached.lastSummarizedId !== lastMsgToSummarize.id) {
+      let startIndex = 0;
+      if (cached.lastSummarizedId) {
+        const idx = messagesToSummarize.findIndex((m) => m.id === cached!.lastSummarizedId);
+        if (idx !== -1) {
+          startIndex = idx + 1;
+        }
+      }
+
+      const newMessagesForSummary = messagesToSummarize.slice(startIndex);
+      if (newMessagesForSummary.length > 0) {
+        try {
+          console.log(`[Smart Summarization] Summarizing ${newMessagesForSummary.length} older messages...`);
+          const updatedSummary = await generateCumulativeSummary(cached.summary, newMessagesForSummary);
+          cached.summary = updatedSummary;
+          cached.lastSummarizedId = lastMsgToSummarize.id;
+          summaryCache.set(sessionKey, cached);
+        } catch (sumErr) {
+          console.warn("[Smart Summarization] Background summarization failed:", sumErr);
+        }
+      }
+    }
+
+    if (cached.summary) {
+      enrichedSystemInstruction += `\n\n[ملخص تراكمي لمعلومات وقرارات الجلسة السابقة مع الكاتبة رحمة السيد موافي]:\n${cached.summary}\n[نهاية الملخص التراكمي]`;
+    }
+  }
+
+  // Build full contents payload with (potentially sliced) conversation history
+  const contents = activeHistory
     .filter((msg) => msg.content && msg.content.trim())
     .map((msg) => ({
       role: (msg.role === "user" ? "user" : "model") as "user" | "model",
@@ -317,7 +431,7 @@ export async function streamLiteraryAssistantResponse(
         try {
           candidateAccumulated = await streamGeminiDirectly({
             apiKey,
-            systemInstruction: fullSystemInstruction,
+            systemInstruction: enrichedSystemInstruction,
             contents,
             onChunk,
           });
@@ -333,7 +447,7 @@ export async function streamLiteraryAssistantResponse(
           // Fallback to direct generateContent
           const genResult = await generateGeminiDirectly({
             apiKey,
-            systemInstruction: fullSystemInstruction,
+            systemInstruction: enrichedSystemInstruction,
             contents,
           });
           if (genResult.text) {
@@ -349,7 +463,7 @@ export async function streamLiteraryAssistantResponse(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              systemInstruction: fullSystemInstruction,
+              systemInstruction: enrichedSystemInstruction,
               contents,
               model: "gemini-3.8-flash",
             }),
@@ -433,7 +547,7 @@ export async function streamLiteraryAssistantResponse(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              systemInstruction: fullSystemInstruction,
+              systemInstruction: enrichedSystemInstruction,
               contents,
               model: "gemini-3.8-flash",
             }),

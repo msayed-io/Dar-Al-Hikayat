@@ -86,10 +86,6 @@ export interface PendingAgentRequest {
   reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI";
   originalMessage: string;
   pendingOperations?: ExecutiveToolCall[];
-  fixedScope?: {
-    chapterIndex?: number;
-    blockId?: string;
-  };
 }
 
 export interface AgentExecutionResult {
@@ -400,12 +396,14 @@ export async function executeAgentPlan({
   onStepUpdate,
   onCommit,
   accentColor = "#D97706",
+  skipScopeCheck,
 }: {
   rootElement: HTMLElement | null;
   rawCalls: ExecutiveToolCall[];
   onStepUpdate: (steps: AgentStepItem[]) => void;
   onCommit: () => void;
   accentColor?: string;
+  skipScopeCheck?: boolean;
 }): Promise<AgentExecutionResult> {
   // 1. فحص التزامن والقفل (Concurrency Guard)
   if (isAgentEditLocked()) {
@@ -460,49 +458,58 @@ export async function executeAgentPlan({
     };
   }
 
-  // فحص النطاق متعدد الفصول (Multi-Chapter Scope Check - F2)
-  const chaptersInvolved = new Set<string>();
-  const chapterNames: string[] = [];
-
-  for (const c of safeCalls) {
-    let targetBlockId = "";
-    if (c.name === "replace_text" || c.name === "delete_text") {
-      targetBlockId = c.args.block_id;
-    } else if (c.name === "insert_text") {
-      targetBlockId = c.args.anchor_block_id;
-    }
-
-    if (targetBlockId) {
-      const el = rootElement.querySelector<HTMLElement>(`[data-block-id="${targetBlockId}"]`);
-      if (el) {
-        const chapterParent = (typeof el.closest === "function" ? el.closest("[data-chapter-id]") : null) ||
-                              (typeof el.closest === "function" ? el.closest(".editor-container") : null);
-        const chapterId = chapterParent?.getAttribute("data-chapter-id");
-        if (chapterId) {
-          if (!chaptersInvolved.has(chapterId)) {
-            chaptersInvolved.add(chapterId);
-            const titleInput = chapterParent?.parentElement?.querySelector<HTMLInputElement>("input");
-            const chTitle = titleInput?.value || `فصل (${chapterId})`;
-            chapterNames.push(chTitle);
+  if (!skipScopeCheck) {
+    // فحص النطاق متعدد الفصول (Multi-Chapter Scope Check - F2)
+    const chaptersInvolved = new Set<string>();
+    const chapterNames: string[] = [];
+  
+    for (const c of safeCalls) {
+      let targetBlockId = "";
+      if (c.name === "replace_text" || c.name === "delete_text") {
+        targetBlockId = c.args.block_id;
+      } else if (c.name === "insert_text") {
+        targetBlockId = c.args.anchor_block_id;
+      }
+  
+      if (targetBlockId) {
+        const el = rootElement.querySelector<HTMLElement>(`[data-block-id="${targetBlockId}"]`);
+        if (el) {
+          const chapterParent = (typeof el.closest === "function" ? el.closest("[data-chapter-id]") : null) ||
+                                (typeof el.closest === "function" ? el.closest(".editor-container") : null);
+          const chapterId = chapterParent?.getAttribute("data-chapter-id");
+          if (chapterId) {
+            if (!chaptersInvolved.has(chapterId)) {
+              chaptersInvolved.add(chapterId);
+              const titleInput = chapterParent?.parentElement?.querySelector<HTMLInputElement>("input");
+              const chTitle = titleInput?.value || `فصل (${chapterId})`;
+              chapterNames.push(chTitle);
+            }
           }
         }
       }
     }
-  }
-
-  // إذا كانت الخطة تمتد عبر أكثر من فصل في آن واحد دون موافقة مسبقة
-  if (chaptersInvolved.size > 1) {
-    return {
-      success: true,
-      executedSteps: [],
-      askWriter: {
-        question: `الخطة المقترحة تشمل تعديلات تمتد عبر عدة فصول (${chapterNames.join("، ")}). لتأكيد الدقة، هل تودين تطبيق هذه التعديلات عبر الفصول مجتمعة؟`,
-        reason: "SCOPE",
-        pendingOperations: safeCalls,
-      },
-      totalMutations: 0,
-      auditEntriesCount: 0,
-    };
+  
+    // إذا كانت الخطة تمتد عبر أكثر من فصل في آن واحد دون موافقة مسبقة
+    if (chaptersInvolved.size > 1) {
+      return {
+        success: true,
+        executedSteps: [],
+        askWriter: {
+          question: `الخطة المقترحة تشمل تعديلات تمتد عبر عدة فصول (${chapterNames.join("، ")}). لتأكيد الدقة، هل تودين تطبيق هذه التعديلات عبر الفصول مجتمعة؟`,
+          reason: "SCOPE",
+          pendingOperations: safeCalls,
+        },
+        totalMutations: 0,
+        auditEntriesCount: 0,
+      };
+    }
+  } else {
+    globalAuditLog.record({
+      type: "BATCH_BEGIN",
+      blockId: "scope_approved",
+      details: { note: "تجاوز فحص النطاق بموافقة الكاتبة الصريحة (تنفيذ واحد)" },
+      status: "SUCCESS",
+    });
   }
 
   // تحضير قائمة الخطوات للعرض الحركي 1:1

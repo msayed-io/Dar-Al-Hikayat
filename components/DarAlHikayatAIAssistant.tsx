@@ -1214,10 +1214,23 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       let effectivePrompt = userPromptText;
       if (pendingAgentRequest) {
         effectivePrompt = `[سياق توضيحي لسؤال سابق: "${pendingAgentRequest.question}"]\nإجابة الكاتبة وقرارها: ${userPromptText}\nالطلب الأصلي الأساسي: ${pendingAgentRequest.originalMessage}`;
+        if (pendingAgentRequest.pendingOperations && pendingAgentRequest.pendingOperations.length > 0) {
+          effectivePrompt += `\n[عمليات معلقة من خطة سابقة (${pendingAgentRequest.pendingOperations.length}) — خذها في الحسبان عند إعادة التخطيط، ولا تنفذها إلا ضمن خطتك الجديدة]:\n` + 
+            pendingAgentRequest.pendingOperations.map(op => `- (${op.name} | الفقرة ${(op.args as any).block_id || (op.args as any).anchor_block_id || 'بدون'} | ${((op.args as any).step_note || "").slice(0, 60)})`).join("\n");
+        }
       }
 
-      // إذا كانت الكاتبة تؤكد وتوافق على تنفيذ العمليات المعلّقة
-      const isAffirmative = /^(نعم|تمام|موافقة|موافق|أجل|طبقي|طبق|استمري|استمر|أكيد|طبعاً|يلا|نفذي|نفذ|أوافق|موافقين)/i.test(userPromptText.trim());
+      const AFFIRM_WORDS = ["نعم","تمام","موافق","موافقة","أجل","أكيد","طبعا","طبعاً","يلا","نفذ","نفذي","طبق","طبقي","استمر","استمري","أوافق","موافقين"];
+      const QUALIFIER_WORDS = ["لكن","بس","فقط","بشرط","عدا","ماعدا","ما عدا","إلا","غير","بدون","بلا","لا ","لا،","؟","?"];
+      function isStrictAffirmative(raw: string): boolean {
+        const t = (raw || "").trim();
+        if (t.length === 0 || t.length > 25) return false;
+        if (!AFFIRM_WORDS.some((w) => t.startsWith(w))) return false;
+        return !QUALIFIER_WORDS.some((q) => t.includes(q));
+      }
+      const isAffirmative = isStrictAffirmative(userPromptText);
+      const isScopeApproval = pendingAgentRequest?.reason === "SCOPE" && isAffirmative;
+
       let directPendingCalls: ExecutiveToolCall[] | null = null;
       if (pendingAgentRequest?.pendingOperations && pendingAgentRequest.pendingOperations.length > 0 && isAffirmative) {
         directPendingCalls = pendingAgentRequest.pendingOperations;
@@ -1269,10 +1282,6 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           reason,
           originalMessage: pendingAgentRequest?.originalMessage || userPromptText,
           pendingOperations: remainingOps.length > 0 ? remainingOps : undefined,
-          fixedScope: {
-            chapterIndex: activeChapterIdx,
-            blockId: (askWriterCall.args as any)?.block_id,
-          },
         });
 
         setMessages((prev) => [
@@ -1352,6 +1361,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             onCommitAgentChanges?.();
           },
           accentColor: currentTheme.accent || "#D97706",
+          skipScopeCheck: isScopeApproval === true,
         });
 
         if (planResult.askWriter) {

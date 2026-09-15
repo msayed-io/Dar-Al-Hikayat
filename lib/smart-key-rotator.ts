@@ -223,62 +223,79 @@ export async function executeWithSmartRotation<T>(
   let lastError: any = null;
 
   for (const candidate of candidateQueue) {
-    try {
-      // Attempt with candidate key
-      const result = await operation(candidate.key, candidate);
-      return result;
-    } catch (err: any) {
-      lastError = err;
+    let attempts = 0;
+    const maxRetries = 2; // Try up to 2 times (3 attempts total) with exponential backoff before rotating/disabling
+    let currentDelay = 1500; // Start with 1.5s delay
 
-      // Inspect error details
-      const status = err?.status || err?.statusCode || 0;
-      const responseData = err?.data || err?.responseBody;
-      const message = err?.message || "";
+    while (attempts <= maxRetries) {
+      try {
+        // Attempt with candidate key
+        const result = await operation(candidate.key, candidate);
+        return result;
+      } catch (err: any) {
+        lastError = err;
 
-      if (isRateLimitError(status, responseData, message)) {
-        console.warn(
-          `[SmartKeyRotator] Key ${candidate.label || candidate.id} hit rate limit / quota exhaustion. Rotating to next candidate.`
-        );
-        if (candidate.id !== "server_default") {
-          await updateManagedKey(candidate.id, {
-            status: "rate_limited",
-            rateLimitedAt: Date.now(),
-          });
+        // Inspect error details
+        const status = err?.status || err?.statusCode || 0;
+        const responseData = err?.data || err?.responseBody;
+        const message = err?.message || "";
+
+        if (isRateLimitError(status, responseData, message)) {
+          if (attempts < maxRetries) {
+            attempts++;
+            const backoffMs = currentDelay + Math.random() * 500;
+            console.warn(
+              `[SmartKeyRotator 429 Backoff] Key ${candidate.label || candidate.id} hit rate limit. Retrying in ${backoffMs.toFixed(0)}ms (Attempt ${attempts}/${maxRetries})...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            currentDelay *= 2; // double the delay
+            continue; // retry with same key
+          }
+
+          console.warn(
+            `[SmartKeyRotator] Key ${candidate.label || candidate.id} exhausted retries for rate limit / quota exhaustion. Rotating to next candidate.`
+          );
+          if (candidate.id !== "server_default") {
+            await updateManagedKey(candidate.id, {
+              status: "rate_limited",
+              rateLimitedAt: Date.now(),
+            });
+          }
+          // Break inner loop to go to next candidate in queue
+          break;
         }
-        // Continue silently to next candidate in loop!
-        continue;
-      }
 
-      if (isInvalidKeyError(status, responseData, message)) {
-        const isPermissionDenied =
-          status === 403 ||
-          (message && message.toLowerCase().includes("permission")) ||
-          (message && message.toLowerCase().includes("caller does not have permission"));
+        if (isInvalidKeyError(status, responseData, message)) {
+          const isPermissionDenied =
+            status === 403 ||
+            (message && message.toLowerCase().includes("permission")) ||
+            (message && message.toLowerCase().includes("caller does not have permission"));
 
-        console.warn(
-          `[SmartKeyRotator] Key ${candidate.label || candidate.id} is invalid or unauthenticated (${
-            isPermissionDenied ? "The caller does not have permission" : "Invalid Key"
-          }). Marking as disabled.`
-        );
-        if (candidate.id !== "server_default") {
-          await updateManagedKey(candidate.id, {
-            status: "disabled",
-            disabledReason: isPermissionDenied
-              ? "مفتاح غير مصرح له أو تنقصه الأذونات (The caller does not have permission)"
-              : "مفتاح غير صالح أو ملغى",
-          });
+          console.warn(
+            `[SmartKeyRotator] Key ${candidate.label || candidate.id} is invalid or unauthenticated (${
+              isPermissionDenied ? "The caller does not have permission" : "Invalid Key"
+            }). Marking as disabled.`
+          );
+          if (candidate.id !== "server_default") {
+            await updateManagedKey(candidate.id, {
+              status: "disabled",
+              disabledReason: isPermissionDenied
+                ? "مفتاح غير مصرح له أو تنقصه الأذونات (The caller does not have permission)"
+                : "مفتاح غير صالح أو ملغى",
+            });
+          }
+          // Break inner loop to go to next candidate
+          break;
         }
-        // Continue to next candidate
-        continue;
-      }
 
-      if (isNetworkConnectionError(err)) {
-        // General network error - do NOT rotate keys or disable anything
+        if (isNetworkConnectionError(err)) {
+          // General network error - do NOT rotate keys or disable anything
+          throw err;
+        }
+
+        // If it's another non-quota error, rethrow or log
         throw err;
       }
-
-      // If it's another non-quota error, rethrow or log
-      throw err;
     }
   }
 

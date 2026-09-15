@@ -1,7 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 
 export const GEMINI_PRIMARY_MODEL = "gemini-3.8-flash";
-export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 
 /**
  * Determines whether the app is running in a native mobile environment (Capacitor/Android/iOS)
