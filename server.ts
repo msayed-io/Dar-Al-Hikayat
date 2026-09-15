@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { getModelsToTry, isModelFallbackError } from "./lib/gemini-models";
 
 async function startServer() {
   const app = express();
@@ -19,8 +20,6 @@ async function startServer() {
     const key = (providedKey && providedKey.trim()) || process.env.GEMINI_API_KEY || "";
     return key;
   }
-
-  const CANDIDATE_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash"];
 
   // Key validation endpoint for Settings Page
   app.post("/api/gemini/validate-key", async (req, res) => {
@@ -116,9 +115,7 @@ async function startServer() {
         },
       });
 
-      const modelsToTry = Array.from(
-        new Set([model || "gemini-3.8-flash", ...CANDIDATE_MODELS])
-      );
+      const modelsToTry = getModelsToTry(model);
 
       let streamStarted = false;
       let lastError: any = null;
@@ -195,13 +192,7 @@ async function startServer() {
             return;
           }
 
-          const isAuthError =
-            err?.status === 401 ||
-            err?.status === 403 ||
-            (err?.message && err.message.toLowerCase().includes("permission denied")) ||
-            (err?.message && err.message.toLowerCase().includes("api key not valid"));
-
-          if (!isAuthError) {
+          if (isModelFallbackError(err)) {
             console.log(
               `[Server Gemini Stream] Model ${currentModel} returned ${err?.status || "error"}. Trying next candidate model...`
             );
@@ -287,9 +278,7 @@ async function startServer() {
         },
       });
 
-      const modelsToTry = Array.from(
-        new Set([model || "gemini-3.8-flash", ...CANDIDATE_MODELS])
-      );
+      const modelsToTry = getModelsToTry(model);
 
       let lastError: any = null;
 
@@ -366,13 +355,7 @@ async function startServer() {
             err?.message || err
           );
 
-          const isAuthError =
-            err?.status === 401 ||
-            err?.status === 403 ||
-            (err?.message && err.message.toLowerCase().includes("permission denied")) ||
-            (err?.message && err.message.toLowerCase().includes("api key not valid"));
-
-          if (!isAuthError) {
+          if (isModelFallbackError(err)) {
             console.log(
               `[Server Gemini Generate] Model ${currentModel} returned ${err?.status || "error"}. Trying next candidate model...`
             );

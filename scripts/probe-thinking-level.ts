@@ -100,6 +100,29 @@ async function main() {
     allPassed = false;
   }
 
+  // Test 4: Ladder Fallback
+  try {
+    console.log("\n[اختبار 4] السلم الاحتياطي (Fallback Ladder) مع نموذج وهمي");
+    const res = await generateGeminiDirectly({
+      apiKey,
+      model: "gemini-9.9-fake",
+      contents: [{ role: "user", parts: [{ text: "Hello, reply 'Ladder OK'" }] }],
+      generationConfig: {
+        temperature: 0.2,
+        thinkingLevel: "LOW",
+      },
+    });
+    if (res.model === "gemini-3.8-flash") {
+      console.log("-> نجاح: تم التراجع من النموذج الوهمي إلى 3.8 بنجاح.");
+    } else {
+      console.error(`-> فشل: عاد بنموذج غير متوقع (${res.model}).`);
+      allPassed = false;
+    }
+  } catch (err: any) {
+    console.error("-> فشل السلم الاحتياطي:", err?.message || err);
+    allPassed = false;
+  }
+
   console.log("\n=== النتيجة النهائية ===");
   if (allPassed) {
     console.log("جميع الاختبارات اجتازت بنجاح (خروج 0).");

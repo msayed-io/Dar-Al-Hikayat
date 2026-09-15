@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
-
-export const GEMINI_PRIMARY_MODEL = "gemini-3.8-flash";
+import { MODEL_LADDER, getModelsToTry, isModelFallbackError, GEMINI_PRIMARY_MODEL } from "./gemini-models";
+export { GEMINI_PRIMARY_MODEL };
 
 export type ThinkingLevelName = "LOW" | "MEDIUM" | "HIGH";
 export const THINKING_FOR_PATH = {
@@ -70,98 +70,121 @@ export async function validateGeminiKeyDirectly(
     };
   }
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_PRIMARY_MODEL}:generateContent?key=${encodeURIComponent(
-      cleanKey
-    )}`;
+  let lastStatus = 0;
+  let lastErrMessage = "";
+  let lastErrorData = null;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: "فحص الاتصال" }],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: 5,
-          temperature: 0.1,
+  for (const currentModel of MODEL_LADDER) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
+        cleanKey
+      )}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: "فحص الاتصال" }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 5,
+            temperature: 0.1,
+          },
+        }),
+      });
 
-    if (res.ok) {
-      return {
-        valid: true,
-        message: "تم التحقق بنجاح؛ المفتاح متصل ويعمل بكفاءة عالية مع خوادم الذكاء الاصطناعي.",
-        code: 200,
-      };
+      if (res.ok) {
+        return {
+          valid: true,
+          message: `تم التحقق بنجاح؛ المفتاح متصل ويعمل بكفاءة عالية مع خوادم الذكاء الاصطناعي (أجاب عبر ${currentModel}).`,
+          code: 200,
+        };
+      }
+
+      lastErrorData = await res.json().catch(() => ({}));
+      lastStatus = res.status;
+      lastErrMessage = (
+        lastErrorData?.error?.message ||
+        lastErrorData?.message ||
+        ""
+      ).toLowerCase();
+
+      const errToTest: any = new Error(lastErrMessage);
+      errToTest.status = lastStatus;
+
+      if (isModelFallbackError(errToTest)) {
+        console.warn(`[ModelLadder - Key Validation] ${currentModel} (${lastStatus}) ← التالي`);
+        continue;
+      } else {
+        break; // 400, 401, 403
+      }
+    } catch (err: any) {
+      if (isModelFallbackError(err)) {
+        lastStatus = err?.status || err?.code || 0;
+        lastErrMessage = err?.message || "";
+        console.warn(`[ModelLadder - Key Validation] ${currentModel} (Network Error) ← التالي`);
+        continue;
+      } else {
+        return {
+          valid: false,
+          message: err?.message || "تعذر الاتصال بالشبكة للتحقق من المفتاح. يرجى التحقق من اتصال الإنترنت.",
+          code: 0,
+        };
+      }
     }
+  }
 
-    const errData = await res.json().catch(() => ({}));
-    const status = res.status;
-    const errMessage = (
-      errData?.error?.message ||
-      errData?.message ||
-      ""
-    ).toLowerCase();
-
-    if (status === 400 || errMessage.includes("api_key_invalid") || errMessage.includes("not valid")) {
-      return {
-        valid: false,
-        message: "مفتاح API غير صالح أو غير صحيح (API_KEY_INVALID). يرجى التأكد من نسخه بدقة وبشكل كامل.",
-        code: 400,
-      };
-    }
-
-    if (status === 401 || errMessage.includes("unauthenticated")) {
-      return {
-        valid: false,
-        message: "مفتاح API غير مصرح به أو تم إلغاؤه (UNAUTHENTICATED).",
-        code: 401,
-      };
-    }
-
-    if (status === 403 || errMessage.includes("permission_denied") || errMessage.includes("permission")) {
-      return {
-        valid: false,
-        message: "مفتاح API تنقصه أذونات خدمة Gemini API في Google Cloud (PERMISSION_DENIED).",
-        code: 403,
-      };
-    }
-
-    if (status === 429 || errMessage.includes("resource_exhausted") || errMessage.includes("quota")) {
-      return {
-        valid: true, // Key is valid, but currently quota-limited
-        message: "المفتاح صالح ومسجل بنجاح، ولكنه استنفد حصته المؤقتة حالياً (RESOURCE_EXHAUSTED). سيعمل تلقائياً عند تجدد الحصة.",
-        code: 429,
-      };
-    }
-
-    if (status === 503 || errMessage.includes("unavailable") || errMessage.includes("high demand")) {
-      return {
-        valid: true,
-        message: "المفتاح صالح، وخوادم الذكاء الاصطناعي تشهد ضغطاً مؤقتاً في هذه اللحظة (503 Service Unavailable).",
-        code: 503,
-      };
-    }
-
+  if (lastStatus === 400 || lastErrMessage.includes("api_key_invalid") || lastErrMessage.includes("not valid")) {
     return {
       valid: false,
-      message: errData?.error?.message || `تعذر التحقق من المفتاح (رمز الاستجابة: ${status}).`,
-      code: status,
-    };
-  } catch (err: any) {
-    return {
-      valid: false,
-      message: err?.message || "تعذر الاتصال بالشبكة للتحقق من المفتاح. يرجى التحقق من اتصال الإنترنت.",
-      code: 0,
+      message: "مفتاح API غير صالح أو غير صحيح (API_KEY_INVALID). يرجى التأكد من نسخه بدقة وبشكل كامل.",
+      code: 400,
     };
   }
+
+  if (lastStatus === 401 || lastErrMessage.includes("unauthenticated")) {
+    return {
+      valid: false,
+      message: "مفتاح API غير مصرح به أو تم إلغاؤه (UNAUTHENTICATED).",
+      code: 401,
+    };
+  }
+
+  if (lastStatus === 403 || lastErrMessage.includes("permission_denied") || lastErrMessage.includes("permission")) {
+    return {
+      valid: false,
+      message: "مفتاح API تنقصه أذونات خدمة Gemini API في Google Cloud (PERMISSION_DENIED).",
+      code: 403,
+    };
+  }
+
+  if (lastStatus === 429 || lastErrMessage.includes("resource_exhausted") || lastErrMessage.includes("quota")) {
+    return {
+      valid: true, // Key is valid, but currently quota-limited
+      message: "المفتاح صالح ومسجل بنجاح، ولكنه استنفد حصته المؤقتة حالياً (RESOURCE_EXHAUSTED). سيعمل تلقائياً عند تجدد الحصة.",
+      code: 429,
+    };
+  }
+
+  if (lastStatus === 503 || lastStatus >= 500 || lastErrMessage.includes("unavailable") || lastErrMessage.includes("high demand")) {
+    return {
+      valid: true,
+      message: "المفتاح صالح، وخوادم الذكاء الاصطناعي تشهد ضغطاً مؤقتاً في جميع النماذج (503 Service Unavailable).",
+      code: 503,
+    };
+  }
+
+  return {
+    valid: false,
+    message: lastErrorData?.error?.message || `تعذر التحقق من المفتاح (رمز الاستجابة: ${lastStatus}).`,
+    code: lastStatus,
+  };
 }
 
 export interface DirectGeminiGenerateParams {
@@ -200,10 +223,8 @@ export async function generateGeminiDirectly(
     throw err;
   }
 
-  const model = params.model || GEMINI_PRIMARY_MODEL;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
-    cleanKey
-  )}`;
+  const modelsToTry = getModelsToTry(params.model);
+  let lastError: any = null;
 
   const bodyPayload: any = {
     contents: params.contents,
@@ -223,74 +244,93 @@ export async function generateGeminiDirectly(
     ];
   }
 
-  if (params.generationConfig) {
-    const { thinkingLevel, ...restConfig } = params.generationConfig;
-    bodyPayload.generationConfig = restConfig;
-    if (thinkingLevel) {
-      bodyPayload.generationConfig.thinkingConfig = { thinkingLevel };
-    }
-  }
+  for (const currentModel of modelsToTry) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
+      cleanKey
+    )}`;
 
-  const makeRequest = async (payload: any) => {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: params.signal,
-    });
+    const localPayload = JSON.parse(JSON.stringify(bodyPayload));
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const err: any = new Error(
-        errData?.error?.message || `Direct Gemini API generation error (${res.status})`
-      );
-      err.status = res.status;
-      err.data = errData;
-      throw err;
+    if (params.generationConfig) {
+      const { thinkingLevel, ...restConfig } = params.generationConfig;
+      localPayload.generationConfig = restConfig;
+      if (thinkingLevel) {
+        localPayload.generationConfig.thinkingConfig = { thinkingLevel };
+      }
     }
 
-    return res;
-  };
-
-  let res;
-  try {
-    res = await makeRequest(bodyPayload);
-  } catch (err: any) {
-    if (bodyPayload.generationConfig?.thinkingConfig && isThinkingRejection(err)) {
-      console.warn("Thinking level rejected by API, falling back to temperature only.");
-      delete bodyPayload.generationConfig.thinkingConfig;
-      res = await makeRequest(bodyPayload);
-    } else {
-      throw err;
-    }
-  }
-
-  const data = await res.json();
-  const candidate = data.candidates?.[0];
-  const parts = candidate?.content?.parts || [];
-
-  let accumulatedText = "";
-  const functionCalls: Array<{ name: string; args: any }> = [];
-
-  for (const part of parts) {
-    if (part.text) {
-      accumulatedText += part.text;
-    }
-    if (part.functionCall) {
-      functionCalls.push({
-        name: part.functionCall.name,
-        args: part.functionCall.args || {},
+    const makeRequest = async (payload: any) => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: params.signal,
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const err: any = new Error(
+          errData?.error?.message || `Direct Gemini API generation error (${res.status})`
+        );
+        err.status = res.status;
+        err.data = errData;
+        throw err;
+      }
+
+      return res;
+    };
+
+    let res;
+    try {
+      try {
+        res = await makeRequest(localPayload);
+      } catch (initialErr: any) {
+        if (localPayload.generationConfig?.thinkingConfig && isThinkingRejection(initialErr)) {
+          console.warn("Thinking level rejected by API, falling back to temperature only.");
+          delete localPayload.generationConfig.thinkingConfig;
+          res = await makeRequest(localPayload);
+        } else {
+          throw initialErr;
+        }
+      }
+
+      const data = await res.json();
+      const candidate = data.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+
+      let accumulatedText = "";
+      const functionCalls: Array<{ name: string; args: any }> = [];
+
+      for (const part of parts) {
+        if (part.text) {
+          accumulatedText += part.text;
+        }
+        if (part.functionCall) {
+          functionCalls.push({
+            name: part.functionCall.name,
+            args: part.functionCall.args || {},
+          });
+        }
+      }
+
+      return {
+        text: accumulatedText,
+        functionCalls,
+        model: currentModel,
+      };
+    } catch (err: any) {
+      lastError = err;
+      if (isModelFallbackError(err)) {
+        console.warn(`[ModelLadder] ${currentModel} (${err.status || err.code || "Network Error"}) ← التالي`);
+        continue;
+      }
+      throw err;
     }
   }
 
-  return {
-    text: accumulatedText,
-    functionCalls,
-    model,
-  };
+  throw lastError;
 }
 
 export interface DirectGeminiStreamParams {
@@ -326,10 +366,9 @@ export async function streamGeminiDirectly(
     throw err;
   }
 
-  const model = params.model || GEMINI_PRIMARY_MODEL;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(
-    cleanKey
-  )}`;
+  const modelsToTry = getModelsToTry(params.model);
+  let lastError: any = null;
+  let firstChunkReceived = false;
 
   const bodyPayload: any = {
     contents: params.contents,
@@ -341,112 +380,136 @@ export async function streamGeminiDirectly(
     };
   }
 
-  if (params.generationConfig) {
-    const { thinkingLevel, ...restConfig } = params.generationConfig;
-    bodyPayload.generationConfig = restConfig;
-    if (thinkingLevel) {
-      bodyPayload.generationConfig.thinkingConfig = { thinkingLevel };
-    }
-  }
+  for (const currentModel of modelsToTry) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:streamGenerateContent?alt=sse&key=${encodeURIComponent(
+      cleanKey
+    )}`;
 
-  const makeRequest = async (payload: any) => {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: params.signal,
-    });
+    const localPayload = JSON.parse(JSON.stringify(bodyPayload));
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const err: any = new Error(
-        errData?.error?.message || `Direct Gemini API stream error (${res.status})`
-      );
-      err.status = res.status;
-      err.data = errData;
-      throw err;
+    if (params.generationConfig) {
+      const { thinkingLevel, ...restConfig } = params.generationConfig;
+      localPayload.generationConfig = restConfig;
+      if (thinkingLevel) {
+        localPayload.generationConfig.thinkingConfig = { thinkingLevel };
+      }
     }
 
-    return res;
-  };
+    const makeRequest = async (payload: any) => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: params.signal,
+      });
 
-  let res;
-  try {
-    res = await makeRequest(bodyPayload);
-  } catch (err: any) {
-    if (bodyPayload.generationConfig?.thinkingConfig && isThinkingRejection(err)) {
-      console.warn("Thinking level stream rejected by API, falling back to temperature only.");
-      delete bodyPayload.generationConfig.thinkingConfig;
-      res = await makeRequest(bodyPayload);
-    } else {
-      throw err;
-    }
-  }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const err: any = new Error(
+          errData?.error?.message || `Direct Gemini API stream error (${res.status})`
+        );
+        err.status = res.status;
+        err.data = errData;
+        throw err;
+      }
 
-  const reader = res.body?.getReader();
-  if (!reader) {
-    throw new Error("استجابة البث غير قابلة للقراءة كـ Stream.");
-  }
+      return res;
+    };
 
-  const decoder = new TextDecoder("utf-8");
-  let buffer = "";
-  let accumulated = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
-      const jsonStr = trimmed.slice(6).trim();
-      if (jsonStr === "[DONE]") break;
-
+    let res;
+    try {
       try {
-        const parsed = JSON.parse(jsonStr);
-        if (parsed.error) {
-          const err: any = new Error(
-            parsed.error.message || "خطأ في تدفق استجابة Gemini"
-          );
-          err.status = parsed.error.code || 500;
-          err.data = parsed;
-          throw err;
+        res = await makeRequest(localPayload);
+      } catch (initialErr: any) {
+        if (localPayload.generationConfig?.thinkingConfig && isThinkingRejection(initialErr)) {
+          console.warn("Thinking level stream rejected by API, falling back to temperature only.");
+          delete localPayload.generationConfig.thinkingConfig;
+          res = await makeRequest(localPayload);
+        } else {
+          throw initialErr;
         }
+      }
 
-        const parts = parsed.candidates?.[0]?.content?.parts || [];
-        for (const part of parts) {
-          if (part.text) {
-            accumulated += part.text;
-            params.onChunk(part.text);
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("استجابة البث غير قابلة للقراءة كـ Stream.");
+      }
+
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const jsonStr = trimmed.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed.error) {
+              const err: any = new Error(
+                parsed.error.message || "خطأ في تدفق استجابة Gemini"
+              );
+              err.status = parsed.error.code || 500;
+              err.data = parsed;
+              throw err;
+            }
+
+            const parts = parsed.candidates?.[0]?.content?.parts || [];
+            for (const part of parts) {
+              if (part.text) {
+                accumulated += part.text;
+                firstChunkReceived = true;
+                params.onChunk(part.text);
+              }
+            }
+          } catch (parseErr: any) {
+            if (parseErr?.status) throw parseErr;
           }
         }
-      } catch (parseErr: any) {
-        if (parseErr?.status) throw parseErr;
       }
-    }
-  }
 
-  // Flush remaining buffer if needed
-  if (buffer && buffer.startsWith("data: ")) {
-    try {
-      const parsed = JSON.parse(buffer.slice(6).trim());
-      const parts = parsed.candidates?.[0]?.content?.parts || [];
-      for (const part of parts) {
-        if (part.text) {
-          accumulated += part.text;
-          params.onChunk(part.text);
+      // Flush remaining buffer if needed
+      if (buffer && buffer.startsWith("data: ")) {
+        try {
+          const parsed = JSON.parse(buffer.slice(6).trim());
+          const parts = parsed.candidates?.[0]?.content?.parts || [];
+          for (const part of parts) {
+            if (part.text) {
+              accumulated += part.text;
+              firstChunkReceived = true;
+              params.onChunk(part.text);
+            }
+          }
+        } catch {
+          // ignore trailing fragment
         }
       }
-    } catch {
-      // ignore trailing fragment
+
+      return accumulated;
+    } catch (err: any) {
+      lastError = err;
+      if (firstChunkReceived) {
+        throw err;
+      }
+      if (isModelFallbackError(err)) {
+        console.warn(`[ModelLadder] ${currentModel} (${err.status || err.code || "Network Error"}) ← التالي`);
+        continue;
+      }
+      throw err;
     }
   }
 
-  return accumulated;
+  throw lastError;
 }

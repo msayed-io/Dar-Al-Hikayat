@@ -10,6 +10,7 @@ import {
   generateGeminiDirectly,
   streamGeminiDirectly,
   buildReasoningConfig,
+  GEMINI_PRIMARY_MODEL,
 } from "./gemini-direct-client";
 
 // ── SYSTEM PROMPT FOR RAHMA EL SAYED MOWAFI ──
@@ -262,7 +263,7 @@ export async function initializeStoryAssistant(
           body: JSON.stringify({
             systemInstruction: fullSystemInstruction,
             contents: [{ role: "user", parts: [{ text: userInitialPrompt }] }],
-            model: "gemini-3.8-flash",
+            model: GEMINI_PRIMARY_MODEL,
           }),
         });
 
@@ -332,7 +333,7 @@ ${newMessagesText}
           body: JSON.stringify({
             systemInstruction: SUMMARIZE_PROMPT,
             contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-            model: "gemini-3.8-flash",
+            model: GEMINI_PRIMARY_MODEL,
             temperature: 0.3,
             thinkingLevel: "LOW",
           }),
@@ -469,7 +470,7 @@ export async function streamLiteraryAssistantResponse(
             body: JSON.stringify({
               systemInstruction: enrichedSystemInstruction,
               contents,
-              model: "gemini-3.8-flash",
+              model: GEMINI_PRIMARY_MODEL,
               temperature: 0.7,
               thinkingLevel: "MEDIUM",
             }),
@@ -555,7 +556,7 @@ export async function streamLiteraryAssistantResponse(
             body: JSON.stringify({
               systemInstruction: enrichedSystemInstruction,
               contents,
-              model: "gemini-3.8-flash",
+              model: GEMINI_PRIMARY_MODEL,
             }),
           });
 
@@ -610,7 +611,7 @@ export async function streamLiteraryAssistantResponse(
 
 /**
  * دالة طلب القرار التنفيذي للوكيل الأدبي (Executive Decision Request)
- * تستخدم النمط الصارم والدقيق: حرارة 0.2 ونموذج gemini-3.8-flash حصراً لضمان حتمية العقد،
+ * تستخدم النمط الصارم والدقيق: حرارة 0.2 ونموذج أساسي حصراً لضمان حتمية العقد،
  * مع التحقق الشامل من مطابقة مخططات الاستدعاء الأربع.
  */
 export async function requestExecutiveDecision({
@@ -652,7 +653,7 @@ export async function requestExecutiveDecision({
           body: JSON.stringify({
             systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
             contents,
-            model: "gemini-3.8-flash",
+            model: GEMINI_PRIMARY_MODEL,
             temperature: 0.2,
             thinkingLevel: "LOW",
             tools: tools || AGENTIC_TOOL_DECLARATIONS,
@@ -673,7 +674,7 @@ export async function requestExecutiveDecision({
         rawData = {
           text: data.text || "",
           functionCalls: data.functionCalls || [],
-          model: data.model || "gemini-3.8-flash",
+          model: data.model || GEMINI_PRIMARY_MODEL,
         };
       }
 
@@ -759,7 +760,7 @@ export async function requestExecutiveDecision({
       return {
         text: rawData.text || "",
         functionCalls: validatedCalls,
-        model: rawData.model || "gemini-3.8-flash",
+        model: rawData.model || GEMINI_PRIMARY_MODEL,
       };
     });
   } catch (err: any) {
@@ -786,7 +787,7 @@ export async function requestExecutiveDecision({
     return {
       text: "",
       functionCalls: [],
-      model: "gemini-3.8-flash",
+      model: GEMINI_PRIMARY_MODEL,
       error: friendlyError,
     };
   }
@@ -867,7 +868,7 @@ ${stepsSummary}
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
-            model: "gemini-3.8-flash",
+            model: GEMINI_PRIMARY_MODEL,
             temperature: 0.3,
             thinkingLevel: "LOW",
           }),
