@@ -611,7 +611,7 @@ export async function streamLiteraryAssistantResponse(
 
 /**
  * دالة طلب القرار التنفيذي للوكيل الأدبي (Executive Decision Request)
- * تستخدم النمط الصارم والدقيق: حرارة 0.2 ونموذج أساسي حصراً لضمان حتمية العقد،
+ * تستخدم النمط الصارم: حرارة 0.2 ومستوى LOW والنموذج الأساسي أولاً (ثم السلم 3.7 ← 3.6 ← 3.5 عند الضغط)،
  * مع التحقق الشامل من مطابقة مخططات الاستدعاء الأربع.
  */
 export async function requestExecutiveDecision({
