@@ -10,6 +10,7 @@ export type LadderModel = (typeof MODEL_LADDER)[number];
 export const GEMINI_PRIMARY_MODEL = MODEL_LADDER[0];
 
 export function isModelFallbackError(err: any): boolean {
+  if (err?.isTimeout) return true;
   if (err?.name === "AbortError") return false;
   const status = err?.status ?? err?.code;
   if (status === 429 || status === 404) return true;

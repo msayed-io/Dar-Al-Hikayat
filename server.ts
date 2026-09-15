@@ -109,6 +109,7 @@ async function startServer() {
       const ai = new GoogleGenAI({
         apiKey: resolvedKey,
         httpOptions: {
+          timeout: 60_000,
           headers: {
             "User-Agent": "aistudio-build",
           },
@@ -272,6 +273,7 @@ async function startServer() {
       const ai = new GoogleGenAI({
         apiKey: resolvedKey,
         httpOptions: {
+          timeout: 60_000,
           headers: {
             "User-Agent": "aistudio-build",
           },

@@ -105,6 +105,14 @@ export interface AgentExecutionResult {
 // 2. كاشف النية الصريحة والجسر الشامل (Intent Heuristic & Bridge)
 // ============================================================================
 
+export function normalizeArabicForIntent(s: string): string {
+  if (!s) return "";
+  return s
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي");
+}
+
 const EXPLICIT_EDIT_VERBS = [
   "عدل",
   "عدّل",
@@ -153,14 +161,16 @@ const EXPLICIT_EDIT_VERBS = [
   "اكتب بدلا",
   "بدل",
   "بدّل",
-];
+  "ظبط",
+  "ظبطي"
+].map(v => normalizeArabicForIntent(v));
 
 export function isExplicitEditIntent(
   message: string,
   hasMentions: boolean
 ): boolean {
   if (!message) return false;
-  const clean = message.trim().toLowerCase();
+  const clean = normalizeArabicForIntent(message.trim().toLowerCase());
 
   // فحص الأفعال الصريحة
   for (const verb of EXPLICIT_EDIT_VERBS) {
@@ -171,18 +181,11 @@ export function isExplicitEditIntent(
 
   // إذا أرفق منشن مصحوب بكلمات إجرائية (مثل: هذي، هذه، دي، الفقرة، مكانها)
   if (hasMentions) {
-    if (
-      clean.includes("هذه") ||
-      clean.includes("هذي") ||
-      clean.includes("دي") ||
-      clean.includes("ده") ||
-      clean.includes("الفقرة") ||
-      clean.includes("بدل") ||
-      clean.includes("مكان") ||
-      clean.includes("لتكون") ||
-      clean.includes("لتصبح")
-    ) {
-      return true;
+    const triggerWords = ["هذه", "هذي", "دي", "ده", "الفقرة", "بدل", "مكان", "لتكون", "لتصبح"].map(w => normalizeArabicForIntent(w));
+    for (const w of triggerWords) {
+      if (clean.includes(w)) {
+        return true;
+      }
     }
   }
 
@@ -809,7 +812,9 @@ export async function executeAgentPlan({
 
     // 4. التثبيت الواحد لحالة المحرر (Single Atomic Commit to State & History)
     cleanupAgentFx(rootElement);
-    onCommit();
+    if (stepItems.length > 0) {
+      onCommit();
+    }
 
     return {
       success: true,

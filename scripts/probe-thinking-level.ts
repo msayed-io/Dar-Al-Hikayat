@@ -61,39 +61,60 @@ async function main() {
   try {
     console.log("\n[اختبار 3] شكل كونفيج الخادم (SDK) بمستوى LOW");
     const ai = new GoogleGenAI({ apiKey });
-    const config: any = {
-      temperature: 0.2,
-      thinkingConfig: { thinkingLevel: "LOW" },
-    };
+    
+    const LADDER = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"];
+    let answeredModel = "";
+    
+    for (const currentModel of LADDER) {
+      const config: any = {
+        temperature: 0.2,
+        thinkingConfig: { thinkingLevel: "LOW" },
+      };
 
-    let response;
-    let fallbackTriggered = false;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: [{ role: "user", parts: [{ text: "Hi" }] }],
-        config,
-      });
-    } catch (initialErr: any) {
-      const msg = `${initialErr?.message || ""} ${JSON.stringify(initialErr?.data || {})}`;
-      if (config.thinkingConfig && /thinking|THINKING_LEVEL|Enterprise/i.test(msg)) {
-        console.warn("-> تدخل التراجع (Fallback) بعد الرفض.");
-        fallbackTriggered = true;
-        delete config.thinkingConfig;
-        response = await ai.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: [{ role: "user", parts: [{ text: "Hi" }] }],
-          config,
-        });
-      } else {
-        throw initialErr;
+      let response;
+      let fallbackTriggered = false;
+      try {
+        try {
+          response = await ai.models.generateContent({
+            model: currentModel,
+            contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+            config,
+          });
+        } catch (initialErr: any) {
+          const msg = `${initialErr?.message || ""} ${JSON.stringify(initialErr?.data || {})}`;
+          if (config.thinkingConfig && /thinking|THINKING_LEVEL|Enterprise/i.test(msg)) {
+            console.warn("-> تدخل التراجع (Fallback) بعد الرفض.");
+            fallbackTriggered = true;
+            delete config.thinkingConfig;
+            response = await ai.models.generateContent({
+              model: currentModel,
+              contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+              config,
+            });
+          } else {
+            throw initialErr;
+          }
+        }
+
+        answeredModel = currentModel;
+        console.log(`-> نجاح: تم التوليد بواسطة ${answeredModel}. (تدخل التراجع؟ ${fallbackTriggered ? "نعم" : "لا"})`);
+        const metadata = (response as any)?.usageMetadata;
+        if (metadata?.promptTokenCount !== undefined) {
+           console.log(`-> tokens: prompt=${metadata.promptTokenCount}, candidates=${metadata.candidatesTokenCount}`);
+        }
+        break;
+      } catch (err: any) {
+        const status = err?.status ?? err?.code;
+        if (status === 429 || status === 404 || (typeof status === "number" && status >= 500) || (!status && err instanceof TypeError)) {
+          console.warn(`-> فشل ${currentModel} بضغط/عطل، انتقال للتالي...`);
+          continue;
+        }
+        throw err;
       }
     }
-
-    console.log(`-> نجاح: تم التوليد. (هل تدخّل التراجع؟ ${fallbackTriggered ? "نعم" : "لا"})`);
-    const metadata = (response as any)?.usageMetadata;
-    if (metadata?.promptTokenCount !== undefined) {
-       console.log(`-> tokens: prompt=${metadata.promptTokenCount}, candidates=${metadata.candidatesTokenCount}`);
+    
+    if (!answeredModel) {
+      throw new Error("استنفدنا السلم ولم يجب أي نموذج.");
     }
   } catch (err: any) {
     console.error("-> فشل:", err?.message || err);
@@ -112,8 +133,10 @@ async function main() {
         thinkingLevel: "LOW",
       },
     });
-    if (res.model === "gemini-3.8-flash") {
-      console.log("-> نجاح: تم التراجع من النموذج الوهمي إلى 3.8 بنجاح.");
+    
+    const LADDER = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"];
+    if (LADDER.includes(res.model) && res.model !== "gemini-9.9-fake") {
+      console.log(`-> نجاح: تم التراجع من النموذج الوهمي وأجاب النموذج ${res.model} بنجاح.`);
     } else {
       console.error(`-> فشل: عاد بنموذج غير متوقع (${res.model}).`);
       allPassed = false;

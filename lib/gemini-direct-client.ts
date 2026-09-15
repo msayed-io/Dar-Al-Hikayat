@@ -2,6 +2,8 @@ import { Capacitor } from "@capacitor/core";
 import { MODEL_LADDER, getModelsToTry, isModelFallbackError, GEMINI_PRIMARY_MODEL } from "./gemini-models";
 export { GEMINI_PRIMARY_MODEL };
 
+export const DIRECT_TIMEOUT_MS = 60_000;
+
 export type ThinkingLevelName = "LOW" | "MEDIUM" | "HIGH";
 export const THINKING_FOR_PATH = {
   executive: "LOW",
@@ -75,29 +77,43 @@ export async function validateGeminiKeyDirectly(
   let lastErrorData = null;
 
   for (const currentModel of MODEL_LADDER) {
+    const startTime = Date.now();
+    let isInternalTimeout = false;
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
         cleanKey
       )}`;
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: "فحص الاتصال" }],
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: 5,
-            temperature: 0.1,
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        isInternalTimeout = true;
+        controller.abort();
+      }, DIRECT_TIMEOUT_MS);
+
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [{ text: "فحص الاتصال" }],
+              },
+            ],
+            generationConfig: {
+              maxOutputTokens: 5,
+              temperature: 0.1,
+            },
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (res.ok) {
         return {
@@ -117,18 +133,21 @@ export async function validateGeminiKeyDirectly(
 
       const errToTest: any = new Error(lastErrMessage);
       errToTest.status = lastStatus;
+      const elapsed = Date.now() - startTime;
 
       if (isModelFallbackError(errToTest)) {
-        console.warn(`[ModelLadder - Key Validation] ${currentModel} (${lastStatus}) ← التالي`);
+        console.warn(`[ModelLadder - Key Validation] ${currentModel} (${lastStatus}) (${elapsed}ms) ← التالي`);
         continue;
       } else {
         break; // 400, 401, 403
       }
     } catch (err: any) {
+      if (isInternalTimeout) err.isTimeout = true;
       if (isModelFallbackError(err)) {
         lastStatus = err?.status || err?.code || 0;
-        lastErrMessage = err?.message || "";
-        console.warn(`[ModelLadder - Key Validation] ${currentModel} (Network Error) ← التالي`);
+        lastErrMessage = err?.message || (err.isTimeout ? "Timeout" : "Network Error");
+        const elapsed = Date.now() - startTime;
+        console.warn(`[ModelLadder - Key Validation] ${currentModel} (${lastErrMessage}) (${elapsed}ms) ← التالي`);
         continue;
       } else {
         return {
@@ -245,6 +264,7 @@ export async function generateGeminiDirectly(
   }
 
   for (const currentModel of modelsToTry) {
+    const startTime = Date.now();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
       cleanKey
     )}`;
@@ -259,6 +279,18 @@ export async function generateGeminiDirectly(
       }
     }
 
+    let isInternalTimeout = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      isInternalTimeout = true;
+      controller.abort();
+    }, DIRECT_TIMEOUT_MS);
+
+    const onExternalAbort = () => controller.abort();
+    if (params.signal) {
+      params.signal.addEventListener("abort", onExternalAbort);
+    }
+
     const makeRequest = async (payload: any) => {
       const res = await fetch(url, {
         method: "POST",
@@ -266,7 +298,7 @@ export async function generateGeminiDirectly(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-        signal: params.signal,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -321,12 +353,19 @@ export async function generateGeminiDirectly(
         model: currentModel,
       };
     } catch (err: any) {
+      if (isInternalTimeout) err.isTimeout = true;
       lastError = err;
       if (isModelFallbackError(err)) {
-        console.warn(`[ModelLadder] ${currentModel} (${err.status || err.code || "Network Error"}) ← التالي`);
+        const elapsed = Date.now() - startTime;
+        console.warn(`[ModelLadder] ${currentModel} (${err.status || err.code || (err.isTimeout ? "Timeout" : "Network Error")}) (${elapsed}ms) ← التالي`);
         continue;
       }
       throw err;
+    } finally {
+      clearTimeout(timeoutId);
+      if (params.signal) {
+        params.signal.removeEventListener("abort", onExternalAbort);
+      }
     }
   }
 
@@ -381,6 +420,7 @@ export async function streamGeminiDirectly(
   }
 
   for (const currentModel of modelsToTry) {
+    const startTime = Date.now();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:streamGenerateContent?alt=sse&key=${encodeURIComponent(
       cleanKey
     )}`;
@@ -395,6 +435,18 @@ export async function streamGeminiDirectly(
       }
     }
 
+    let isInternalTimeout = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      isInternalTimeout = true;
+      controller.abort();
+    }, DIRECT_TIMEOUT_MS);
+
+    const onExternalAbort = () => controller.abort();
+    if (params.signal) {
+      params.signal.addEventListener("abort", onExternalAbort);
+    }
+
     const makeRequest = async (payload: any) => {
       const res = await fetch(url, {
         method: "POST",
@@ -402,7 +454,7 @@ export async function streamGeminiDirectly(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-        signal: params.signal,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -499,15 +551,22 @@ export async function streamGeminiDirectly(
 
       return accumulated;
     } catch (err: any) {
+      if (isInternalTimeout) err.isTimeout = true;
       lastError = err;
       if (firstChunkReceived) {
         throw err;
       }
       if (isModelFallbackError(err)) {
-        console.warn(`[ModelLadder] ${currentModel} (${err.status || err.code || "Network Error"}) ← التالي`);
+        const elapsed = Date.now() - startTime;
+        console.warn(`[ModelLadder] ${currentModel} (${err.status || err.code || (err.isTimeout ? "Timeout" : "Network Error")}) (${elapsed}ms) ← التالي`);
         continue;
       }
       throw err;
+    } finally {
+      clearTimeout(timeoutId);
+      if (params.signal) {
+        params.signal.removeEventListener("abort", onExternalAbort);
+      }
     }
   }
 
