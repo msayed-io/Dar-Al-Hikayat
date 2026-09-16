@@ -297,6 +297,8 @@ export async function runDiacritizeJob(
 
   let doneCount = 0;
   let skippedCount = 0;
+  let infraSkipped = 0;
+  let lastInfraError: any = null;
   const skippedReasons: string[] = [];
 
   const updateProgressStep = (currentBlockNum: number) => {
@@ -361,6 +363,7 @@ export async function runDiacritizeJob(
       // First AI Attempt
       let parsedResults: string[] | null = null;
       let rawAIOutput = "";
+      let firstAttemptError: any = null;
       try {
         rawAIOutput = await callDiacritizeAI({
           batchTexts,
@@ -374,6 +377,7 @@ export async function runDiacritizeJob(
         if (jobState?.cancelled || abortController.signal.aborted) {
           throw err;
         }
+        firstAttemptError = err;
         console.warn("[Tashkeel Batch Error]:", err);
       }
 
@@ -391,6 +395,7 @@ export async function runDiacritizeJob(
       }
 
       // Single Retry if parsing failed or invariant failed
+      let secondAttemptError: any = null;
       if (!parsedResults || hasInvariantFailure) {
         try {
           const retryOutput = await callDiacritizeAI({
@@ -407,14 +412,31 @@ export async function runDiacritizeJob(
             parsedResults = secondParse;
             hasInvariantFailure = false;
           }
-        } catch {
-          // Ignore retry failure
+        } catch (retryErr: any) {
+          if (jobState?.cancelled || abortController.signal.aborted) {
+            throw retryErr;
+          }
+          secondAttemptError = retryErr;
+          console.warn("[Tashkeel Retry Error]:", retryErr);
         }
+      }
+
+      // batchCallFailed: true ONLY if BOTH attempts threw an exception at the communication/connection level
+      const batchCallFailed = Boolean(firstAttemptError && secondAttemptError);
+      if (batchCallFailed) {
+        lastInfraError = secondAttemptError || firstAttemptError;
       }
 
       // Apply valid items or skip with truthful reporting
       for (let k = 0; k < activeBatch.length; k++) {
         const item = activeBatch[k];
+        if (batchCallFailed) {
+          infraSkipped++;
+          skippedCount++;
+          skippedReasons.push(`الفقرة ${item.index} (تعذر الاتصال بالنموذج)`);
+          continue;
+        }
+
         const voc = parsedResults ? parsedResults[k] : null;
 
         if (voc && invariantHolds(item.origText, voc)) {
@@ -442,6 +464,34 @@ export async function runDiacritizeJob(
     }
 
     // 5. Final Step Note & Result
+    if (doneCount === 0 && infraSkipped > 0 && skippedCount === infraSkipped) {
+      activeJobs.delete(jobId);
+      const rawMsg = (lastInfraError?.message || String(lastInfraError || "")).trim();
+      let errorReason = rawMsg;
+      if (/429|quota|RESOURCE_EXHAUSTED/i.test(rawMsg)) {
+        errorReason = `تجاوز حصة الاستخدام (${rawMsg})`;
+      } else if (/401|403|API_KEY|UNAUTHENTICATED|PERMISSION_DENIED|مفتاح/i.test(rawMsg)) {
+        errorReason = `خطأ في مفتاح API (${rawMsg})`;
+      } else if (/500|502|503|504|خادم|server/i.test(rawMsg)) {
+        errorReason = `خطأ في الخادم (${rawMsg})`;
+      } else if (/network|fetch|Failed to fetch|ENOTFOUND|ECONNREFUSED|شبكة/i.test(rawMsg)) {
+        errorReason = `انقطاع اتصال الشبكة (${rawMsg})`;
+      }
+      const errorMsg = `تعذر الاتصال بالنموذج: ${errorReason || "خطأ غير معروف في الاتصال"}`;
+
+      if (onStepUpdate && existingStepItems && typeof stepItemIndex === "number" && existingStepItems[stepItemIndex]) {
+        existingStepItems[stepItemIndex].stepNote = errorMsg;
+        existingStepItems[stepItemIndex].status = "failed";
+        onStepUpdate([...existingStepItems]);
+      }
+
+      return {
+        status: "FAILED",
+        blockId: target,
+        error: errorMsg,
+      };
+    }
+
     const finalStepNote = `ضُبط ${doneCount} فقرة${
       skippedCount ? `، تُخطّي ${skippedCount} (${skippedReasons.slice(0, 2).join("، ")})` : ""
     }`;
