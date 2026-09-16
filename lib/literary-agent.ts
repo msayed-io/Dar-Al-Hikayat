@@ -249,32 +249,68 @@ export function isExplicitEditIntent(
 export function findReplaceAllMatches(
   rootElement: HTMLElement | null,
   targetText: string
-): string[] {
-  if (!rootElement || !targetText) return [];
-  const matchedBlockIds: string[] = [];
+): { matches: string[]; skipped: string[] } {
+  if (!rootElement || !targetText) return { matches: [], skipped: [] };
+  const matches: string[] = [];
+  const skipped: string[] = [];
 
-  const blocks = Array.from(
+  const rawBlocks = Array.from(
     rootElement.querySelectorAll<HTMLElement>("[data-block-id]")
   );
+  const blocks: HTMLElement[] = [];
+  const seenIds = new Set<string>();
   if (rootElement.getAttribute("data-block-id")) {
-    blocks.unshift(rootElement);
+    blocks.push(rootElement);
+    const rid = rootElement.getAttribute("data-block-id");
+    if (rid) seenIds.add(rid);
   }
-
-  const normTarget = normalizeArabicForIntent(targetText);
+  for (const b of rawBlocks) {
+    const bid = b.getAttribute("data-block-id");
+    if (bid && !seenIds.has(bid)) {
+      seenIds.add(bid);
+      blocks.push(b);
+    }
+  }
 
   for (const block of blocks) {
     const blockId = block.getAttribute("data-block-id");
     if (!blockId) continue;
 
     const rawText = cleanBlockRawText(block.innerHTML);
-    const normText = normalizeArabicForIntent(rawText);
 
-    if (rawText.includes(targetText) || (normTarget && normText.includes(normTarget))) {
-      matchedBlockIds.push(blockId);
+    let rawOccurrences = 0;
+    let p = rawText.indexOf(targetText);
+    while (p !== -1 && targetText.length > 0) {
+      rawOccurrences++;
+      p = rawText.indexOf(targetText, p + 1);
+    }
+
+    if (rawOccurrences === 1) {
+      matches.push(blockId);
+    } else if (rawOccurrences > 1) {
+      skipped.push(blockId);
+    } else {
+      // الصفر الخام: فحص المطبّع الوحيد
+      const normRaw = normalizeArabicForIntent(rawText);
+      const normTarget = normalizeArabicForIntent(targetText);
+      let normOccurrences = 0;
+      if (normTarget.length > 0) {
+        let np = normRaw.indexOf(normTarget);
+        while (np !== -1) {
+          normOccurrences++;
+          np = normRaw.indexOf(normTarget, np + 1);
+        }
+      }
+
+      if (normOccurrences === 1) {
+        matches.push(blockId);
+      } else if (normOccurrences > 1) {
+        skipped.push(blockId);
+      }
     }
   }
 
-  return matchedBlockIds;
+  return { matches, skipped };
 }
 
 export function formatExecutiveContextForAI({
@@ -624,7 +660,20 @@ export async function executeAgentPlan({
   // فحص سقف الاستبدال الشامل (replace_all 30 ops limit)
   for (const c of safeCalls) {
     if (c.name === "replace_all") {
-      const matches = findReplaceAllMatches(rootElement, c.args.target_text);
+      const { matches, skipped } = findReplaceAllMatches(rootElement, c.args.target_text);
+      if (matches.length === 0) {
+        return {
+          success: true,
+          executedSteps: [],
+          askWriter: {
+            question: `لم أجد "${c.args.target_text}" في أي فقرة من الفصل — هل تودين إملاء الصيغة الدقيقة؟`,
+            reason: "NOT_FOUND",
+            pendingOperations: rawCalls,
+          },
+          totalMutations: 0,
+          auditEntriesCount: 0,
+        };
+      }
       if (!skipScopeCheck && matches.length > MAX_EXPANDED_OPS_PER_REQUEST) {
         return {
           success: true,
@@ -697,7 +746,7 @@ export async function executeAgentPlan({
         splitAfterText: c.args.split_after_text,
       });
     } else if (c.name === "replace_all") {
-      const matches = findReplaceAllMatches(rootElement, c.args.target_text);
+      const { matches } = findReplaceAllMatches(rootElement, c.args.target_text);
       for (const mBlockId of matches) {
         plannedOps.push({
           type: "REPLACE",
@@ -1052,7 +1101,7 @@ export async function executeAgentPlan({
           cleanupAgentFx(rootElement);
           return opRes;
         } else if (call.name === "replace_all") {
-          const matches = findReplaceAllMatches(rootElement, call.args.target_text);
+          const { matches, skipped } = findReplaceAllMatches(rootElement, call.args.target_text);
           if (matches.length === 0) {
             stepItems[idx].status = "failed";
             onStepUpdate([...stepItems]);
@@ -1065,14 +1114,6 @@ export async function executeAgentPlan({
 
           let lastRes: any = { status: "SUCCESS", blockId: "chapter" };
           for (const mBlockId of matches) {
-            const blkEl = rootElement.querySelector<HTMLElement>(`[data-block-id="${mBlockId}"]`);
-            if (blkEl) {
-              blkEl.style.transition = "opacity 0.15s ease";
-              blkEl.style.opacity = "0.7";
-              await new Promise((r) => setTimeout(r, 60));
-              blkEl.style.opacity = "1";
-            }
-
             const opRes = replaceTextWithinBlock(mBlockId, call.args.target_text, call.args.new_text, { rootElement });
             if (opRes.status !== "SUCCESS") {
               stepItems[idx].status = "failed";
@@ -1084,6 +1125,7 @@ export async function executeAgentPlan({
             lastRes = opRes;
           }
 
+          stepItems[idx].stepNote += ` (${matches.length} موضعاً${skipped.length ? `، تُخطّي ${skipped.length} للتكرار` : ""})`;
           stepItems[idx].status = "completed";
           onStepUpdate([...stepItems]);
           cleanupAgentFx(rootElement);
