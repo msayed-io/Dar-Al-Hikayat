@@ -1224,6 +1224,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
       const apiHistory = hist
         .filter((m) => !m.ephemeral && (m.role === "user" || m.role === "assistant"))
+        .slice(-8)
         .map((m) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
@@ -1445,23 +1446,12 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             const skippedText = r.skipped > 0 ? `، وتخطي ${r.skipped} (للحفاظ على الحروف كما هي بدون تغيير)` : "";
             summaryText = `تم إنجاز الضبط اللغوي بدقة رياضية لـ ${r.done} فقرة بنجاح${skippedText}.`;
           } else {
-            try {
-              summaryText = await generateAgentCompletionSummary({
-                userPrompt: userPromptText,
-                executedSteps: planResult.executedSteps.map((s) => ({
-                  toolName: s.toolName,
-                  stepNote: s.stepNote,
-                })),
-                storyTitle: storyContext?.title,
-              });
-            } catch {
-              summaryText = generateDefaultAgentSummary(
-                planResult.executedSteps.map((s) => ({
-                  toolName: s.toolName,
-                  stepNote: s.stepNote,
-                }))
-              );
-            }
+            summaryText = generateDefaultAgentSummary(
+              planResult.executedSteps.map((s) => ({
+                toolName: s.toolName,
+                stepNote: s.stepNote,
+              }))
+            );
           }
 
           setMessages((prev) => [

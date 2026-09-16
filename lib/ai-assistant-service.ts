@@ -857,6 +857,7 @@ export async function requestExecutiveDecision({
         const res = await fetch("/api/gemini/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(100_000),
           body: JSON.stringify({
             systemInstruction: executiveInstruction || UNIFIED_AGENT_INSTRUCTION,
             contents,
@@ -1071,7 +1072,17 @@ export async function requestExecutiveDecision({
       "عذراً يا أستاذة رحمة، تعذر تنفيذ القرار الأدبي حالياً. يمكنكِ إعادة المحاولة.";
 
     const msg = (err?.message || "").toLowerCase();
-    if (
+    const isTimeout =
+      err?.name === "TimeoutError" ||
+      err?.name === "AbortError" ||
+      msg.includes("timeout") ||
+      msg.includes("aborted") ||
+      msg.includes("abort");
+
+    if (isTimeout) {
+      friendlyError =
+        "تعذر إكمال الاتصال بالنموذج خلال المهلة — حاولي مجدداً";
+    } else if (
       msg.includes("high demand") ||
       msg.includes("503") ||
       msg.includes("unavailable") ||
@@ -1168,6 +1179,7 @@ ${stepsSummary}
         const res = await fetch("/api/gemini/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(100_000),
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             model: GEMINI_PRIMARY_MODEL,
