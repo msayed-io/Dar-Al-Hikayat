@@ -281,51 +281,95 @@ export async function initializeStoryAssistant(
   }
 }
 
-interface SummaryCacheEntry {
-  summary: string;
-  lastSummarizedId: string;
+
+export interface StructuredMemory {
+  storyDecisions: string[];
+  characterFacts: string[];
+  plotFacts: string[];
+  styleRules: string[];
+  writerPreferences: string[];
+  openTasks: string[];
+  executedEdits: string[];
 }
 
-const summaryCache = new Map<string, SummaryCacheEntry>();
+export interface StructuredMemoryEntry {
+  memory: StructuredMemory;
+  lastIncludedMessageId: string;
+}
+
+function getStructuredMemory(key: string): StructuredMemoryEntry {
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const stored = localStorage.getItem(`story_memory_${key}`);
+      if (stored) return JSON.parse(stored);
+    } catch(e) {}
+  }
+  return {
+    memory: {
+      storyDecisions: [],
+      characterFacts: [],
+      plotFacts: [],
+      styleRules: [],
+      writerPreferences: [],
+      openTasks: [],
+      executedEdits: []
+    },
+    lastIncludedMessageId: ""
+  };
+}
+
+function saveStructuredMemory(key: string, entry: StructuredMemoryEntry) {
+  if (typeof window !== "undefined" && window.localStorage) {
+    localStorage.setItem(`story_memory_${key}`, JSON.stringify(entry));
+  }
+}
+
 
 const SUMMARIZE_PROMPT = `أنت مساعد تلخيص أدبي احترافي وموجز للغاية.
-مهمتك هي مراجعة تاريخ المحادثة السابقة بين المساعد الأدبي والكاتبة "رحمة السيد موافي" وتحديث الملخص التراكمي للمحادثة بدقة بالغة.
-يجب أن تركز حصرياً على:
-1. القرارات الفنية والأدبية التي اتفقت عليها الكاتبة مع المساعد (مثل اتجاه الحبكة، مصير الشخصيات، الأسلوب).
-2. التفاصيل والحقائق والخطوط العريضة الجديدة المعتمدة للحكاية.
-3. التوجيهات أو القواعد الفنية الخاصة التي طلبت الكاتبة الالتزام بها في الكتابة.
-
-اكتب الملخص باللغة العربية الفصحى بأسلوب مكثف ومركّز جداً في شكل نقاط محددة وسرد موجز لا يتجاوز 200 كلمة.`;
+مهمتك هي مراجعة تاريخ المحادثة السابقة وتحديث الذاكرة التراكمية المنظمة للمحادثة.
+قم بدمج المعلومات الجديدة مع الذاكرة السابقة بدقة واحترافية بدون تكرار، وأصلح أي تعارضات.
+تأكد من الحفاظ على الحقائق القديمة إذا لم يتم نفيها.
+يجب أن تعيد الناتج حصرياً ككائن JSON بالصيغة التالية (بدون أي نصوص إضافية):
+{
+  "storyDecisions": ["قرار 1", "قرار 2"],
+  "characterFacts": ["حقيقة 1"],
+  "plotFacts": [],
+  "styleRules": [],
+  "writerPreferences": [],
+  "openTasks": [],
+  "executedEdits": []
+}`;
 
 async function generateCumulativeSummary(
-  oldSummary: string,
+  oldMemory: StructuredMemory,
   newMessages: AIMessage[]
-): Promise<string> {
+): Promise<StructuredMemory> {
   const newMessagesText = newMessages
     .map((m) => `${m.role === "user" ? "الكاتبة" : "المساعد"}: ${m.content}`)
     .join("\n");
 
-  const userPrompt = `الملخص التراكمي السابق (إن وجد):
-${oldSummary || "لا يوجد ملخص سابق بعد."}
+  const userPrompt = `الذاكرة التراكمية السابقة المنظمة:
+${JSON.stringify(oldMemory)}
 
-الرسائل الجديدة المراد إضافتها للملخص:
+الرسائل الجديدة:
 ${newMessagesText}
 
-الملخص التراكمي الجديد والمحدّث بالكامل:`;
+يرجى إعادة الذاكرة التراكمية الجديدة بصيغة JSON فقط:`;
 
   try {
     return await executeWithSmartRotation(async (apiKey) => {
+      let textResponse = "";
       if (apiKey) {
         const directRes = await generateGeminiDirectly({
           apiKey,
           systemInstruction: SUMMARIZE_PROMPT,
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
           generationConfig: {
-            ...buildReasoningConfig("summary", 0.3),
-            maxOutputTokens: 300,
+            ...buildReasoningConfig("summary", 0.1),
+            responseMimeType: "application/json",
           },
         });
-        return directRes.text || "";
+        textResponse = directRes.text || "{}";
       } else {
         const res = await fetch("/api/gemini/generate", {
           method: "POST",
@@ -333,22 +377,29 @@ ${newMessagesText}
           body: JSON.stringify({
             systemInstruction: SUMMARIZE_PROMPT,
             contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-            model: GEMINI_PRIMARY_MODEL,
-            temperature: 0.3,
-            thinkingLevel: "LOW",
+            model: "gemini-2.5-flash",
+            temperature: 0.1,
+            responseMimeType: "application/json",
           }),
         });
-
-        if (res.ok) {
-          const data = await res.json();
-          return data.text || "";
-        }
-        throw new Error(`Server generate summary failed with status ${res.status}`);
+        const data = await res.json();
+        textResponse = data.text || "{}";
       }
+      
+      const parsed = JSON.parse(textResponse);
+      return {
+        storyDecisions: Array.isArray(parsed.storyDecisions) ? parsed.storyDecisions : [],
+        characterFacts: Array.isArray(parsed.characterFacts) ? parsed.characterFacts : [],
+        plotFacts: Array.isArray(parsed.plotFacts) ? parsed.plotFacts : [],
+        styleRules: Array.isArray(parsed.styleRules) ? parsed.styleRules : [],
+        writerPreferences: Array.isArray(parsed.writerPreferences) ? parsed.writerPreferences : [],
+        openTasks: Array.isArray(parsed.openTasks) ? parsed.openTasks : [],
+        executedEdits: Array.isArray(parsed.executedEdits) ? parsed.executedEdits : []
+      };
     });
-  } catch (error) {
-    console.error("Error in generateCumulativeSummary:", error);
-    return oldSummary;
+  } catch (err) {
+    console.warn("Failed to generate structured summary:", err);
+    return oldMemory;
   }
 }
 
@@ -378,39 +429,50 @@ export async function streamLiteraryAssistantResponse(
     const messagesToSummarize = history.slice(0, limitIndex);
     activeHistory = history.slice(limitIndex);
 
-    let cached = summaryCache.get(sessionKey);
-    if (!cached) {
-      cached = { summary: "", lastSummarizedId: "" };
-    }
-
+    
+    let cached = getStructuredMemory(sessionKey);
     const lastMsgToSummarize = messagesToSummarize[messagesToSummarize.length - 1];
-    if (cached.lastSummarizedId !== lastMsgToSummarize.id) {
+    if (cached.lastIncludedMessageId !== lastMsgToSummarize.id) {
       let startIndex = 0;
-      if (cached.lastSummarizedId) {
-        const idx = messagesToSummarize.findIndex((m) => m.id === cached!.lastSummarizedId);
+      if (cached.lastIncludedMessageId) {
+        const idx = messagesToSummarize.findIndex((m) => m.id === cached.lastIncludedMessageId);
         if (idx !== -1) {
           startIndex = idx + 1;
         }
       }
-
       const newMessagesForSummary = messagesToSummarize.slice(startIndex);
       if (newMessagesForSummary.length > 0) {
         try {
           console.log(`[Smart Summarization] Summarizing ${newMessagesForSummary.length} older messages...`);
-          const updatedSummary = await generateCumulativeSummary(cached.summary, newMessagesForSummary);
-          cached.summary = updatedSummary;
-          cached.lastSummarizedId = lastMsgToSummarize.id;
-          summaryCache.set(sessionKey, cached);
+          // Note: background summarization doesn't block the immediate request!
+          // We fire and forget it to update the cache for the NEXT turn.
+          generateCumulativeSummary(cached.memory, newMessagesForSummary).then((updatedMemory) => {
+            saveStructuredMemory(sessionKey, {
+              memory: updatedMemory,
+              lastIncludedMessageId: lastMsgToSummarize.id
+            });
+          }).catch((err) => console.warn(err));
         } catch (sumErr) {
           console.warn("[Smart Summarization] Background summarization failed:", sumErr);
         }
       }
     }
-
-    if (cached.summary) {
-      enrichedSystemInstruction += `\n\n[ملخص تراكمي لمعلومات وقرارات الجلسة السابقة مع الكاتبة رحمة السيد موافي]:\n${cached.summary}\n[نهاية الملخص التراكمي]`;
+    
+    // Convert structured memory to text for the prompt
+    const hasAnyMemory = Object.values(cached.memory).some(arr => arr && arr.length > 0);
+    if (hasAnyMemory) {
+      let formattedMemory = `[الذاكرة التراكمية للقصة والقرارات]:\n`;
+      if (cached.memory.storyDecisions?.length) formattedMemory += `- قرارات القصة:\n  * ${cached.memory.storyDecisions.join("\n  * ")}\n`;
+      if (cached.memory.characterFacts?.length) formattedMemory += `- معلومات الشخصيات:\n  * ${cached.memory.characterFacts.join("\n  * ")}\n`;
+      if (cached.memory.plotFacts?.length) formattedMemory += `- الأحداث والحبكة:\n  * ${cached.memory.plotFacts.join("\n  * ")}\n`;
+      if (cached.memory.styleRules?.length) formattedMemory += `- قواعد الأسلوب:\n  * ${cached.memory.styleRules.join("\n  * ")}\n`;
+      if (cached.memory.writerPreferences?.length) formattedMemory += `- تفضيلات الكاتبة:\n  * ${cached.memory.writerPreferences.join("\n  * ")}\n`;
+      if (cached.memory.openTasks?.length) formattedMemory += `- المهام المفتوحة:\n  * ${cached.memory.openTasks.join("\n  * ")}\n`;
+      if (cached.memory.executedEdits?.length) formattedMemory += `- التعديلات المنفذة مسبقاً:\n  * ${cached.memory.executedEdits.join("\n  * ")}\n`;
+      enrichedSystemInstruction += `\n\n${formattedMemory}\n[نهاية الذاكرة التراكمية]`;
     }
   }
+
 
   // Build full contents payload with (potentially sliced) conversation history
   const contents = activeHistory

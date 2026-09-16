@@ -1391,11 +1391,11 @@ export function validateBatchOperations(
   ops: PlannedOperation[],
   rootElement?: HTMLElement | null
 ): { isValid: boolean; results: ValidationItemResult[] } {
-  const searchRoot = rootElement || (typeof document !== "undefined" ? document : null);
+  const originalRoot = rootElement || (typeof document !== "undefined" ? document.body : null);
   const results: ValidationItemResult[] = [];
   let allValid = true;
 
-  if (!searchRoot) {
+  if (!originalRoot || !(originalRoot instanceof HTMLElement)) {
     return {
       isValid: false,
       results: ops.map((op, i) => ({
@@ -1404,17 +1404,21 @@ export function validateBatchOperations(
         blockId: op.blockId,
         status: "BLOCK_NOT_FOUND",
         isValid: false,
-        error: "Root element not found",
+        error: "Root element not found or not an HTMLElement",
       })),
     };
   }
 
+  // محاكاة العمليات على نسخة مؤقتة لضمان التنفيذ الذري (Transactional Simulation)
+  const simulationRoot = originalRoot.cloneNode(true) as HTMLElement;
+
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i];
-    let el = searchRoot.querySelector(`[data-block-id="${op.blockId}"]`);
-    if (!el && searchRoot instanceof HTMLElement && searchRoot.getAttribute("data-block-id") === op.blockId) {
-      el = searchRoot;
+    let el = simulationRoot.querySelector(`[data-block-id="${op.blockId}"]`);
+    if (!el && simulationRoot.getAttribute("data-block-id") === op.blockId) {
+      el = simulationRoot;
     }
+
     if (!el) {
       allValid = false;
       results.push({
@@ -1430,6 +1434,21 @@ export function validateBatchOperations(
 
     if (op.type === "REPLACE") {
       const targetText = op.targetText || "";
+      const newText = op.newText || "";
+
+      if (targetText === newText) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "IDENTICAL_REPLACEMENT",
+          isValid: false,
+          error: `النص البديل مطابق تمامًا للنص المستهدف في الفقرة "${op.blockId}".`,
+        });
+        continue;
+      }
+
       const rawText = cleanBlockRawText(el.innerHTML);
       let occurrences = 0;
       let p = rawText.indexOf(targetText);
@@ -1438,6 +1457,7 @@ export function validateBatchOperations(
         p = rawText.indexOf(targetText, p + 1);
       }
 
+      let matchType = "EXACT";
       if (occurrences === 0) {
         const normRaw = normalizeTextForMatching(rawText);
         const normTarget = normalizeTextForMatching(targetText);
@@ -1470,6 +1490,7 @@ export function validateBatchOperations(
           });
           continue;
         }
+        matchType = "NORMALIZED";
       } else if (occurrences > 1) {
         allValid = false;
         results.push({
@@ -1479,6 +1500,21 @@ export function validateBatchOperations(
           status: "AMBIGUOUS_MATCH",
           isValid: false,
           error: `النص المستهدف مكرر ${occurrences} مرات في الفقرة "${op.blockId}".`,
+        });
+        continue;
+      }
+
+      // Simulation application
+      const replaceResult = replaceTextWithinBlock(op.blockId, targetText, newText, { rootElement: simulationRoot });
+      if (replaceResult.status !== "SUCCESS") {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "SIMULATION_FAILED",
+          isValid: false,
+          error: `تعذر محاكاة استبدال النص في الفقرة "${op.blockId}".`,
         });
         continue;
       }
@@ -1492,42 +1528,24 @@ export function validateBatchOperations(
             opIndex: i,
             opType: op.type,
             blockId: op.blockId,
-            status: "CANNOT_DELETE_LAST_BLOCK",
+            status: "LAST_BLOCK",
             isValid: false,
-            error: "لا يمكن حذف الفقرة الوحيدة المتبقية.",
+            error: `لا يمكن حذف الفقرة "${op.blockId}" لأنها الفقرة الوحيدة المتبقية.`,
           });
           continue;
         }
       }
-    } else if (op.type === "MERGE") {
-      const elB = op.targetBlockIdB
-        ? (searchRoot.querySelector(`[data-block-id="${op.targetBlockIdB}"]`) as HTMLElement | null)
-        : null;
-      if (!elB) {
-        allValid = false;
-        results.push({
-          opIndex: i,
-          opType: op.type,
-          blockId: op.blockId,
-          status: "BLOCK_NOT_FOUND",
-          isValid: false,
-          error: `الفقرة الثانية "${op.targetBlockIdB}" غير موجودة للدمج.`,
-        });
-        continue;
-      }
-      const isAdjacent = el.nextElementSibling === elB || elB.nextElementSibling === el;
-      if (!isAdjacent) {
-        allValid = false;
-        results.push({
-          opIndex: i,
-          opType: op.type,
-          blockId: op.blockId,
-          status: "BLOCKS_NOT_ADJACENT",
-          isValid: false,
-          error: "الفقرتان ليستا متجاورتين مباشرة.",
-        });
-        continue;
-      }
+      el.remove(); // Simulate delete
+    } else if (op.type === "INSERT_AFTER" || op.type === "INSERT_BEFORE") {
+      const newEl = document.createElement("p");
+      newEl.setAttribute("data-block-id", "sim-" + Date.now());
+      newEl.className = "editor-block";
+      newEl.textContent = op.newText || "";
+      if (op.type === "INSERT_AFTER") {
+        el.after(newEl);
+      } else {
+        el.before(newEl);
+      } // Simulate insert
     }
 
     results.push({
@@ -1542,9 +1560,8 @@ export function validateBatchOperations(
   return { isValid: allValid, results };
 }
 
-// ==========================================================================
-// 1.5 & 1.6 مدير الدفعات الذرية وعدّاء الدفعات الفطين (BlockBatchManager)
-// ==========================================================================
+
+
 export interface BatchSnapshot {
   html: string;
   chapters?: any[];

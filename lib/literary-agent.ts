@@ -400,6 +400,7 @@ export async function executeAgentPlan({
   onCommit,
   accentColor = "#D97706",
   skipScopeCheck,
+  requestId,
 }: {
   rootElement: HTMLElement | null;
   rawCalls: ExecutiveToolCall[];
@@ -407,8 +408,24 @@ export async function executeAgentPlan({
   onCommit: () => void;
   accentColor?: string;
   skipScopeCheck?: boolean;
+  requestId?: string;
 }): Promise<AgentExecutionResult> {
   // 1. فحص التزامن والقفل (Concurrency Guard)
+  
+  // فحص تكرار الطلب (Idempotency)
+  if (requestId && window.localStorage) {
+    const executedRequests = JSON.parse(localStorage.getItem('executed_agent_requests') || '[]');
+    if (executedRequests.includes(requestId)) {
+      return {
+        success: true,
+        executedSteps: [],
+        error: "تم تنفيذ هذا الطلب مسبقاً (تكرار الطلب).",
+        totalMutations: 0,
+        auditEntriesCount: 0,
+      };
+    }
+  }
+
   if (isAgentEditLocked()) {
     return {
       success: false,
@@ -560,26 +577,19 @@ export async function executeAgentPlan({
   // 2. التحقق المسبق الشامل (Two-Phase Validation) قبل أي مساس بالـ DOM
   const validation = validateBatchOperations(plannedOps, rootElement);
   if (!validation.isValid) {
+    
     const firstInvalid = validation.results.find((r) => !r.isValid);
-    const failReason =
-      firstInvalid?.status === "BLOCK_NOT_FOUND"
-        ? "NOT_FOUND"
-        : firstInvalid?.status === "AMBIGUOUS_MATCH"
-        ? "AMBIGUOUS"
-        : "NOT_FOUND";
-
+    const validCount = validation.results.filter(r => r.isValid).length;
+    const failCount = validation.results.length - validCount;
+    
     return {
       success: false,
-      executedSteps: stepItems.map((s) => ({ ...s, status: "failed" })),
-      askWriter: {
-        question:
-          firstInvalid?.error ||
-          "تعذر العثور على الفقرة أو موضع النص المستهدف في هذا الفصل. هل تودين تحديد الموضع؟",
-        reason: failReason,
-      },
+      executedSteps: stepItems.map((s, idx) => ({ ...s, status: validation.results[idx]?.isValid ? "completed" : "failed", stepNote: validation.results[idx]?.error || s.stepNote })),
+      error: `تم إيقاف التنفيذ الذري. نجحت محاكاة ${validCount} عملية، وفشلت ${failCount} بسبب: ${firstInvalid?.error}`,
       totalMutations: 0,
       auditEntriesCount: 0,
     };
+
   }
 
   // 3. حجز القفل الجراحي (Agent Lock) داخل try/finally
@@ -812,9 +822,18 @@ export async function executeAgentPlan({
 
     // 4. التثبيت الواحد لحالة المحرر (Single Atomic Commit to State & History)
     cleanupAgentFx(rootElement);
+    
     if (stepItems.length > 0) {
+      if (requestId && window.localStorage) {
+        const executedRequests = JSON.parse(localStorage.getItem('executed_agent_requests') || '[]');
+        executedRequests.push(requestId);
+        // keep only last 50
+        if (executedRequests.length > 50) executedRequests.shift();
+        localStorage.setItem('executed_agent_requests', JSON.stringify(executedRequests));
+      }
       onCommit();
     }
+
 
     return {
       success: true,

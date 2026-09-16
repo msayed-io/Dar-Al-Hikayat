@@ -1346,6 +1346,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         ]);
 
         const planResult = await executeAgentPlan({
+          requestId: stepsMsgId,
           rootElement: targetRoot,
           rawCalls: decision.functionCalls as ExecutiveToolCall[],
           onStepUpdate: (updatedSteps) => {
