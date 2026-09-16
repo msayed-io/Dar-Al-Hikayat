@@ -1391,9 +1391,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                   ...m,
                   agentResult: {
                     totalMutations: planResult.totalMutations,
-                    completed: planResult.success,
-                    failed: !planResult.success && !planResult.askWriter,
-                    error: planResult.error,
+                    completed: planResult.success && !planResult.duplicate,
+                    failed: (!planResult.success && !planResult.askWriter) || planResult.duplicate === true,
+                    error: planResult.duplicate ? "تم تخطي التنفيذ لتكرار الطلب." : planResult.error,
                   },
                 }
               : m

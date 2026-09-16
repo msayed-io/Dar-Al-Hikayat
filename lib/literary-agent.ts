@@ -595,7 +595,8 @@ export async function executeAgentPlan({
       reason = "NOT_FOUND";
     }
 
-    const question = `نجحت محاكاة ${validCount} عملية وفشلت ${failCount} بسبب: ${firstInvalid?.error || "تعذر تحديد الموضع بدقة"}. فهل تحددين الموضع المطلوب بوضوح؟`;
+    const rawError = (firstInvalid?.error || "تعذر تحديد الموضع بدقة").trim().replace(/\.+$/, "");
+    const question = `نجحت محاكاة ${validCount} عملية وفشلت ${failCount} بسبب: ${rawError}. فهل تحددين الموضع المطلوب بوضوح؟`;
 
     return {
       success: false,
