@@ -1401,7 +1401,20 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         );
 
         // 2. Concluding summary and polite inquiry after successful execution
-        if (planResult.success && !planResult.askWriter) {
+        if (planResult.duplicate) {
+          const duplicateMsgId = (Date.now() + 4).toString();
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: duplicateMsgId,
+              role: "assistant",
+              content: "نُفِّذ هذا الطلب مسبقاً — لم يُعَد تطبيقه.",
+              timestamp: new Date(),
+              isAgent: true,
+              isNew: true,
+            },
+          ]);
+        } else if (planResult.success && !planResult.askWriter) {
           const summaryMsgId = (Date.now() + 4).toString();
           let summaryText = "";
           try {

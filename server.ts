@@ -256,7 +256,7 @@ async function startServer() {
   // Non-streaming generate content route with model fallback
   app.post("/api/gemini/generate", async (req, res) => {
     try {
-      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel } = req.body;
+      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel, responseMimeType } = req.body;
       const resolvedKey = resolveApiKey(apiKey);
 
       if (!resolvedKey) {
@@ -291,6 +291,9 @@ async function startServer() {
             temperature: typeof temperature === "number" ? temperature : 0.7,
             topP: 0.9,
           };
+          if (responseMimeType) {
+            config.responseMimeType = responseMimeType;
+          }
           if (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") {
             config.thinkingConfig = { thinkingLevel };
           }

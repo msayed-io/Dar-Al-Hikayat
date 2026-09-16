@@ -221,6 +221,7 @@ export interface DirectGeminiGenerateParams {
     topK?: number;
     maxOutputTokens?: number;
     thinkingLevel?: ThinkingLevelName;
+    responseMimeType?: string;
   };
   signal?: AbortSignal;
 }

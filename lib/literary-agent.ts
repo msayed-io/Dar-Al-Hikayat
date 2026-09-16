@@ -99,6 +99,7 @@ export interface AgentExecutionResult {
   error?: string;
   totalMutations: number;
   auditEntriesCount: number;
+  duplicate?: boolean;
 }
 
 // ============================================================================
@@ -413,16 +414,20 @@ export async function executeAgentPlan({
   // 1. فحص التزامن والقفل (Concurrency Guard)
   
   // فحص تكرار الطلب (Idempotency)
-  if (requestId && window.localStorage) {
-    const executedRequests = JSON.parse(localStorage.getItem('executed_agent_requests') || '[]');
-    if (executedRequests.includes(requestId)) {
-      return {
-        success: true,
-        executedSteps: [],
-        error: "تم تنفيذ هذا الطلب مسبقاً (تكرار الطلب).",
-        totalMutations: 0,
-        auditEntriesCount: 0,
-      };
+  if (requestId && typeof window !== "undefined" && window.localStorage) {
+    try {
+      const executedRequests = JSON.parse(localStorage.getItem('executed_agent_requests') || '[]');
+      if (Array.isArray(executedRequests) && executedRequests.includes(requestId)) {
+        return {
+          success: true,
+          duplicate: true,
+          executedSteps: [],
+          totalMutations: 0,
+          auditEntriesCount: 0,
+        };
+      }
+    } catch {
+      // Ignore corrupted localStorage item
     }
   }
 
@@ -577,19 +582,35 @@ export async function executeAgentPlan({
   // 2. التحقق المسبق الشامل (Two-Phase Validation) قبل أي مساس بالـ DOM
   const validation = validateBatchOperations(plannedOps, rootElement);
   if (!validation.isValid) {
-    
     const firstInvalid = validation.results.find((r) => !r.isValid);
-    const validCount = validation.results.filter(r => r.isValid).length;
+    const validCount = validation.results.filter((r) => r.isValid).length;
     const failCount = validation.results.length - validCount;
-    
+
+    let reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI" = "NOT_FOUND";
+    if (firstInvalid?.status === "AMBIGUOUS_MATCH") {
+      reason = "AMBIGUOUS";
+    } else if (firstInvalid?.status === "BLOCK_NOT_FOUND") {
+      reason = "NOT_FOUND";
+    } else {
+      reason = "NOT_FOUND";
+    }
+
+    const question = `نجحت محاكاة ${validCount} عملية وفشلت ${failCount} بسبب: ${firstInvalid?.error || "تعذر تحديد الموضع بدقة"}. فهل تحددين الموضع المطلوب بوضوح؟`;
+
     return {
       success: false,
-      executedSteps: stepItems.map((s, idx) => ({ ...s, status: validation.results[idx]?.isValid ? "completed" : "failed", stepNote: validation.results[idx]?.error || s.stepNote })),
-      error: `تم إيقاف التنفيذ الذري. نجحت محاكاة ${validCount} عملية، وفشلت ${failCount} بسبب: ${firstInvalid?.error}`,
+      executedSteps: stepItems.map((s) => ({
+        ...s,
+        status: "failed" as const,
+      })),
+      askWriter: {
+        question,
+        reason,
+        pendingOperations: rawCalls,
+      },
       totalMutations: 0,
       auditEntriesCount: 0,
     };
-
   }
 
   // 3. حجز القفل الجراحي (Agent Lock) داخل try/finally
@@ -824,12 +845,17 @@ export async function executeAgentPlan({
     cleanupAgentFx(rootElement);
     
     if (stepItems.length > 0) {
-      if (requestId && window.localStorage) {
-        const executedRequests = JSON.parse(localStorage.getItem('executed_agent_requests') || '[]');
-        executedRequests.push(requestId);
-        // keep only last 50
-        if (executedRequests.length > 50) executedRequests.shift();
-        localStorage.setItem('executed_agent_requests', JSON.stringify(executedRequests));
+      if (requestId && typeof window !== "undefined" && window.localStorage) {
+        try {
+          const executedRequests = JSON.parse(localStorage.getItem('executed_agent_requests') || '[]');
+          const list = Array.isArray(executedRequests) ? executedRequests : [];
+          list.push(requestId);
+          // keep only last 50
+          if (list.length > 50) list.shift();
+          localStorage.setItem('executed_agent_requests', JSON.stringify(list));
+        } catch {
+          // Ignore localStorage errors
+        }
       }
       onCommit();
     }

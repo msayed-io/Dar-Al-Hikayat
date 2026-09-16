@@ -377,8 +377,9 @@ ${newMessagesText}
           body: JSON.stringify({
             systemInstruction: SUMMARIZE_PROMPT,
             contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-            model: "gemini-2.5-flash",
+            model: GEMINI_PRIMARY_MODEL,
             temperature: 0.1,
+            thinkingLevel: "LOW",
             responseMimeType: "application/json",
           }),
         });
