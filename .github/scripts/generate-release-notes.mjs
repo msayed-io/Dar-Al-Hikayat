@@ -41,37 +41,79 @@ function validNotes(value) {
   );
 }
 
+function extractJsonObject(text) {
+  const cleaned = String(text || "")
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+  const start = cleaned.indexOf("{");
+  if (start < 0) throw new Error("Gemini response contains no JSON object");
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let i = start; i < cleaned.length; i += 1) {
+    const char = cleaned[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) {
+      const candidate = cleaned.slice(start, i + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        return JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1"));
+      }
+    }
+  }
+  throw new Error("Gemini response contains incomplete JSON");
+}
+
 async function generate() {
   if (!apiKey) return fallback;
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const prompt = `أنت محرر ملاحظات إصدار لتطبيق عربي. استخدم التقرير التالي فقط. اكتب من 1 إلى 5 نقاط عربية قصيرة، كل نقطة لا تتجاوز 140 حرفًا، للمستخدم العادي. لا تذكر أسماء ملفات أو دوال أو API أو GitHub، ولا تخترع ميزة غير موجودة. إذا كانت التفاصيل التقنية غير واضحة فاكتب تحسينًا عامًا صادقًا. أعد JSON فقط بالشكل: {"title":"ما الجديد في هذا الإصدار؟","items":["..."]}.\n\n${sourceReport}`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            title: { type: "STRING" },
-            items: { type: "ARRAY", items: { type: "STRING" } },
-          },
-          required: ["title", "items"],
+  const prompt = `اكتب ملاحظات إصدار عربية قصيرة من التقرير فقط. أعد كائن JSON واحدًا فقط، بلا Markdown أو شرح أو أسطر قبل/بعده، بهذا الشكل الدقيق: {"title":"ما الجديد في هذا الإصدار؟","items":["نقطة قصيرة"]}. من 1 إلى 5 نقاط، كل نقطة أقل من 140 حرفًا. لا تخترع، ولا تذكر ملفات أو كودًا أو API.\n\n${sourceReport}`;
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          title: { type: "STRING" },
+          items: { type: "ARRAY", items: { type: "STRING" } },
         },
-        temperature: 0.2,
-        maxOutputTokens: 600,
+        required: ["title", "items"],
       },
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
-  const payload = await response.json();
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-  const parsed = JSON.parse(text || "{}");
-  if (!validNotes(parsed)) throw new Error("Gemini returned invalid release notes");
-  return { title: "ما الجديد في هذا الإصدار؟", items: parsed.items.map((item) => item.trim()) };
+      temperature: 0.1,
+      maxOutputTokens: 400,
+    },
+  };
+  let lastError;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+      const payload = await response.json();
+      const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
+      const parsed = extractJsonObject(text);
+      if (!validNotes(parsed)) throw new Error("Gemini JSON failed validation");
+      return { title: "ما الجديد في هذا الإصدار؟", items: parsed.items.map((item) => item.trim()) };
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  throw lastError;
 }
 
 let notes = fallback;
