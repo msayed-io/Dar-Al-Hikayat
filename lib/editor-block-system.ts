@@ -75,6 +75,7 @@ export interface AuditLogEntry {
     | "MERGE"
     | "MOVE"
     | "SPLIT"
+    | "DIACRITIZE"
     | "BATCH_BEGIN"
     | "BATCH_COMMIT"
     | "BATCH_ROLLBACK"

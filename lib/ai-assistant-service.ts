@@ -96,6 +96,10 @@ export const UNIFIED_AGENT_INSTRUCTION = `أنت المساعد والوكيل �
    - scope: نطاق الاستبدال وهو "chapter" حصراً.
    - step_note: سطر وصفي عربي واحد موجز يشرح الاستبدال الشامل (مثال: "تعديل اسم الشخصية في الفصل كاملاً").
 
+9. diacritize_scope: تشغيل خط إنتاج الضبط اللغوي (تشكيل جزئي معتمد، فواصل أدبية، وهمزات) لنطاق محدد.
+   - target: نطاق الضبط، إما معرف فقرة يبدأ بـ "b_" أو "chapter" للفصل كاملاً (ممنوع إرسال أي نص في الوسائط).
+   - step_note: سطر وصفي عربي واحد موجز يشرح النطاق المستهدف (مثال: "بدء الضبط اللغوي للفصل كاملاً").
+
 قواعد الجراحة والنطاق والمحرّمات:
 1. سطر الخطوة (step_note): لكل استدعاء أداة، يجب توليد سطر عربي واحد بليغ وحقيقي يصف الإجراء بدقة؛ يمنع منعاً باتاً تكرار عبارات نمطية ثابتة.
 2. الجراحة الموضعية: لا تلمس حرفاً واحداً خارج نطاق التعديل المطلوب. حافظ على علامات الترقيم والسياق المحيط.
@@ -103,7 +107,8 @@ export const UNIFIED_AGENT_INSTRUCTION = `أنت المساعد والوكيل �
 4. الغموض وتعدد المطابقات: ممنوع التخمين إطلاقاً! إذا احتمل التعديل موضعين أو لم يتضح النص المستهدف بدقة، استدعِ ask_writer فوراً.
 5. مفاتيح الفقرات: معرّفات الفقرات مثل [b_xxxx] هي مراجع جراحية لك؛ لا تقم أبداً بكتابة رمز [b_xxxx] داخل new_text.
 6. نظام المنشن (@) والضمائر الإشارية (ديت / هذه / المقطع ده / الفقرة دي / غير ديت / استبدلها): عندما ترفق الكاتبة منشناً أو تستخدم ضميراً إشارياً مع وجود منشن في السياق، فإن الهدف الحتمي هو الفقرة والمقطع المذكوران في المنشن؛ باشر استدعاء replace_text مستخدماً block_id المرفق فوراً، وممنوع منعاً باتاً استدعاء ask_writer بسبب NOT_FOUND طالما أن المنشن محدد وموجود.
-7. قاعدة توجيه النطاق والدمج: النطاق الشامل (الفصل كله/كل المواضع) ← replace_all حصراً، والموضع الواحد ← replace_text؛ والدمج يشترط التجاور.`;
+7. قاعدة توجيه النطاق والدمج: النطاق الشامل (الفصل كله/كل المواضع) ← replace_all حصراً، والموضع الواحد ← replace_text؛ والدمج يشترط التجاور.
+8. قاعدة ضبط وتشكيل النصوص: طلب الضبط/التشكيل/الهمزات/الفواصل ← diacritize_scope حصراً — وممنوع منعاً باتاً إعادة كتابة نص مشكّل يدوياً عبر replace_text.`;
 
 export const AGENTIC_TOOL_DECLARATIONS = [
   {
@@ -292,6 +297,24 @@ export const AGENTIC_TOOL_DECLARATIONS = [
         },
       },
       required: ["target_text", "new_text", "scope", "step_note"],
+    },
+  },
+  {
+    name: "diacritize_scope",
+    description: "تشغيل خط إنتاج الضبط اللغوي (تشكيل جزئي معتمد، فواصل أدبية، وهمزات) لنطاق محدد دون إرسال أي نصوص في الوسائط — النطاق فقط، والتطبيق ينفذ خط الإنتاج.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        target: {
+          type: "STRING",
+          description: "نطاق الضبط اللغوي: إما معرف فقرة يبدأ بـ b_ أو \"chapter\" للفصل كاملاً (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف نطاق الضبط لعرضه في خطوات التنفيذ (إجباري)",
+        },
+      },
+      required: ["target", "step_note"],
     },
   },
 ];
@@ -1012,6 +1035,23 @@ export async function requestExecutiveDecision({
                 target_text: args.target_text,
                 new_text: args.new_text,
                 scope: "chapter",
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "diacritize_scope") {
+          const isTargetValid =
+            args.target === "chapter" ||
+            (typeof args.target === "string" && args.target.startsWith("b_"));
+          if (
+            isTargetValid &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                target: args.target.trim(),
                 step_note: args.step_note.trim(),
               },
             });

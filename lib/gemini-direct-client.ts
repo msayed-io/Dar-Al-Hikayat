@@ -10,6 +10,7 @@ export const THINKING_FOR_PATH = {
   summary: "LOW",
   advisory: "MEDIUM",
   init: "MEDIUM",
+  diacritize: "LOW",
 } as const;
 
 export interface ReasoningConfig {

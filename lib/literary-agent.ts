@@ -31,6 +31,7 @@ import {
   UNIFIED_AGENT_INSTRUCTION,
   AGENTIC_TOOL_DECLARATIONS,
 } from "./ai-assistant-service";
+import { runDiacritizeJob } from "./tashkeel-pipeline";
 
 // ============================================================================
 // 1. الثوابت والأدوات والأنواع
@@ -108,6 +109,13 @@ export type ExecutiveToolCall =
         scope: "chapter";
         step_note: string;
       };
+    }
+  | {
+      name: "diacritize_scope";
+      args: {
+        target: string;
+        step_note: string;
+      };
     };
 
 export interface AgentStepItem {
@@ -138,6 +146,12 @@ export interface AgentExecutionResult {
   totalMutations: number;
   auditEntriesCount: number;
   duplicate?: boolean;
+  diacritizeReport?: {
+    done: number;
+    skipped: number;
+    jobId: string;
+    skippedReasons?: string[];
+  };
 }
 
 // ============================================================================
@@ -209,7 +223,18 @@ const EXPLICIT_EDIT_VERBS = [
   "حرّك",
   "حرّكي",
   "اقسم",
-  "اقسمي"
+  "اقسمي",
+  "شكل",
+  "شكّل",
+  "شكلي",
+  "شكّلي",
+  "اضبط",
+  "اضبطي",
+  "أضبط",
+  "تشكيل",
+  "ضبط",
+  "صحح",
+  "صححي"
 ].map(v => normalizeArabicForIntent(v));
 
 export function isExplicitEditIntent(
@@ -698,7 +723,7 @@ export async function executeAgentPlan({
       (c.args as any)?.block_id ||
       (c.args as any)?.anchor_block_id ||
       (c.args as any)?.block_id_a ||
-      (c.name === "replace_all" ? "الفصل" : "writer"),
+      (c.name === "diacritize_scope" ? (c.args as any).target : (c.name === "replace_all" ? "الفصل" : "writer")),
     stepNote: (c.args as any).step_note || "تنفيذ تعديل أدبي",
     status: "waiting",
   }));
@@ -759,38 +784,40 @@ export async function executeAgentPlan({
   }
 
   // 2. التحقق المسبق الشامل (Two-Phase Validation) قبل أي مساس بالـ DOM
-  const validation = validateBatchOperations(plannedOps, rootElement);
-  if (!validation.isValid) {
-    const firstInvalid = validation.results.find((r) => !r.isValid);
-    const validCount = validation.results.filter((r) => r.isValid).length;
-    const failCount = validation.results.length - validCount;
+  if (plannedOps.length > 0) {
+    const validation = validateBatchOperations(plannedOps, rootElement);
+    if (!validation.isValid) {
+      const firstInvalid = validation.results.find((r) => !r.isValid);
+      const validCount = validation.results.filter((r) => r.isValid).length;
+      const failCount = validation.results.length - validCount;
 
-    let reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI" = "NOT_FOUND";
-    if (firstInvalid?.status === "AMBIGUOUS_MATCH") {
-      reason = "AMBIGUOUS";
-    } else if (firstInvalid?.status === "BLOCK_NOT_FOUND") {
-      reason = "NOT_FOUND";
-    } else {
-      reason = "NOT_FOUND";
+      let reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI" = "NOT_FOUND";
+      if (firstInvalid?.status === "AMBIGUOUS_MATCH") {
+        reason = "AMBIGUOUS";
+      } else if (firstInvalid?.status === "BLOCK_NOT_FOUND") {
+        reason = "NOT_FOUND";
+      } else {
+        reason = "NOT_FOUND";
+      }
+
+      const rawError = (firstInvalid?.error || "تعذر تحديد الموضع بدقة").trim().replace(/\.+$/, "");
+      const question = `نجحت محاكاة ${validCount} عملية وفشلت ${failCount} بسبب: ${rawError}. فهل تحددين الموضع المطلوب بوضوح؟`;
+
+      return {
+        success: false,
+        executedSteps: stepItems.map((s) => ({
+          ...s,
+          status: "failed" as const,
+        })),
+        askWriter: {
+          question,
+          reason,
+          pendingOperations: rawCalls,
+        },
+        totalMutations: 0,
+        auditEntriesCount: 0,
+      };
     }
-
-    const rawError = (firstInvalid?.error || "تعذر تحديد الموضع بدقة").trim().replace(/\.+$/, "");
-    const question = `نجحت محاكاة ${validCount} عملية وفشلت ${failCount} بسبب: ${rawError}. فهل تحددين الموضع المطلوب بوضوح؟`;
-
-    return {
-      success: false,
-      executedSteps: stepItems.map((s) => ({
-        ...s,
-        status: "failed" as const,
-      })),
-      askWriter: {
-        question,
-        reason,
-        pendingOperations: rawCalls,
-      },
-      totalMutations: 0,
-      auditEntriesCount: 0,
-    };
   }
 
   // 3. حجز القفل الجراحي (Agent Lock) داخل try/finally
@@ -811,6 +838,7 @@ export async function executeAgentPlan({
   };
 
   let totalSuccessfulMutations = 0;
+  let lastDiacritizeReport: { done: number; skipped: number; jobId: string; skippedReasons?: string[] } | undefined;
 
   try {
     // تشغيل الدفعة عبر runCheckedBatch
@@ -1130,6 +1158,42 @@ export async function executeAgentPlan({
           onStepUpdate([...stepItems]);
           cleanupAgentFx(rootElement);
           return lastRes;
+        } else if (call.name === "diacritize_scope") {
+          const diacritizeRes = await runDiacritizeJob({
+            target: call.args.target,
+            rootElement,
+            onStepUpdate,
+            stepItemIndex: idx,
+            existingStepItems: stepItems,
+          });
+
+          if (diacritizeRes.status === "SUCCESS") {
+            lastDiacritizeReport = diacritizeRes.report;
+            totalSuccessfulMutations += (diacritizeRes.report?.done || 1);
+            stepItems[idx].status = "completed";
+            onStepUpdate([...stepItems]);
+            cleanupAgentFx(rootElement);
+            return { status: "SUCCESS", blockId: call.args.target };
+          } else if (diacritizeRes.status === "CANCELLED") {
+            stepItems[idx].status = "failed";
+            stepItems[idx].stepNote = diacritizeRes.error || "أُلغي الضبط بطلبك — لم يُحفَظ شيء.";
+            onStepUpdate([...stepItems]);
+            cleanupAgentFx(rootElement);
+            return {
+              status: "CANCELLED",
+              blockId: call.args.target,
+              error: diacritizeRes.error,
+            };
+          } else {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+            cleanupAgentFx(rootElement);
+            return {
+              status: "EXECUTION_ERROR",
+              blockId: call.args.target,
+              error: diacritizeRes.error,
+            };
+          }
         }
 
         return { status: "SUCCESS", blockId: "noop" };
@@ -1183,6 +1247,7 @@ export async function executeAgentPlan({
       executedSteps: stepItems,
       totalMutations: totalSuccessfulMutations,
       auditEntriesCount: totalSuccessfulMutations,
+      diacritizeReport: lastDiacritizeReport,
     };
   } finally {
     cleanupAgentFx(rootElement);

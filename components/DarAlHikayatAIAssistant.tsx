@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Plus,
   Zap,
+  Undo2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -47,6 +48,7 @@ import {
   type ExecutiveToolCall,
   type PendingAgentRequest,
 } from "../lib/literary-agent";
+import { cancelDiacritizeJob, undoDiacritizeJob } from "../lib/tashkeel-pipeline";
 
 export type Message = {
   id: string;
@@ -65,6 +67,7 @@ export type Message = {
     failed?: boolean;
     error?: string;
   };
+  diacritizeJobId?: string;
 };
 
 export type StoredConversation = {
@@ -638,6 +641,7 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
   const steps = message.steps || [];
   const result = message.agentResult;
   const isExecuting = !result?.completed && !result?.failed;
+  const hasActiveDiacritize = isExecuting && steps.some((s) => s.toolName === "diacritize_scope" && (s.status === "active" || s.status === "waiting"));
   const checkboxId = `agent-tree-toggle-${message.id}`;
 
   const stepCount = steps.length || 1;
@@ -860,11 +864,27 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
                     </div>
                   ) : (
                     <div
-                      className="flex items-center gap-1.5 text-[12px] font-zain-bold"
+                      className="flex items-center justify-between w-full text-[12px] font-zain-bold"
                       style={{ color: theme.accent }}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
-                      <span>جارٍ التنفيذ...</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
+                        <span>جارٍ التنفيذ...</span>
+                      </div>
+                      {hasActiveDiacritize && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cancelDiacritizeJob();
+                          }}
+                          className="px-2.5 py-0.5 rounded text-[11px] font-zain-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 transition-colors cursor-pointer"
+                          title="إلغاء خط إنتاج الضبط والتراجع الفوري عن أي تغييرات"
+                        >
+                          إلغاء الضبط
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1418,22 +1438,29 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         } else if (planResult.success && !planResult.askWriter) {
           const summaryMsgId = (Date.now() + 4).toString();
           let summaryText = "";
-          try {
-            summaryText = await generateAgentCompletionSummary({
-              userPrompt: userPromptText,
-              executedSteps: planResult.executedSteps.map((s) => ({
-                toolName: s.toolName,
-                stepNote: s.stepNote,
-              })),
-              storyTitle: storyContext?.title,
-            });
-          } catch {
-            summaryText = generateDefaultAgentSummary(
-              planResult.executedSteps.map((s) => ({
-                toolName: s.toolName,
-                stepNote: s.stepNote,
-              }))
-            );
+
+          if (planResult.diacritizeReport) {
+            const r = planResult.diacritizeReport;
+            const skippedText = r.skipped > 0 ? `، وتخطي ${r.skipped} (للحفاظ على الحروف كما هي بدون تغيير)` : "";
+            summaryText = `تم إنجاز الضبط اللغوي بدقة رياضية لـ ${r.done} فقرة بنجاح${skippedText}.`;
+          } else {
+            try {
+              summaryText = await generateAgentCompletionSummary({
+                userPrompt: userPromptText,
+                executedSteps: planResult.executedSteps.map((s) => ({
+                  toolName: s.toolName,
+                  stepNote: s.stepNote,
+                })),
+                storyTitle: storyContext?.title,
+              });
+            } catch {
+              summaryText = generateDefaultAgentSummary(
+                planResult.executedSteps.map((s) => ({
+                  toolName: s.toolName,
+                  stepNote: s.stepNote,
+                }))
+              );
+            }
           }
 
           setMessages((prev) => [
@@ -1445,6 +1472,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               timestamp: new Date(),
               isAgent: true,
               isNew: true,
+              diacritizeJobId: planResult.diacritizeReport?.jobId,
             },
           ]);
         }
@@ -2550,6 +2578,41 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             />
                           )}
                         </div>
+                        {m.diacritizeJobId && (
+                          <div
+                            dir="rtl"
+                            className="mt-2.5 flex items-center gap-2 select-none"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editorRootElement && onCommitAgentChanges && m.diacritizeJobId) {
+                                  const undone = undoDiacritizeJob(
+                                    m.diacritizeJobId,
+                                    editorRootElement,
+                                    onCommitAgentChanges
+                                  );
+                                  if (undone) {
+                                    setMessages((prev) => [
+                                      ...prev,
+                                      {
+                                        id: Date.now().toString(),
+                                        role: "system_ephemeral",
+                                        content: "تم التراجع عن الضبط واستعادة النص الأصلي كاملاً.",
+                                        timestamp: new Date(),
+                                      },
+                                    ]);
+                                  }
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-zain-bold border transition-all hover:bg-rose-500/15 text-rose-500 border-rose-500/30 cursor-pointer active:scale-95"
+                              title="تراجع عن الضبط اللغوي واستعادة النص الأصلي كما كان قبل التشكيل"
+                            >
+                              <Undo2 size={13} />
+                              <span>تراجع عن الضبط</span>
+                            </button>
+                          </div>
+                        )}
                         {isLastAI && (
                           <div
                             dir="ltr"
