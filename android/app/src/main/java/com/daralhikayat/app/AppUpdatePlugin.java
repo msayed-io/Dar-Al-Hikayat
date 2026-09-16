@@ -69,14 +69,20 @@ public class AppUpdatePlugin extends Plugin {
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)
             );
 
+            int iconRes = context.getResources().getIdentifier("ic_stat_update", "drawable", context.getPackageName());
+            if (iconRes == 0) {
+                iconRes = context.getApplicationInfo().icon != 0 ? context.getApplicationInfo().icon : android.R.drawable.stat_sys_download_done;
+            }
+
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, UPDATE_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setSmallIcon(iconRes)
                 .setContentTitle("تحديث جديد لدار الحكايات")
                 .setContentText("الإصدار " + versionName + " متاح — اضغط للتحديث")
-                .setStyle(new NotificationCompat.BigTextStyle().bigText("الإصدار " + versionName + " متاح — اضغط لفتح التطبيق وتثبيته."))
+                .setStyle(new NotificationCompat.BigTextStyle().bigText("الإصدار " + versionName + " متاح الآن بكافة التحسينات والميزات الجديدة — اضغط لفتح التطبيق وتثبيته فوراً."))
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION);
             manager.notify(UPDATE_NOTIFICATION_ID, builder.build());
 

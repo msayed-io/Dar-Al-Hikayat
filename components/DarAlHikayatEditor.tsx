@@ -2071,9 +2071,9 @@ const DarAlHikayatMaster: React.FC = () => {
     ? chapters.reduce((acc, curr) => acc + getCleanCharCount(curr.content), 0)
     : getCleanCharCount(content);
 
-  // Auto-close assistant and hide tooltip if word count drops below the 300-word threshold
+  // Auto-close assistant and hide tooltip if word count drops below the 50-word threshold
   useEffect(() => {
-    if (wordCount < 300) {
+    if (wordCount < 50) {
       if (showAIAssistant) {
         setShowAIAssistant(false);
       }
@@ -3073,8 +3073,8 @@ const DarAlHikayatMaster: React.FC = () => {
                   <Plus className="w-4 h-4" />
                 </button>
               )}
-              {/* AI Assistant Button - Strictly rendered ONLY when wordCount >= 300 */}
-              {wordCount >= 300 && (
+              {/* AI Assistant Button - Strictly rendered ONLY when wordCount >= 50 */}
+              {wordCount >= 50 && (
                 <div className="relative flex items-center">
                   <button
                     id="dar-alhikayat-ai-toggle-btn"
@@ -3653,7 +3653,7 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Separate Adjacent @ Mention Capsule Button */}
-      {toolbarVisible && !isAgentEditLocked() && screenInfo.canOpenAssistant && wordCount >= 300 && (
+      {toolbarVisible && !isAgentEditLocked() && screenInfo.canOpenAssistant && wordCount >= 50 && (
         <button
           onMouseDown={(e) => {
             e.preventDefault();
