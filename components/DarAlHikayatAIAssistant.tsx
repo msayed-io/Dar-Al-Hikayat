@@ -1216,7 +1216,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         effectivePrompt = `[سياق توضيحي لسؤال سابق: "${pendingAgentRequest.question}"]\nإجابة الكاتبة وقرارها: ${userPromptText}\nالطلب الأصلي الأساسي: ${pendingAgentRequest.originalMessage}`;
         if (pendingAgentRequest.pendingOperations && pendingAgentRequest.pendingOperations.length > 0) {
           effectivePrompt += `\n[عمليات معلقة من خطة سابقة (${pendingAgentRequest.pendingOperations.length}) — خذها في الحسبان عند إعادة التخطيط، ولا تنفذها إلا ضمن خطتك الجديدة]:\n` + 
-            pendingAgentRequest.pendingOperations.map(op => `- (${op.name} | الفقرة ${(op.args as any).block_id || (op.args as any).anchor_block_id || 'بدون'} | ${((op.args as any).step_note || "").slice(0, 60)})`).join("\n");
+            pendingAgentRequest.pendingOperations.map(op => `- (${op.name} | الفقرة ${(op.args as any).block_id || (op.args as any).anchor_block_id || (op.args as any).block_id_a || (op.name === "replace_all" ? "الفصل" : 'بدون')} | ${((op.args as any).step_note || "").slice(0, 60)})`).join("\n");
         }
       }
 
@@ -1319,7 +1319,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             blockId:
               (fc.args as any)?.block_id ||
               (fc.args as any)?.anchor_block_id ||
-              "",
+              (fc.args as any)?.block_id_a ||
+              (fc.name === "replace_all" ? "الفصل" : ""),
             status: "waiting",
             stepNote:
               (fc.args as any)?.step_note ||

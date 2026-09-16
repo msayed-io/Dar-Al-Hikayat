@@ -95,4 +95,105 @@ describe("Editor Block System - validateBatchOperations", () => {
     expect(res.isValid).toBe(true);
     expect(res.results[0].status).toBe("SUCCESS");
   });
+
+  // =========================================================================
+  // حزمة S-Tools: اختبارات أدوات الدمج، النقل، والتقسيم
+  // =========================================================================
+
+  it("9. دمج فقرتين متجاورتين بنجاح (MERGE)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">الفقرة الأولى.</p>
+        <p data-block-id="b_2">الفقرة الثانية.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "MERGE", blockId: "b_1", targetBlockIdB: "b_2" }
+    ], root);
+    expect(res.isValid).toBe(true);
+    expect(res.results[0].status).toBe("SUCCESS");
+  });
+
+  it("10. فشل دمج فقرتين غير متجاورتين (BLOCKS_NOT_ADJACENT)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">الفقرة الأولى.</p>
+        <p data-block-id="b_middle">فقرة فاصلة في الوسط.</p>
+        <p data-block-id="b_2">الفقرة الثانية.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "MERGE", blockId: "b_1", targetBlockIdB: "b_2" }
+    ], root);
+    expect(res.isValid).toBe(false);
+    expect(res.results[0].status).toBe("BLOCKS_NOT_ADJACENT");
+  });
+
+  it("11. نقل فقرة إلى بعد فقرة أخرى بنجاح (MOVE)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">الفقرة 1.</p>
+        <p data-block-id="b_2">الفقرة 2.</p>
+        <p data-block-id="b_3">الفقرة 3.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "MOVE", blockId: "b_1", anchorBlockId: "b_3", position: "after" }
+    ], root);
+    expect(res.isValid).toBe(true);
+    expect(res.results[0].status).toBe("SUCCESS");
+  });
+
+  it("12. منع نقل الفقرة إلى نفسها (BLOCK_NOT_FOUND)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">الفقرة 1.</p>
+        <p data-block-id="b_2">الفقرة 2.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "MOVE", blockId: "b_1", anchorBlockId: "b_1", position: "before" }
+    ], root);
+    expect(res.isValid).toBe(false);
+    expect(res.results[0].status).toBe("BLOCK_NOT_FOUND");
+  });
+
+  it("13. شطر فقرة بنجاح عند نص محدد (SPLIT)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">كانت ليلة هادئة. وفجأة دوى صوت انفجار في البعيد.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "SPLIT", blockId: "b_1", splitAfterText: "كانت ليلة هادئة." }
+    ], root);
+    expect(res.isValid).toBe(true);
+    expect(res.results[0].status).toBe("SUCCESS");
+  });
+
+  it("14. فشل شطر الفقرة عند نص غير موجود (NO_MATCH_FOUND)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">كانت ليلة هادئة تماماً.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "SPLIT", blockId: "b_1", splitAfterText: "نص غير موجود إطلاقاً" }
+    ], root);
+    expect(res.isValid).toBe(false);
+    expect(res.results[0].status).toBe("NO_MATCH_FOUND");
+  });
+
+  it("15. فشل شطر الفقرة عند نص متكرر داخل نفس الفقرة (AMBIGUOUS_MATCH)", () => {
+    const root = resetDOM(`
+      <div class="editor-container">
+        <p data-block-id="b_1">نقطة البداية هنا ثم نقطة البداية هناك.</p>
+      </div>
+    `);
+    const res = validateBatchOperations([
+      { type: "SPLIT", blockId: "b_1", splitAfterText: "نقطة البداية" }
+    ], root);
+    expect(res.isValid).toBe(false);
+    expect(res.results[0].status).toBe("AMBIGUOUS_MATCH");
+  });
 });

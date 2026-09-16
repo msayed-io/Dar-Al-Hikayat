@@ -73,6 +73,8 @@ export interface AuditLogEntry {
     | "INSERT_BEFORE"
     | "DELETE"
     | "MERGE"
+    | "MOVE"
+    | "SPLIT"
     | "BATCH_BEGIN"
     | "BATCH_COMMIT"
     | "BATCH_ROLLBACK"
@@ -1370,15 +1372,229 @@ export function mergeBlocks(
   };
 }
 
+/**
+ * أداة نقل فقرة قائمة بجوار فقرة مرجعية أخرى (moveBlock)
+ */
+export function moveBlock(
+  blockId: string,
+  anchorBlockId: string,
+  position: "after" | "before",
+  options?: {
+    rootElement?: HTMLElement | null;
+    onSuccess?: (blockId: string, movedEl: HTMLElement) => void;
+  }
+): BlockOperationResult {
+  if (!blockId || !anchorBlockId) {
+    return {
+      status: "BLOCK_NOT_FOUND",
+      blockId: !blockId ? (blockId || "unknown") : anchorBlockId,
+      error: "معرّف الفقرة غير صالح.",
+    };
+  }
+
+  if (blockId === anchorBlockId) {
+    return {
+      status: "BLOCK_NOT_FOUND",
+      blockId,
+      error: "لا يمكن نقل الفقرة إلى موضع نفسها.",
+    };
+  }
+
+  let targetEl: HTMLElement | null = null;
+  let anchorEl: HTMLElement | null = null;
+  const searchRoot = options?.rootElement || (typeof document !== "undefined" ? document : null);
+
+  if (searchRoot) {
+    targetEl = searchRoot.querySelector(`[data-block-id="${blockId}"]`);
+    anchorEl = searchRoot.querySelector(`[data-block-id="${anchorBlockId}"]`);
+  }
+
+  if (!targetEl) {
+    globalAuditLog.record({
+      type: "MOVE",
+      blockId,
+      details: { anchorBlockId, position },
+      status: "BLOCK_NOT_FOUND",
+      error: `لم يتم العثور على الفقرة المراد نقلها "${blockId}".`,
+    });
+    return {
+      status: "BLOCK_NOT_FOUND",
+      blockId,
+      error: `لم يتم العثور على الفقرة المراد نقلها "${blockId}".`,
+    };
+  }
+
+  if (!anchorEl) {
+    globalAuditLog.record({
+      type: "MOVE",
+      blockId: anchorBlockId,
+      details: { targetBlockId: blockId, position },
+      status: "BLOCK_NOT_FOUND",
+      error: `لم يتم العثور على الفقرة المرجعية "${anchorBlockId}".`,
+    });
+    return {
+      status: "BLOCK_NOT_FOUND",
+      blockId: anchorBlockId,
+      error: `لم يتم العثور على الفقرة المرجعية "${anchorBlockId}".`,
+    };
+  }
+
+  if (position === "after") {
+    anchorEl.after(targetEl);
+  } else {
+    anchorEl.before(targetEl);
+  }
+
+  if (options?.onSuccess) {
+    options.onSuccess(blockId, targetEl);
+  }
+
+  globalAuditLog.record({
+    type: "MOVE",
+    blockId,
+    details: { anchorBlockId, position },
+    status: "SUCCESS",
+  });
+
+  return {
+    status: "SUCCESS",
+    blockId,
+    node: targetEl,
+  };
+}
+
+/**
+ * أداة شطر فقرة إلى فقرتين عند نقطة محددة (splitBlock)
+ * تستخدم generateBlockId() حصراً لتوليد المعرف الجديد
+ */
+export function splitBlock(
+  blockId: string,
+  splitAfterText: string,
+  options?: {
+    rootElement?: HTMLElement | null;
+    onSuccess?: (originalBlockId: string, newBlockId: string) => void;
+  }
+): BlockOperationResult {
+  if (!blockId) {
+    return {
+      status: "BLOCK_NOT_FOUND",
+      blockId: blockId || "unknown",
+      error: "معرّف الفقرة غير صالح.",
+    };
+  }
+
+  let targetBlockEl: HTMLElement | null = null;
+  const searchRoot = options?.rootElement || (typeof document !== "undefined" ? document : null);
+
+  if (searchRoot) {
+    targetBlockEl = searchRoot.querySelector(`[data-block-id="${blockId}"]`);
+  }
+
+  if (!targetBlockEl) {
+    globalAuditLog.record({
+      type: "SPLIT",
+      blockId,
+      details: { splitAfterText },
+      status: "BLOCK_NOT_FOUND",
+      error: `لم يتم العثور على الفقرة ذات المعرّف "${blockId}".`,
+    });
+    return {
+      status: "BLOCK_NOT_FOUND",
+      blockId,
+      error: `لم يتم العثور على الفقرة ذات المعرّف "${blockId}".`,
+    };
+  }
+
+  const rawText = cleanBlockRawText(targetBlockEl.innerHTML);
+  let occurrences = 0;
+  let p = rawText.indexOf(splitAfterText);
+  while (p !== -1 && splitAfterText.length > 0) {
+    occurrences++;
+    p = rawText.indexOf(splitAfterText, p + 1);
+  }
+
+  if (occurrences === 0) {
+    globalAuditLog.record({
+      type: "SPLIT",
+      blockId,
+      details: { splitAfterText },
+      status: "NO_MATCH_FOUND",
+      error: `نقطة الشطر "${splitAfterText}" غير موجودة في الفقرة "${blockId}".`,
+    });
+    return {
+      status: "NO_MATCH_FOUND",
+      blockId,
+      error: `نقطة الشطر "${splitAfterText}" غير موجودة في الفقرة "${blockId}".`,
+    };
+  }
+
+  if (occurrences > 1) {
+    globalAuditLog.record({
+      type: "SPLIT",
+      blockId,
+      details: { splitAfterText, occurrences },
+      status: "AMBIGUOUS_MATCH",
+      error: `نقطة الشطر "${splitAfterText}" مكررة ${occurrences} مرات في الفقرة "${blockId}".`,
+    });
+    return {
+      status: "AMBIGUOUS_MATCH",
+      blockId,
+      error: `نقطة الشطر "${splitAfterText}" مكررة ${occurrences} مرات في الفقرة "${blockId}".`,
+    };
+  }
+
+  const splitIndex = rawText.indexOf(splitAfterText) + splitAfterText.length;
+  const firstPart = rawText.slice(0, splitIndex).trimEnd();
+  const secondPart = rawText.slice(splitIndex).trimStart();
+
+  while (targetBlockEl.firstChild) {
+    targetBlockEl.removeChild(targetBlockEl.firstChild);
+  }
+  targetBlockEl.appendChild(document.createTextNode(firstPart));
+
+  const tagName = targetBlockEl.tagName ? targetBlockEl.tagName.toLowerCase() : "div";
+  const newBlockEl = document.createElement(tagName);
+  if (targetBlockEl.className) {
+    newBlockEl.className = targetBlockEl.className;
+  }
+  const newBlockId = generateBlockId();
+  newBlockEl.setAttribute("data-block-id", newBlockId);
+  newBlockEl.appendChild(document.createTextNode(secondPart));
+
+  targetBlockEl.after(newBlockEl);
+
+  if (options?.onSuccess) {
+    options.onSuccess(blockId, newBlockId);
+  }
+
+  globalAuditLog.record({
+    type: "SPLIT",
+    blockId,
+    details: { splitAfterText, newBlockId },
+    status: "SUCCESS",
+  });
+
+  return {
+    status: "SUCCESS",
+    blockId,
+    createdBlockIds: [newBlockId],
+    updatedText: firstPart,
+    node: targetBlockEl,
+  };
+}
+
 // ==========================================================================
 // 1.1 التحقق المسبق قبل التنفيذ (Two-Phase Validation)
 // ==========================================================================
 export interface PlannedOperation {
-  type: "REPLACE" | "INSERT_AFTER" | "INSERT_BEFORE" | "DELETE" | "MERGE";
+  type: "REPLACE" | "INSERT_AFTER" | "INSERT_BEFORE" | "DELETE" | "MERGE" | "MOVE" | "SPLIT";
   blockId: string;
   targetText?: string;
   newText?: string;
   targetBlockIdB?: string;
+  anchorBlockId?: string;
+  position?: "after" | "before";
+  splitAfterText?: string;
 }
 
 export interface ValidationItemResult {
@@ -1549,6 +1765,154 @@ export function validateBatchOperations(
       } else {
         el.before(newEl);
       } // Simulate insert
+    } else if (op.type === "MERGE") {
+      const targetB = op.targetBlockIdB || "";
+      const elB = targetB ? simulationRoot.querySelector(`[data-block-id="${targetB}"]`) : null;
+      if (!elB) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: targetB || "unknown",
+          status: "BLOCK_NOT_FOUND",
+          isValid: false,
+          error: `الفقرة المجاورة "${targetB}" غير موجودة.`,
+        });
+        continue;
+      }
+
+      const isDirectlyAdjacent =
+        el.nextElementSibling === elB || elB.nextElementSibling === el;
+      if (!isDirectlyAdjacent) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "BLOCKS_NOT_ADJACENT",
+          isValid: false,
+          error: `الفقرتان "${op.blockId}" و "${targetB}" ليستا متجاورتين مباشرة.`,
+        });
+        continue;
+      }
+
+      const mergeRes = mergeBlocks(op.blockId, targetB, { rootElement: simulationRoot });
+      if (mergeRes.status !== "SUCCESS") {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "SIMULATION_FAILED",
+          isValid: false,
+          error: mergeRes.error || `تعذر محاكاة دمج الفقرتين "${op.blockId}" و "${targetB}".`,
+        });
+        continue;
+      }
+    } else if (op.type === "MOVE") {
+      const anchorId = op.anchorBlockId || "";
+      if (!anchorId || anchorId === op.blockId) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "BLOCK_NOT_FOUND",
+          isValid: false,
+          error: `معرّف الفقرة المرجعية مطابق للفقرة المنقولة أو غير صالح.`,
+        });
+        continue;
+      }
+
+      const anchorEl = simulationRoot.querySelector(`[data-block-id="${anchorId}"]`);
+      if (!anchorEl) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: anchorId,
+          status: "BLOCK_NOT_FOUND",
+          isValid: false,
+          error: `الفقرة المرجعية "${anchorId}" غير موجودة.`,
+        });
+        continue;
+      }
+
+      const moveRes = moveBlock(op.blockId, anchorId, op.position || "after", { rootElement: simulationRoot });
+      if (moveRes.status !== "SUCCESS") {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "SIMULATION_FAILED",
+          isValid: false,
+          error: moveRes.error || `تعذر محاكاة نقل الفقرة "${op.blockId}".`,
+        });
+        continue;
+      }
+    } else if (op.type === "SPLIT") {
+      const splitPoint = op.splitAfterText || "";
+      if (!splitPoint) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "NO_MATCH_FOUND",
+          isValid: false,
+          error: `نقطة الشطر غير محددة.`,
+        });
+        continue;
+      }
+
+      const rawText = cleanBlockRawText(el.innerHTML);
+      let occurrences = 0;
+      let p = rawText.indexOf(splitPoint);
+      while (p !== -1 && splitPoint.length > 0) {
+        occurrences++;
+        p = rawText.indexOf(splitPoint, p + 1);
+      }
+
+      if (occurrences === 0) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "NO_MATCH_FOUND",
+          isValid: false,
+          error: `نقطة الشطر "${splitPoint}" غير موجودة في الفقرة "${op.blockId}".`,
+        });
+        continue;
+      }
+
+      if (occurrences > 1) {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "AMBIGUOUS_MATCH",
+          isValid: false,
+          error: `نقطة الشطر "${splitPoint}" مكررة ${occurrences} مرات في الفقرة "${op.blockId}".`,
+        });
+        continue;
+      }
+
+      const splitRes = splitBlock(op.blockId, splitPoint, { rootElement: simulationRoot });
+      if (splitRes.status !== "SUCCESS") {
+        allValid = false;
+        results.push({
+          opIndex: i,
+          opType: op.type,
+          blockId: op.blockId,
+          status: "SIMULATION_FAILED",
+          isValid: false,
+          error: splitRes.error || `تعذر محاكاة شطر الفقرة "${op.blockId}".`,
+        });
+        continue;
+      }
     }
 
     results.push({

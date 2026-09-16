@@ -74,13 +74,36 @@ export const UNIFIED_AGENT_INSTRUCTION = `أنت المساعد والوكيل �
      * "NOT_FOUND": إذا لم تجد النص أو الفقرة المذكورة في نص الفصل المفتوح.
      * "MULTI": إذا تكرر النص المستهدف في أكثر من موضع ولم تحدد الكاتبة الموضع المقصود.
 
+5. merge_blocks: دمج فقرتين متجاورتين في فقرة واحدة متصلة.
+   - block_id_a: معرّف الفقرة الأولى (يبدأ بـ "b_").
+   - block_id_b: معرّف الفقرة الثانية المجاورة لها مباشرة (يبدأ بـ "b_").
+   - step_note: سطر وصفي عربي واحد موجز يشرح سبب الدمج (مثال: "دمج فقرتي الحوار لتصل الفكرة بدون انقطاع").
+
+6. move_block: نقل فقرة قائمة بجوار فقرة مرجعية أخرى.
+   - block_id: معرّف الفقرة المراد نقلها (يبدأ بـ "b_").
+   - anchor_block_id: معرّف الفقرة المرجعية (يبدأ بـ "b_").
+   - position: موضع النقل، إما "after" أو "before".
+   - step_note: سطر وصفي عربي واحد موجز يشرح النقل (مثال: "نقل استرجاع الذكريات ليسبق بدء المواجهة").
+
+7. split_text: شطر فقرة إلى فقرتين عند نقطة محددة.
+   - block_id: معرّف الفقرة المراد شطرها (يبدأ بـ "b_").
+   - split_after_text: النص الذي سيتم الشطر بعده مباشرة، ويجب أن يظهر مرة واحدة داخل الفقرة.
+   - step_note: سطر وصفي عربي واحد موجز يشرح الشطر (مثال: "فصل المناجاة الذاتية في فقرة مستقلة لتعميق الأثر").
+
+8. replace_all: استبدال شامل لكل مواضع كلمة أو اسم متكرر في الفصل كله.
+   - target_text: النص المراد استبداله في جميع مواضع الفصل (للكلمة/الاسم المتكرر في الفصل كله — لا تستخدمه لموضع واحد).
+   - new_text: النص البديل الجديد.
+   - scope: نطاق الاستبدال وهو "chapter" حصراً.
+   - step_note: سطر وصفي عربي واحد موجز يشرح الاستبدال الشامل (مثال: "تعديل اسم الشخصية في الفصل كاملاً").
+
 قواعد الجراحة والنطاق والمحرّمات:
 1. سطر الخطوة (step_note): لكل استدعاء أداة، يجب توليد سطر عربي واحد بليغ وحقيقي يصف الإجراء بدقة؛ يمنع منعاً باتاً تكرار عبارات نمطية ثابتة.
 2. الجراحة الموضعية: لا تلمس حرفاً واحداً خارج نطاق التعديل المطلوب. حافظ على علامات الترقيم والسياق المحيط.
 3. حدود النطاق (Scope): نطاق عملك الجراحي هو "الفصل المفتوح حالياً فقط". إذا طلبت الكاتبة تعديلاً يخص فصلاً آخر أو لم يتضح في أي فصل يقع، استدعِ ask_writer مع سبب "SCOPE" واسألها بأدب.
 4. الغموض وتعدد المطابقات: ممنوع التخمين إطلاقاً! إذا احتمل التعديل موضعين أو لم يتضح النص المستهدف بدقة، استدعِ ask_writer فوراً.
 5. مفاتيح الفقرات: معرّفات الفقرات مثل [b_xxxx] هي مراجع جراحية لك؛ لا تقم أبداً بكتابة رمز [b_xxxx] داخل new_text.
-6. نظام المنشن (@) والضمائر الإشارية (ديت / هذه / المقطع ده / الفقرة دي / غير ديت / استبدلها): عندما ترفق الكاتبة منشناً أو تستخدم ضميراً إشارياً مع وجود منشن في السياق، فإن الهدف الحتمي هو الفقرة والمقطع المذكوران في المنشن؛ باشر استدعاء replace_text مستخدماً block_id المرفق فوراً، وممنوع منعاً باتاً استدعاء ask_writer بسبب NOT_FOUND طالما أن المنشن محدد وموجود.`;
+6. نظام المنشن (@) والضمائر الإشارية (ديت / هذه / المقطع ده / الفقرة دي / غير ديت / استبدلها): عندما ترفق الكاتبة منشناً أو تستخدم ضميراً إشارياً مع وجود منشن في السياق، فإن الهدف الحتمي هو الفقرة والمقطع المذكوران في المنشن؛ باشر استدعاء replace_text مستخدماً block_id المرفق فوراً، وممنوع منعاً باتاً استدعاء ask_writer بسبب NOT_FOUND طالما أن المنشن محدد وموجود.
+7. قاعدة توجيه النطاق والدمج: النطاق الشامل (الفصل كله/كل المواضع) ← replace_all حصراً، والموضع الواحد ← replace_text؛ والدمج يشترط التجاور.`;
 
 export const AGENTIC_TOOL_DECLARATIONS = [
   {
@@ -171,6 +194,104 @@ export const AGENTIC_TOOL_DECLARATIONS = [
         },
       },
       required: ["question", "reason"],
+    },
+  },
+  {
+    name: "merge_blocks",
+    description: "دمج فقرتين متجاورتين في فقرة واحدة متصلة وإزالة الفقرة المدمجة.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        block_id_a: {
+          type: "STRING",
+          description: "معرّف الفقرة الأولى ويبدأ بـ b_ (إجباري)",
+        },
+        block_id_b: {
+          type: "STRING",
+          description: "معرّف الفقرة الثانية المجاورة ويبدأ بـ b_ (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف الدمج حرفياً لعرضه في خطوات التنفيذ (إجباري)",
+        },
+      },
+      required: ["block_id_a", "block_id_b", "step_note"],
+    },
+  },
+  {
+    name: "move_block",
+    description: "نقل فقرة قائمة من موضعها ووضعها قبل أو بعد فقرة مرجعية أخرى.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        block_id: {
+          type: "STRING",
+          description: "معرّف الفقرة المراد نقلها ويبدأ بـ b_ (إجباري)",
+        },
+        anchor_block_id: {
+          type: "STRING",
+          description: "معرّف الفقرة المرجعية التي سيتم النقل بجوارها ويبدأ بـ b_ (إجباري)",
+        },
+        position: {
+          type: "STRING",
+          enum: ["after", "before"],
+          description: "موضع النقل: after بعد الفقرة المرجعية، أو before قبلها (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف النقل حرفياً لعرضه في خطوات التنفيذ (إجباري)",
+        },
+      },
+      required: ["block_id", "anchor_block_id", "position", "step_note"],
+    },
+  },
+  {
+    name: "split_text",
+    description: "شطر فقرة إلى فقرتين عند نقطة نصية محددة تظهر مرة واحدة بالفقرة.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        block_id: {
+          type: "STRING",
+          description: "معرّف الفقرة المراد شطرها ويبدأ بـ b_ (إجباري)",
+        },
+        split_after_text: {
+          type: "STRING",
+          description: "النص الذي سيتم الشطر بعده مباشرة ويجب أن يظهر مرة واحدة داخل الفقرة (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف الشطر حرفياً لعرضه في خطوات التنفيذ (إجباري)",
+        },
+      },
+      required: ["block_id", "split_after_text", "step_note"],
+    },
+  },
+  {
+    name: "replace_all",
+    description: "استبدال شامل لكلمة أو اسم متكرر في الفصل المفتوح كله دفعة واحدة. للكلمة/الاسم المتكرر في الفصل كله — لا تستخدمه لموضع واحد.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        target_text: {
+          type: "STRING",
+          description: "الكلمة أو العبارة المتكررة المراد استبدالها في كافة مواضع الفصل (إجباري)",
+        },
+        new_text: {
+          type: "STRING",
+          description: "النص البديل الجديد المختلف عن النص الأصلي (إجباري)",
+        },
+        scope: {
+          type: "STRING",
+          enum: ["chapter"],
+          description: "نطاق الاستبدال ويجب أن يكون \"chapter\" حرفياً (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف الاستبدال الشامل حرفياً لعرضه في خطوات التنفيذ (إجباري)",
+        },
+      },
+      required: ["target_text", "new_text", "scope", "step_note"],
     },
   },
 ];
@@ -814,6 +935,84 @@ export async function requestExecutiveDecision({
               args: {
                 question: args.question.trim(),
                 reason: args.reason,
+              },
+            });
+          }
+        } else if (name === "merge_blocks") {
+          if (
+            typeof args.block_id_a === "string" &&
+            args.block_id_a.startsWith("b_") &&
+            typeof args.block_id_b === "string" &&
+            args.block_id_b.startsWith("b_") &&
+            args.block_id_a.trim() !== args.block_id_b.trim() &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                block_id_a: args.block_id_a.trim(),
+                block_id_b: args.block_id_b.trim(),
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "move_block") {
+          if (
+            typeof args.block_id === "string" &&
+            args.block_id.startsWith("b_") &&
+            typeof args.anchor_block_id === "string" &&
+            args.anchor_block_id.startsWith("b_") &&
+            args.block_id.trim() !== args.anchor_block_id.trim() &&
+            (args.position === "after" || args.position === "before") &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                block_id: args.block_id.trim(),
+                anchor_block_id: args.anchor_block_id.trim(),
+                position: args.position,
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "split_text") {
+          if (
+            typeof args.block_id === "string" &&
+            args.block_id.startsWith("b_") &&
+            typeof args.split_after_text === "string" &&
+            args.split_after_text.length > 0 &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                block_id: args.block_id.trim(),
+                split_after_text: args.split_after_text,
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "replace_all") {
+          if (
+            typeof args.target_text === "string" &&
+            args.target_text.length > 0 &&
+            typeof args.new_text === "string" &&
+            args.target_text !== args.new_text &&
+            args.scope === "chapter" &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                target_text: args.target_text,
+                new_text: args.new_text,
+                scope: "chapter",
+                step_note: args.step_note.trim(),
               },
             });
           }

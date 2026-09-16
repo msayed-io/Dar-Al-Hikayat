@@ -21,6 +21,9 @@ import {
   AttachedMention,
   TextMatchItem,
   cleanBlockRawText,
+  mergeBlocks,
+  moveBlock,
+  splitBlock,
 } from "./editor-block-system";
 
 import {
@@ -36,6 +39,7 @@ import {
 export const EXEC_BRIDGE_TOKEN = "[[EXEC]]";
 
 export const MAX_TOOL_CALLS_PER_REQUEST = 25;
+export const MAX_EXPANDED_OPS_PER_REQUEST = 30;
 export const MAX_MODEL_ROUNDS_PER_REQUEST = 3;
 
 export type ExecutiveToolCall =
@@ -69,6 +73,40 @@ export type ExecutiveToolCall =
       args: {
         question: string;
         reason: "SCOPE" | "AMBIGUOUS" | "NOT_FOUND" | "MULTI";
+      };
+    }
+  | {
+      name: "merge_blocks";
+      args: {
+        block_id_a: string;
+        block_id_b: string;
+        step_note: string;
+      };
+    }
+  | {
+      name: "move_block";
+      args: {
+        block_id: string;
+        anchor_block_id: string;
+        position: "after" | "before";
+        step_note: string;
+      };
+    }
+  | {
+      name: "split_text";
+      args: {
+        block_id: string;
+        split_after_text: string;
+        step_note: string;
+      };
+    }
+  | {
+      name: "replace_all";
+      args: {
+        target_text: string;
+        new_text: string;
+        scope: "chapter";
+        step_note: string;
       };
     };
 
@@ -163,7 +201,15 @@ const EXPLICIT_EDIT_VERBS = [
   "بدل",
   "بدّل",
   "ظبط",
-  "ظبطي"
+  "ظبطي",
+  "ادمج",
+  "ادمجي",
+  "انقل",
+  "انقلي",
+  "حرّك",
+  "حرّكي",
+  "اقسم",
+  "اقسمي"
 ].map(v => normalizeArabicForIntent(v));
 
 export function isExplicitEditIntent(
@@ -196,6 +242,40 @@ export function isExplicitEditIntent(
 // ============================================================================
 // 3. بناء السياق التنفيذي (Executive Context Formatter)
 // ============================================================================
+
+/**
+ * البحث عن جميع الفقرات التي تحتوي على النص المستهدف لاستبدالها شمولياً (replace_all)
+ */
+export function findReplaceAllMatches(
+  rootElement: HTMLElement | null,
+  targetText: string
+): string[] {
+  if (!rootElement || !targetText) return [];
+  const matchedBlockIds: string[] = [];
+
+  const blocks = Array.from(
+    rootElement.querySelectorAll<HTMLElement>("[data-block-id]")
+  );
+  if (rootElement.getAttribute("data-block-id")) {
+    blocks.unshift(rootElement);
+  }
+
+  const normTarget = normalizeArabicForIntent(targetText);
+
+  for (const block of blocks) {
+    const blockId = block.getAttribute("data-block-id");
+    if (!blockId) continue;
+
+    const rawText = cleanBlockRawText(block.innerHTML);
+    const normText = normalizeArabicForIntent(rawText);
+
+    if (rawText.includes(targetText) || (normTarget && normText.includes(normTarget))) {
+      matchedBlockIds.push(blockId);
+    }
+  }
+
+  return matchedBlockIds;
+}
 
 export function formatExecutiveContextForAI({
   chapterHtmlOrEl,
@@ -490,10 +570,14 @@ export async function executeAgentPlan({
   
     for (const c of safeCalls) {
       let targetBlockId = "";
-      if (c.name === "replace_text" || c.name === "delete_text") {
+      if (c.name === "replace_text" || c.name === "delete_text" || c.name === "split_text") {
         targetBlockId = c.args.block_id;
       } else if (c.name === "insert_text") {
         targetBlockId = c.args.anchor_block_id;
+      } else if (c.name === "move_block") {
+        targetBlockId = c.args.block_id;
+      } else if (c.name === "merge_blocks") {
+        targetBlockId = c.args.block_id_a;
       }
   
       if (targetBlockId) {
@@ -537,18 +621,35 @@ export async function executeAgentPlan({
     });
   }
 
+  // فحص سقف الاستبدال الشامل (replace_all 30 ops limit)
+  for (const c of safeCalls) {
+    if (c.name === "replace_all") {
+      const matches = findReplaceAllMatches(rootElement, c.args.target_text);
+      if (!skipScopeCheck && matches.length > MAX_EXPANDED_OPS_PER_REQUEST) {
+        return {
+          success: true,
+          executedSteps: [],
+          askWriter: {
+            question: `وجدت ${matches.length} موضعاً (الحد 30) — أؤكد المتابعة؟`,
+            reason: "MULTI",
+            pendingOperations: rawCalls,
+          },
+          totalMutations: 0,
+          auditEntriesCount: 0,
+        };
+      }
+    }
+  }
+
   // تحضير قائمة الخطوات للعرض الحركي 1:1
   const stepItems: AgentStepItem[] = safeCalls.map((c, idx) => ({
     id: `step-${idx}-${Date.now()}`,
     toolName: c.name,
     blockId:
-      c.name === "replace_text"
-        ? c.args.block_id
-        : c.name === "insert_text"
-        ? c.args.anchor_block_id
-        : c.name === "delete_text"
-        ? c.args.block_id
-        : "writer",
+      (c.args as any)?.block_id ||
+      (c.args as any)?.anchor_block_id ||
+      (c.args as any)?.block_id_a ||
+      (c.name === "replace_all" ? "الفصل" : "writer"),
     stepNote: (c.args as any).step_note || "تنفيذ تعديل أدبي",
     status: "waiting",
   }));
@@ -576,6 +677,35 @@ export async function executeAgentPlan({
         type: "DELETE",
         blockId: c.args.block_id,
       });
+    } else if (c.name === "merge_blocks") {
+      plannedOps.push({
+        type: "MERGE",
+        blockId: c.args.block_id_a,
+        targetBlockIdB: c.args.block_id_b,
+      });
+    } else if (c.name === "move_block") {
+      plannedOps.push({
+        type: "MOVE",
+        blockId: c.args.block_id,
+        anchorBlockId: c.args.anchor_block_id,
+        position: c.args.position,
+      });
+    } else if (c.name === "split_text") {
+      plannedOps.push({
+        type: "SPLIT",
+        blockId: c.args.block_id,
+        splitAfterText: c.args.split_after_text,
+      });
+    } else if (c.name === "replace_all") {
+      const matches = findReplaceAllMatches(rootElement, c.args.target_text);
+      for (const mBlockId of matches) {
+        plannedOps.push({
+          type: "REPLACE",
+          blockId: mBlockId,
+          targetText: c.args.target_text,
+          newText: c.args.new_text,
+        });
+      }
     }
   }
 
@@ -814,6 +944,150 @@ export async function executeAgentPlan({
 
           cleanupAgentFx(rootElement);
           return opRes;
+        } else if (call.name === "merge_blocks") {
+          const elA = rootElement.querySelector<HTMLElement>(`[data-block-id="${call.args.block_id_a}"]`);
+          const elB = rootElement.querySelector<HTMLElement>(`[data-block-id="${call.args.block_id_b}"]`);
+          if (!elA || !elB) {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+            return {
+              status: "BLOCK_NOT_FOUND",
+              blockId: !elA ? call.args.block_id_a : call.args.block_id_b,
+              error: `إحدى الفقرتين المراد دمجهما غير موجودة.`,
+            };
+          }
+
+          if (elA) {
+            elA.style.transition = "opacity 0.2s ease";
+            elA.style.opacity = "0.7";
+          }
+          if (elB) {
+            elB.style.transition = "opacity 0.2s ease";
+            elB.style.opacity = "0.7";
+          }
+          await new Promise((r) => setTimeout(r, 120));
+          if (elA) elA.style.opacity = "1";
+          if (elB) elB.style.opacity = "1";
+
+          const opRes = mergeBlocks(call.args.block_id_a, call.args.block_id_b, { rootElement });
+          if (opRes.status === "SUCCESS") {
+            const mergedEl = opRes.node as HTMLElement;
+            if (mergedEl && opRes.updatedText) {
+              await typewriterReveal(mergedEl, opRes.updatedText, accentColor);
+            }
+            stepItems[idx].status = "completed";
+            totalSuccessfulMutations++;
+            onStepUpdate([...stepItems]);
+          } else {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+          }
+          cleanupAgentFx(rootElement);
+          return opRes;
+        } else if (call.name === "move_block") {
+          const targetEl = rootElement.querySelector<HTMLElement>(`[data-block-id="${call.args.block_id}"]`);
+          const anchorEl = rootElement.querySelector<HTMLElement>(`[data-block-id="${call.args.anchor_block_id}"]`);
+          if (!targetEl || !anchorEl) {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+            return {
+              status: "BLOCK_NOT_FOUND",
+              blockId: !targetEl ? call.args.block_id : call.args.anchor_block_id,
+              error: `تعذر العثور على الفقرة أو المرجع لنقلها.`,
+            };
+          }
+
+          targetEl.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+          targetEl.style.opacity = "0.5";
+          targetEl.style.transform = "translateX(4px)";
+          await new Promise((r) => setTimeout(r, 120));
+          targetEl.style.opacity = "1";
+          targetEl.style.transform = "none";
+
+          const opRes = moveBlock(call.args.block_id, call.args.anchor_block_id, call.args.position, { rootElement });
+          if (opRes.status === "SUCCESS") {
+            stepItems[idx].status = "completed";
+            totalSuccessfulMutations++;
+            onStepUpdate([...stepItems]);
+          } else {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+          }
+          cleanupAgentFx(rootElement);
+          return opRes;
+        } else if (call.name === "split_text") {
+          const targetEl = rootElement.querySelector<HTMLElement>(`[data-block-id="${call.args.block_id}"]`);
+          if (!targetEl) {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+            return {
+              status: "BLOCK_NOT_FOUND",
+              blockId: call.args.block_id,
+              error: `الفقرة ${call.args.block_id} غير موجودة للشطر.`,
+            };
+          }
+
+          targetEl.style.transition = "opacity 0.2s ease";
+          targetEl.style.opacity = "0.6";
+          await new Promise((r) => setTimeout(r, 120));
+          targetEl.style.opacity = "1";
+
+          const opRes = splitBlock(call.args.block_id, call.args.split_after_text, { rootElement });
+          if (opRes.status === "SUCCESS") {
+            const newBlockId = opRes.createdBlockIds?.[0];
+            const newBlockEl = newBlockId
+              ? rootElement.querySelector<HTMLElement>(`[data-block-id="${newBlockId}"]`)
+              : null;
+            if (newBlockEl) {
+              const secondText = newBlockEl.textContent || cleanBlockRawText(newBlockEl.innerHTML);
+              await typewriterReveal(newBlockEl, secondText, accentColor);
+            }
+            stepItems[idx].status = "completed";
+            totalSuccessfulMutations++;
+            onStepUpdate([...stepItems]);
+          } else {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+          }
+          cleanupAgentFx(rootElement);
+          return opRes;
+        } else if (call.name === "replace_all") {
+          const matches = findReplaceAllMatches(rootElement, call.args.target_text);
+          if (matches.length === 0) {
+            stepItems[idx].status = "failed";
+            onStepUpdate([...stepItems]);
+            return {
+              status: "NO_MATCH_FOUND",
+              blockId: "chapter",
+              error: `لم يتم العثور على أي موضع للعبارة "${call.args.target_text}".`,
+            };
+          }
+
+          let lastRes: any = { status: "SUCCESS", blockId: "chapter" };
+          for (const mBlockId of matches) {
+            const blkEl = rootElement.querySelector<HTMLElement>(`[data-block-id="${mBlockId}"]`);
+            if (blkEl) {
+              blkEl.style.transition = "opacity 0.15s ease";
+              blkEl.style.opacity = "0.7";
+              await new Promise((r) => setTimeout(r, 60));
+              blkEl.style.opacity = "1";
+            }
+
+            const opRes = replaceTextWithinBlock(mBlockId, call.args.target_text, call.args.new_text, { rootElement });
+            if (opRes.status !== "SUCCESS") {
+              stepItems[idx].status = "failed";
+              onStepUpdate([...stepItems]);
+              cleanupAgentFx(rootElement);
+              return opRes;
+            }
+            totalSuccessfulMutations++;
+            lastRes = opRes;
+          }
+
+          stepItems[idx].status = "completed";
+          onStepUpdate([...stepItems]);
+          cleanupAgentFx(rootElement);
+          return lastRes;
         }
 
         return { status: "SUCCESS", blockId: "noop" };
