@@ -8,9 +8,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
@@ -21,7 +18,6 @@ import android.os.Vibrator;
 import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.io.InputStream;
 
 public class PrayerAlarmReceiver extends BroadcastReceiver {
     public static final String CHANNEL_ID = "prayer_reminders_v2";
@@ -89,7 +85,6 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                     channel.enableVibration(true);
                     channel.setVibrationPattern(new long[]{0, 500, 250, 750});
                     channel.enableLights(true);
-                    channel.setLightColor(0xFFA7AA63);
                     channel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
                     Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
@@ -148,11 +143,8 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                 soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
             }
 
-            Bitmap largeLogoBitmap = getAdaptiveNotificationLogo(context);
-
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                     .setSmallIcon(smallIconRes)
-                    .setColor(0xFFA7AA63)
                     .setContentTitle(title != null ? title : (isPreAlarm ? "اقترب موعد الصلاة" : "حان الآن وقت الصلاة"))
                     .setContentText(body != null ? body : "")
                     .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
@@ -164,10 +156,6 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                     .setSound(soundUri)
                     .setVibrate(new long[]{0, 500, 250, 750});
 
-            if (largeLogoBitmap != null) {
-                builder.setLargeIcon(largeLogoBitmap);
-            }
-
             // Pre-alarm (فاضل 10 دقائق): Automatically dismisses after 10 minutes (600,000 ms) if not clicked
             // Exact prayer alarm (موعد الأذان الفعلي): Stays in notification tray until user clears or clicks it!
             if (isPreAlarm && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -177,57 +165,6 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             notificationManager.notify(id, builder.build());
         } catch (Exception e) {
             e.printStackTrace();
-        }
-    }
-
-    /**
-     * الحصول على شعار التطبيق المتكيف بالتباين العكسي الفائق مع سمة هاتف المستخدم:
-     * - الوضع الداكن (Dark Mode): يُعرض شعار الوضع الفاتح (logo-light-bg) ليبرز بأعلى تباين فوق بطاقة الإشعارات الداكنة.
-     * - الوضع الفاتح (Light Mode): يُعرض شعار الوضع الداكن (logo-dark-bg) ليوفر تباينًا غنيًا وظهورًا واضحًا فوق بطاقة الإشعارات الفاتحة.
-     */
-    public static Bitmap getAdaptiveNotificationLogo(Context context) {
-        if (context == null) {
-            return null;
-        }
-        try {
-            int nightModeFlags = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-            boolean isNightMode = (nightModeFlags == Configuration.UI_MODE_NIGHT_YES);
-
-            Bitmap bitmap = null;
-
-            // 1. محاولة التحميل من مجلد drawable المباشر بالعكس المطلوب للتباين
-            try {
-                int resId = isNightMode ? R.drawable.logo_light_bg : R.drawable.logo_dark_bg;
-                if (resId != 0) {
-                    bitmap = BitmapFactory.decodeResource(context.getResources(), resId);
-                }
-            } catch (Throwable ignored) {
-            }
-
-            // 2. محاولة التحميل من مجلد assets بالعكس المطلوب للتباين
-            if (bitmap == null) {
-                String assetFileName = isNightMode ? "public/logo-light-bg.png" : "public/logo-dark-bg.png";
-                try (InputStream is = context.getAssets().open(assetFileName)) {
-                    bitmap = BitmapFactory.decodeStream(is);
-                } catch (Throwable ignored) {
-                    try (InputStream is2 = context.getAssets().open(isNightMode ? "logo-light-bg.png" : "logo-dark-bg.png")) {
-                        bitmap = BitmapFactory.decodeStream(is2);
-                    } catch (Throwable ignored2) {
-                    }
-                }
-            }
-
-            // 3. خيار بديل أخير لأيقونة التطبيق إذا تعذر تحميل الشعار
-            if (bitmap == null) {
-                try {
-                    bitmap = BitmapFactory.decodeResource(context.getResources(), R.mipmap.ic_launcher);
-                } catch (Throwable ignored) {
-                }
-            }
-
-            return bitmap;
-        } catch (Throwable e) {
-            return null;
         }
     }
 

@@ -24,11 +24,23 @@ const AppContent = () => {
   return (
     <div className="App relative min-h-screen">
       {/* ── Main Tab Screens (Persistent to preserve scroll & state) ── */}
-      <div className={currentView === "home" ? "block" : "hidden"}>
+      <div
+        className={`transition-all duration-500 ease-out ${
+          currentView === "home"
+            ? "opacity-100 translate-y-0 pointer-events-auto block"
+            : "opacity-0 -translate-y-2 pointer-events-none hidden"
+        }`}
+      >
         <HomePage />
       </div>
 
-      <div className={currentView === "prayer" ? "block" : "hidden"}>
+      <div
+        className={`transition-all duration-500 ease-out ${
+          currentView === "prayer"
+            ? "opacity-100 translate-y-0 pointer-events-auto block"
+            : "opacity-0 -translate-y-2 pointer-events-none hidden"
+        }`}
+      >
         <PrayerPage />
       </div>
 
@@ -47,20 +59,18 @@ const AppContent = () => {
       <AnimatePresence>
         {(currentView === "home" || currentView === "prayer") && !isSelectionMode && (
           <motion.footer
-            initial={{ opacity: 0, y: 24, scale: 0.95 }}
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.95 }}
+            exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{
-              type: "spring",
-              stiffness: 240,
-              damping: 25,
-              mass: 0.8,
+              duration: 0.45,
+              ease: [0.22, 1, 0.36, 1],
             }}
             className="fixed bottom-4 left-0 right-0 z-40 px-4 pointer-events-none flex justify-center items-center gap-3"
           >
             {/* Floating Navigation Capsule */}
             <div
-              className="pointer-events-auto h-12 p-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-300"
+              className="pointer-events-auto h-12 p-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-500 ease-out"
               style={{
                 borderRadius: "9999px",
                 backgroundColor: currentTheme.glass,
@@ -71,7 +81,7 @@ const AppContent = () => {
               {/* Tab 1: الحكايات */}
               <button
                 onClick={backToHome}
-                className={`relative h-full flex items-center justify-center gap-2 rounded-full transition-all duration-300 cursor-pointer ${
+                className={`relative h-full flex items-center justify-center gap-2 rounded-full transition-all duration-500 ease-out cursor-pointer ${
                   currentView === "home"
                     ? "px-4"
                     : "px-3.5 opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
@@ -92,25 +102,21 @@ const AppContent = () => {
                       borderColor: `${currentTheme.accent}35`,
                     }}
                     transition={{
-                      type: "spring",
-                      stiffness: 220,
-                      damping: 26,
-                      mass: 0.8,
+                      duration: 0.45,
+                      ease: [0.22, 1, 0.36, 1],
                     }}
                   />
                 )}
-                <BookOpen className="w-4 h-4 shrink-0 relative z-10" strokeWidth={2.2} />
+                <BookOpen className="w-4 h-4 shrink-0 relative z-10 transition-transform duration-500 ease-out" strokeWidth={2.2} />
                 <AnimatePresence mode="popLayout">
                   {currentView === "home" && (
                     <motion.div
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: "auto" }}
-                      exit={{ opacity: 0, width: 0 }}
+                      initial={{ opacity: 0, width: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, width: "auto", scale: 1 }}
+                      exit={{ opacity: 0, width: 0, scale: 0.95 }}
                       transition={{
-                        type: "spring",
-                        stiffness: 220,
-                        damping: 26,
-                        mass: 0.8,
+                        duration: 0.45,
+                        ease: [0.22, 1, 0.36, 1],
                       }}
                       className="relative z-10 overflow-hidden flex items-center"
                     >
@@ -128,7 +134,7 @@ const AppContent = () => {
               {/* Tab 2: المحراب */}
               <button
                 onClick={openPrayer}
-                className={`relative h-full flex items-center justify-center gap-2 rounded-full transition-all duration-300 cursor-pointer ${
+                className={`relative h-full flex items-center justify-center gap-2 rounded-full transition-all duration-500 ease-out cursor-pointer ${
                   currentView === "prayer"
                     ? "px-4"
                     : "px-3.5 opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95"
@@ -149,25 +155,21 @@ const AppContent = () => {
                       borderColor: `${currentTheme.accent}35`,
                     }}
                     transition={{
-                      type: "spring",
-                      stiffness: 220,
-                      damping: 26,
-                      mass: 0.8,
+                      duration: 0.45,
+                      ease: [0.22, 1, 0.36, 1],
                     }}
                   />
                 )}
-                <Compass className="w-4 h-4 shrink-0 relative z-10" strokeWidth={2.2} />
+                <Compass className="w-4 h-4 shrink-0 relative z-10 transition-transform duration-500 ease-out" strokeWidth={2.2} />
                 <AnimatePresence mode="popLayout">
                   {currentView === "prayer" && (
                     <motion.div
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: "auto" }}
-                      exit={{ opacity: 0, width: 0 }}
+                      initial={{ opacity: 0, width: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, width: "auto", scale: 1 }}
+                      exit={{ opacity: 0, width: 0, scale: 0.95 }}
                       transition={{
-                        type: "spring",
-                        stiffness: 220,
-                        damping: 26,
-                        mass: 0.8,
+                        duration: 0.45,
+                        ease: [0.22, 1, 0.36, 1],
                       }}
                       className="relative z-10 overflow-hidden flex items-center"
                     >
@@ -187,10 +189,10 @@ const AppContent = () => {
             <AnimatePresence>
               {currentView === "home" && (
                 <motion.button
-                  initial={{ opacity: 0, scale: 0.7 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.7 }}
-                  transition={{ type: "spring", stiffness: 220, damping: 24, mass: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.8, x: 8 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, x: 8 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => openEditor(null)}
                   className="pointer-events-auto w-12 h-12 rounded-full border flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer"
                   style={{

@@ -8,8 +8,8 @@ export type ThinkingLevelName = "LOW" | "MEDIUM" | "HIGH";
 export const THINKING_FOR_PATH = {
   executive: "LOW",
   summary: "LOW",
-  advisory: "MEDIUM",
-  init: "MEDIUM",
+  advisory: "HIGH",
+  init: "HIGH",
   diacritize: "LOW",
 } as const;
 
@@ -234,6 +234,8 @@ export async function generateGeminiDirectly(
   params: DirectGeminiGenerateParams
 ): Promise<{
   text: string;
+  thought?: string;
+  rawParts?: any[];
   functionCalls: Array<{ name: string; args: any }>;
   model: string;
 }> {
@@ -335,11 +337,16 @@ export async function generateGeminiDirectly(
       const parts = candidate?.content?.parts || [];
 
       let accumulatedText = "";
+      let accumulatedThought = "";
       const functionCalls: Array<{ name: string; args: any }> = [];
 
       for (const part of parts) {
         if (part.text) {
-          accumulatedText += part.text;
+          if (part.thought) {
+            accumulatedThought += part.text;
+          } else {
+            accumulatedText += part.text;
+          }
         }
         if (part.functionCall) {
           functionCalls.push({
@@ -351,6 +358,8 @@ export async function generateGeminiDirectly(
 
       return {
         text: accumulatedText,
+        thought: accumulatedThought,
+        rawParts: parts,
         functionCalls,
         model: currentModel,
       };
@@ -389,7 +398,7 @@ export interface DirectGeminiStreamParams {
     maxOutputTokens?: number;
     thinkingLevel?: ThinkingLevelName;
   };
-  onChunk: (text: string) => void;
+  onChunk: (chunk: { text: string; thought: string; rawParts: any[] }) => void;
   signal?: AbortSignal;
 }
 
@@ -399,7 +408,7 @@ export interface DirectGeminiStreamParams {
  */
 export async function streamGeminiDirectly(
   params: DirectGeminiStreamParams
-): Promise<string> {
+): Promise<{ text: string; thought: string; rawParts: any[] }> {
   const cleanKey = sanitizeApiKey(params.apiKey);
   if (!cleanKey) {
     const err: any = new Error("مفتاح API غير متوفر للبث المباشر.");
@@ -494,6 +503,8 @@ export async function streamGeminiDirectly(
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
       let accumulated = "";
+      let accumulatedThought = "";
+      let finalRawParts: any[] = [];
 
       while (true) {
         const { value, done } = await reader.read();
@@ -521,12 +532,23 @@ export async function streamGeminiDirectly(
             }
 
             const parts = parsed.candidates?.[0]?.content?.parts || [];
+            if (parts.length > 0) finalRawParts = parts;
+            let chunkText = "";
+            let chunkThought = "";
             for (const part of parts) {
               if (part.text) {
-                accumulated += part.text;
-                firstChunkReceived = true;
-                params.onChunk(part.text);
+                if (part.thought) {
+                  chunkThought += part.text;
+                  accumulatedThought += part.text;
+                } else {
+                  chunkText += part.text;
+                  accumulated += part.text;
+                }
               }
+            }
+            if (chunkText || chunkThought || parts.length > 0) {
+              firstChunkReceived = true;
+              params.onChunk({ text: chunkText, thought: chunkThought, rawParts: parts });
             }
           } catch (parseErr: any) {
             if (parseErr?.status) throw parseErr;
@@ -539,19 +561,30 @@ export async function streamGeminiDirectly(
         try {
           const parsed = JSON.parse(buffer.slice(6).trim());
           const parts = parsed.candidates?.[0]?.content?.parts || [];
+          if (parts.length > 0) finalRawParts = parts;
+          let chunkText = "";
+          let chunkThought = "";
           for (const part of parts) {
             if (part.text) {
-              accumulated += part.text;
-              firstChunkReceived = true;
-              params.onChunk(part.text);
+              if (part.thought) {
+                chunkThought += part.text;
+                accumulatedThought += part.text;
+              } else {
+                chunkText += part.text;
+                accumulated += part.text;
+              }
             }
+          }
+          if (chunkText || chunkThought || parts.length > 0) {
+            firstChunkReceived = true;
+            params.onChunk({ text: chunkText, thought: chunkThought, rawParts: parts });
           }
         } catch {
           // ignore trailing fragment
         }
       }
 
-      return accumulated;
+      return { text: accumulated, thought: accumulatedThought, rawParts: finalRawParts };
     } catch (err: any) {
       if (isInternalTimeout) err.isTimeout = true;
       lastError = err;

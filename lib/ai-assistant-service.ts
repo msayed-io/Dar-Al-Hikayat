@@ -323,6 +323,8 @@ export type AIMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  thought?: string;
+  rawParts?: any[];
   timestamp: Date;
   isNew?: boolean;
   isStreaming?: boolean;
@@ -556,9 +558,9 @@ export async function streamLiteraryAssistantResponse(
   history: AIMessage[],
   userPrompt: string,
   storyContext: StoryContext,
-  onChunk: (text: string) => void,
+  onChunk: (chunk: { text: string; thought: string; rawParts: any[] }) => void,
   mentionsContext?: string
-): Promise<string> {
+): Promise<{ text: string; thought: string; rawParts: any[] }> {
   const contextBlock = formatStoryContextForAI(storyContext);
   const baseSystemInstruction = `${RAHMA_MOWAFI_SYSTEM_PROMPT}\n\n${contextBlock}${
     mentionsContext ? `\n\n${mentionsContext}` : ""
@@ -621,10 +623,10 @@ export async function streamLiteraryAssistantResponse(
 
   // Build full contents payload with (potentially sliced) conversation history
   const contents = activeHistory
-    .filter((msg) => msg.content && msg.content.trim())
+    .filter((msg) => (msg.content && msg.content.trim()) || (msg.rawParts && msg.rawParts.length > 0))
     .map((msg) => ({
       role: (msg.role === "user" ? "user" : "model") as "user" | "model",
-      parts: [{ text: msg.content }],
+      parts: msg.rawParts && msg.rawParts.length > 0 ? msg.rawParts : [{ text: msg.content }],
     }));
 
   contents.push({
@@ -635,18 +637,20 @@ export async function streamLiteraryAssistantResponse(
   try {
     return await executeWithSmartRotation(async (apiKey) => {
       let candidateAccumulated = "";
+      let thoughtAccumulated = "";
+      let rawPartsAccumulated: any[] = [];
 
       if (apiKey) {
         // Direct SSE streaming from Google Generative Language API
         try {
-          candidateAccumulated = await streamGeminiDirectly({
+          const directRes = await streamGeminiDirectly({
             apiKey,
             systemInstruction: enrichedSystemInstruction,
             contents,
             onChunk,
             generationConfig: { ...buildReasoningConfig("advisory", 0.7) },
           });
-          return candidateAccumulated;
+          return directRes;
         } catch (streamErr: any) {
           if (
             isRateLimitError(streamErr?.status || 0, streamErr?.data, streamErr?.message) ||
@@ -662,11 +666,9 @@ export async function streamLiteraryAssistantResponse(
             contents,
             generationConfig: { ...buildReasoningConfig("advisory", 0.7) },
           });
-          if (genResult.text) {
-            onChunk(genResult.text);
-            return genResult.text;
-          }
-          throw streamErr;
+          const textRes = genResult.text || "";
+          onChunk({ text: textRes, thought: "", rawParts: [{ text: textRes }] });
+          return { text: textRes, thought: "", rawParts: [{ text: textRes }] };
         }
       } else {
         // Web Server-side streaming with /api/gemini/stream
@@ -679,7 +681,7 @@ export async function streamLiteraryAssistantResponse(
               contents,
               model: GEMINI_PRIMARY_MODEL,
               temperature: 0.7,
-              thinkingLevel: "MEDIUM",
+              thinkingLevel: "HIGH",
             }),
           });
 
@@ -724,9 +726,15 @@ export async function streamLiteraryAssistantResponse(
                   throw err;
                 }
                 const chunkText = parsed.text || "";
-                if (chunkText) {
+                const chunkThought = parsed.thought || "";
+                const chunkParts = parsed.rawParts || [];
+                
+                if (chunkParts.length > 0) rawPartsAccumulated = chunkParts;
+
+                if (chunkText || chunkThought || chunkParts.length > 0) {
                   candidateAccumulated += chunkText;
-                  onChunk(chunkText);
+                  thoughtAccumulated += chunkThought;
+                  onChunk({ text: chunkText, thought: chunkThought, rawParts: chunkParts });
                 }
               } catch (pErr: any) {
                 if (pErr?.status) throw pErr;
@@ -734,20 +742,25 @@ export async function streamLiteraryAssistantResponse(
             }
           }
 
-          if (!candidateAccumulated && buffer && buffer.startsWith("data: ")) {
+          if (buffer && buffer.startsWith("data: ")) {
             try {
               const parsed = JSON.parse(buffer.slice(6).trim());
               const chunkText = parsed.text || "";
-              if (chunkText) {
+              const chunkThought = parsed.thought || "";
+              const chunkParts = parsed.rawParts || [];
+              if (chunkParts.length > 0) rawPartsAccumulated = chunkParts;
+
+              if (chunkText || chunkThought || chunkParts.length > 0) {
                 candidateAccumulated += chunkText;
-                onChunk(chunkText);
+                thoughtAccumulated += chunkThought;
+                onChunk({ text: chunkText, thought: chunkThought, rawParts: chunkParts });
               }
             } catch {
               // ignore
             }
           }
 
-          return candidateAccumulated;
+          return { text: candidateAccumulated, thought: thoughtAccumulated, rawParts: rawPartsAccumulated };
         } catch (serverErr: any) {
           if (
             isRateLimitError(serverErr?.status || 0, serverErr?.data, serverErr?.message) ||
@@ -764,6 +777,8 @@ export async function streamLiteraryAssistantResponse(
               systemInstruction: enrichedSystemInstruction,
               contents,
               model: GEMINI_PRIMARY_MODEL,
+              temperature: 0.7,
+              thinkingLevel: "HIGH",
             }),
           });
 
@@ -778,12 +793,9 @@ export async function streamLiteraryAssistantResponse(
           }
 
           const fallbackData = await fallbackRes.json();
-          const text = fallbackData.text || "";
-          if (text) {
-            onChunk(text);
-            return text;
-          }
-          throw serverErr;
+          const textRes = fallbackData.text || "";
+          onChunk({ text: textRes, thought: "", rawParts: [{ text: textRes }] });
+          return { text: textRes, thought: "", rawParts: [{ text: textRes }] };
         }
       }
     });
@@ -811,8 +823,8 @@ export async function streamLiteraryAssistantResponse(
         "تعذر الاتصال بالشبكة. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.";
     }
 
-    onChunk(fallbackMessage);
-    return fallbackMessage;
+    onChunk({ text: fallbackMessage, thought: "", rawParts: [{ text: fallbackMessage }] });
+    return { text: fallbackMessage, thought: "", rawParts: [{ text: fallbackMessage }] };
   }
 }
 

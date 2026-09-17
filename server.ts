@@ -155,15 +155,26 @@ async function startServer() {
           }
 
           for await (const chunk of streamResponse) {
-            const text = chunk.text || "";
-            if (text) {
+            const parts = chunk.candidates?.[0]?.content?.parts || [];
+            let chunkText = "";
+            let chunkThought = "";
+            for (const part of parts) {
+              if (part.text) {
+                if (part.thought) {
+                  chunkThought += part.text;
+                } else {
+                  chunkText += part.text;
+                }
+              }
+            }
+            if (chunkText || chunkThought || parts.length > 0) {
               if (!streamStarted) {
                 streamStarted = true;
                 res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
                 res.setHeader("Cache-Control", "no-cache, no-transform");
                 res.setHeader("Connection", "keep-alive");
               }
-              res.write(`data: ${JSON.stringify({ text })}\n\n`);
+              res.write(`data: ${JSON.stringify({ text: chunkText, thought: chunkThought, rawParts: parts })}\n\n`);
             }
           }
 
@@ -333,23 +344,35 @@ async function startServer() {
             : [];
 
           let responseText = "";
-          try {
-            responseText = response.text || "";
-          } catch {
-            // ignore
-          }
-
-          if (!responseText && (response as any)?.candidates?.[0]?.content?.parts) {
-            const parts = (response as any).candidates[0].content.parts;
-            responseText = parts
-              .filter((p: any) => typeof p.text === "string" && !p.thought)
-              .map((p: any) => p.text)
-              .join("\n")
-              .trim();
+          let responseThought = "";
+          let rawParts: any[] = [];
+          
+          if ((response as any)?.candidates?.[0]?.content?.parts) {
+            rawParts = (response as any).candidates[0].content.parts;
+            const parts = rawParts;
+            for (const p of parts) {
+              if (typeof p.text === "string") {
+                if (p.thought) {
+                  responseThought += p.text;
+                } else {
+                  responseText += p.text;
+                }
+              }
+            }
+            responseText = responseText.trim();
+            responseThought = responseThought.trim();
+          } else {
+            try {
+              responseText = response.text || "";
+            } catch {
+              // ignore
+            }
           }
 
           return res.json({
             text: responseText,
+            thought: responseThought,
+            rawParts,
             functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
             model: currentModel,
           });

@@ -97,6 +97,16 @@ const HomePage: React.FC = () => {
   const longPressTimerRef = useRef<any>(null);
   const isLongPressRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isSearchOpen) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isSearchOpen]);
 
   // --- Powerful Filtering Logic ---
   const filteredNotes = React.useMemo(() => {
@@ -861,7 +871,7 @@ const HomePage: React.FC = () => {
             className="fixed top-0 left-0 right-0 z-[120] pointer-events-none"
             style={{ top: 0, paddingTop: "16px", paddingBottom: "8px", paddingLeft: "16px", paddingRight: "16px" }}
           >
-            <div className="max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto flex items-center justify-between pointer-events-none w-full">
+            <div className="w-full max-w-7xl mx-auto relative flex items-center justify-between pointer-events-none px-4 sm:px-6 lg:px-8">
               {/* Right Capsule: Title */}
               <div
                 className="pointer-events-auto h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl transition-all"
@@ -915,10 +925,11 @@ const HomePage: React.FC = () => {
             <div className="w-full max-w-2xl mx-auto flex flex-col items-center text-center space-y-12 pb-20 pt-6">
               {/* Intro Card */}
               <div
-                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-200 fill-mode-backwards"
+                className="w-full p-6 sm:p-8 rounded-[32px] border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-200 fill-mode-backwards"
                 style={{
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
+                  borderRadius: "32px",
                   boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
                 }}
               >
@@ -951,10 +962,11 @@ const HomePage: React.FC = () => {
 
               {/* 2. VISION SECTION */}
               <div
-                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-backwards"
+                className="w-full p-6 sm:p-8 rounded-[32px] border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-backwards"
                 style={{
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
+                  borderRadius: "32px",
                   boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
                 }}
               >
@@ -993,10 +1005,11 @@ const HomePage: React.FC = () => {
 
               {/* 3. THE ZIKR FEATURE */}
               <div
-                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-500 fill-mode-backwards"
+                className="w-full p-6 sm:p-8 rounded-[32px] border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-500 fill-mode-backwards"
                 style={{
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
+                  borderRadius: "32px",
                   boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
                 }}
               >
@@ -1035,10 +1048,11 @@ const HomePage: React.FC = () => {
 
               {/* 4. DEVELOPER SECTION */}
               <div
-                className="w-full p-6 sm:p-8 rounded-3xl border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-700 fill-mode-backwards"
+                className="w-full p-6 sm:p-8 rounded-[32px] border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-bottom-8 duration-700 delay-700 fill-mode-backwards"
                 style={{
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
+                  borderRadius: "32px",
                   boxShadow: `0 12px 32px -4px ${currentTheme.shadow}`,
                 }}
               >
@@ -1117,258 +1131,273 @@ const HomePage: React.FC = () => {
           style={{ top: 0 }}
         >
           <div className="w-full max-w-7xl mx-auto relative flex items-center justify-between pointer-events-none px-4 sm:px-6 lg:px-8">
-            {isSearchOpen ? (
-              /* Full-Width Search Floating Capsule */
+            {/* Standard Header Row (Brand Title & Action Buttons) */}
+            <div
+              className={`w-full flex items-center justify-between transition-all duration-500 ease-out ${
+                isSearchOpen
+                  ? "opacity-0 -translate-y-3 scale-95 pointer-events-none"
+                  : "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+              }`}
+            >
+              {/* Right Capsule: Brand Title (Clean typography only) */}
               <div
-                className="pointer-events-auto w-full h-11 px-3.5 rounded-full border flex items-center gap-2.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200"
+                className="h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl"
                 style={{
                   backgroundColor: currentTheme.glass,
                   borderColor: currentTheme.border,
                   boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                 }}
               >
-                <Search
-                  className="w-4 h-4 flex-shrink-0"
+                <span
+                  className="font-zain-xbold text-lg leading-none pt-0.5 tracking-wide select-none"
                   style={{ color: currentTheme.accent }}
-                  strokeWidth={2.2}
-                />
-                <input
-                  type="text"
-                  placeholder="ابحث في حكاياتك..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  autoFocus
-                  className="flex-1 bg-transparent border-none outline-none font-zain-reg text-sm pt-0.5"
-                  style={{ color: currentTheme.text }}
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm("")}
-                    className="w-5 h-5 rounded-full flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
-                    style={{ color: currentTheme.text }}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setIsSearchOpen(false);
-                    setSearchTerm("");
-                  }}
-                  className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95"
-                  style={{ color: currentTheme.secondary }}
-                  title="إغلاق البحث"
                 >
-                  <X className="w-4 h-4" />
-                </button>
+                  دَارُ الحِكَايَاتِ
+                </span>
               </div>
-            ) : (
-              <>
-                {/* Right Capsule: Brand Title (Clean typography only) */}
+
+              {/* Left Capsule: Search Trigger + Three-lines Menu ("الثلاث شرط") */}
+              <div className="relative header-menu-container">
                 <div
-                  className="pointer-events-auto h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl transition-transform hover:scale-[1.02]"
+                  className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl"
                   style={{
                     backgroundColor: currentTheme.glass,
                     borderColor: currentTheme.border,
                     boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
                   }}
                 >
-                  <span
-                    className="font-zain-xbold text-lg leading-none pt-0.5 tracking-wide select-none"
-                    style={{ color: currentTheme.accent }}
+                  {/* Search Icon Button */}
+                  <button
+                    onClick={() => {
+                      setIsSearchOpen(true);
+                      setShowMenu(false);
+                    }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
+                    style={{ color: currentTheme.text }}
+                    title="بحث"
                   >
-                    دَارُ الحِكَايَاتِ
-                  </span>
+                    <Search
+                      className="w-4 h-4"
+                      style={{ color: currentTheme.accent }}
+                      strokeWidth={2.2}
+                    />
+                  </button>
+
+                  {/* Divider */}
+                  <div
+                    className="w-px h-4 mx-0.5 opacity-60"
+                    style={{ backgroundColor: currentTheme.border }}
+                  />
+
+                  {/* More Menu Button (Three Vertical Dots) */}
+                  <button
+                    onClick={() => setShowMenu(!showMenu)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
+                    style={{ color: currentTheme.text }}
+                    title="خيارات إضافية"
+                  >
+                    <MoreVertical
+                      className="w-4 h-4"
+                      style={{ color: currentTheme.text }}
+                      strokeWidth={2.2}
+                    />
+                  </button>
                 </div>
 
-                {/* Left Capsule: Search Trigger + Three-lines Menu ("الثلاث شرط") */}
-                <div className="relative header-menu-container pointer-events-auto">
-                  <div
-                    className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl transition-transform hover:scale-[1.02]"
-                    style={{
-                      backgroundColor: currentTheme.glass,
-                      borderColor: currentTheme.border,
-                      boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
-                    }}
-                  >
-                    {/* Search Icon Button */}
+                {/* Redesigned Menu Dropdown Card (Editor Smooth 500ms Animation Pattern) */}
+                <div
+                  className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
+                    showMenu
+                      ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                      : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
+                  }`}
+                  style={{
+                    backgroundColor: currentTheme.bg,
+                    borderColor: currentTheme.border,
+                    borderRadius: "20px",
+                    boxShadow: `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
+                  }}
+                >
+                  <div className="flex flex-col p-1 gap-0.5">
+                    {/* 1. تفعيل وضع التحديد */}
                     <button
-                      onClick={() => setIsSearchOpen(true)}
-                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95"
-                      style={{ color: currentTheme.text }}
-                      title="بحث"
+                      onClick={toggleSelectionMode}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                      style={{
+                        color: currentTheme.text,
+                        borderRadius: "16px",
+                      }}
                     >
-                      <Search
-                        className="w-4 h-4"
+                      <CheckSquare
+                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
                         style={{ color: currentTheme.accent }}
-                        strokeWidth={2.2}
+                        strokeWidth={2}
                       />
+                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                        تحديد الحكايات
+                      </span>
                     </button>
 
-                    {/* Divider */}
+                    {/* 2. نمط العرض (شبكي / قائمة) */}
+                    <button
+                      onClick={toggleViewMode}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                      style={{
+                        color: currentTheme.text,
+                        borderRadius: "16px",
+                      }}
+                    >
+                      {viewMode === "list" ? (
+                        <>
+                          <Grid
+                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                            style={{ color: currentTheme.accent }}
+                            strokeWidth={2}
+                          />
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                            عرض شبكي
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <List
+                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                            style={{ color: currentTheme.accent }}
+                            strokeWidth={2}
+                          />
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                            عرض قائمة
+                          </span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* 3. إحصائيات الإبداع */}
+                    <button
+                      onClick={() => {
+                        setShowDashboard(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                      style={{
+                        color: currentTheme.text,
+                        borderRadius: "16px",
+                      }}
+                    >
+                      <BarChart
+                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                        style={{ color: currentTheme.accent }}
+                        strokeWidth={2}
+                      />
+                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                        إحصائيات الإبداع
+                      </span>
+                    </button>
+
                     <div
-                      className="w-px h-4 mx-0.5 opacity-60"
+                      className="h-px mx-1.5 my-0.5 opacity-30"
                       style={{ backgroundColor: currentTheme.border }}
                     />
 
-                    {/* More Menu Button (Three Vertical Dots) */}
+                    {/* 4. الإعدادات */}
                     <button
-                      onClick={() => setShowMenu(!showMenu)}
-                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
-                      style={{ color: currentTheme.text }}
-                      title="خيارات إضافية"
+                      onClick={() => {
+                        openSettings();
+                        setShowMenu(false);
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                      style={{
+                        color: currentTheme.text,
+                        borderRadius: "16px",
+                      }}
                     >
-                      <MoreVertical
-                        className="w-4 h-4"
-                        style={{ color: currentTheme.text }}
-                        strokeWidth={2.2}
+                      <Settings
+                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                        style={{ color: currentTheme.accent }}
+                        strokeWidth={2}
                       />
+                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                        الإعدادات
+                      </span>
+                    </button>
+
+                    {/* 5. عن دار الحكايات */}
+                    <button
+                      onClick={() => {
+                        setShowAbout(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                      style={{
+                        color: currentTheme.text,
+                        borderRadius: "16px",
+                      }}
+                    >
+                      <Info
+                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                        style={{ color: currentTheme.accent }}
+                        strokeWidth={2}
+                      />
+                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                        عن دَارِ الحِكَايَاتِ
+                      </span>
                     </button>
                   </div>
-
-                  {/* Redesigned Menu Dropdown Card (Editor Smooth 500ms Animation Pattern) */}
-                  <div
-                    className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
-                      showMenu
-                        ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-                        : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
-                    }`}
-                    style={{
-                      backgroundColor: currentTheme.bg,
-                      borderColor: currentTheme.border,
-                      borderRadius: "20px",
-                      boxShadow: `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
-                    }}
-                  >
-                      <div className="flex flex-col p-1 gap-0.5">
-                        {/* 1. تفعيل وضع التحديد */}
-                        <button
-                          onClick={toggleSelectionMode}
-                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                          style={{
-                            color: currentTheme.text,
-                            borderRadius: "16px",
-                          }}
-                        >
-                          <CheckSquare
-                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                            strokeWidth={2}
-                          />
-                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                            تحديد الحكايات
-                          </span>
-                        </button>
-
-                        {/* 2. نمط العرض (شبكي / قائمة) */}
-                        <button
-                          onClick={toggleViewMode}
-                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                          style={{
-                            color: currentTheme.text,
-                            borderRadius: "16px",
-                          }}
-                        >
-                          {viewMode === "list" ? (
-                            <>
-                              <Grid
-                                className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                                style={{ color: currentTheme.accent }}
-                                strokeWidth={2}
-                              />
-                              <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                                عرض شبكي
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <List
-                                className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                                style={{ color: currentTheme.accent }}
-                                strokeWidth={2}
-                              />
-                              <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                                عرض قائمة
-                              </span>
-                            </>
-                          )}
-                        </button>
-
-                        {/* 3. إحصائيات الإبداع */}
-                        <button
-                          onClick={() => {
-                            setShowDashboard(true);
-                            setShowMenu(false);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                          style={{
-                            color: currentTheme.text,
-                            borderRadius: "16px",
-                          }}
-                        >
-                          <BarChart
-                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                            strokeWidth={2}
-                          />
-                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                            إحصائيات الإبداع
-                          </span>
-                        </button>
-
-                        <div
-                          className="h-px mx-1.5 my-0.5 opacity-30"
-                          style={{ backgroundColor: currentTheme.border }}
-                        />
-
-                        {/* 4. الإعدادات */}
-                        <button
-                          onClick={() => {
-                            openSettings();
-                            setShowMenu(false);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                          style={{
-                            color: currentTheme.text,
-                            borderRadius: "16px",
-                          }}
-                        >
-                          <Settings
-                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                            strokeWidth={2}
-                          />
-                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                            الإعدادات
-                          </span>
-                        </button>
-
-                        {/* 5. عن دار الحكايات */}
-                        <button
-                          onClick={() => {
-                            setShowAbout(true);
-                            setShowMenu(false);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                          style={{
-                            color: currentTheme.text,
-                            borderRadius: "16px",
-                          }}
-                        >
-                          <Info
-                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                            strokeWidth={2}
-                          />
-                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                            عن دَارِ الحِكَايَاتِ
-                          </span>
-                        </button>
-                      </div>
-                    </div>
                 </div>
-              </>
-            )}
+              </div>
+            </div>
+
+            {/* Full-Width Search Floating Capsule (Smooth 500ms Animated Transition) */}
+            <div
+              className={`absolute inset-x-4 sm:inset-x-6 lg:inset-x-8 top-0 h-11 px-3.5 rounded-full border flex items-center gap-2.5 backdrop-blur-xl transition-all duration-500 ease-out origin-top ${
+                isSearchOpen
+                  ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                  : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
+              }`}
+              style={{
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+              }}
+            >
+              <Search
+                className="w-4 h-4 flex-shrink-0"
+                style={{ color: currentTheme.accent }}
+                strokeWidth={2.2}
+              />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="ابحث في حكاياتك..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 bg-transparent border-none outline-none font-zain-reg text-sm pt-0.5"
+                style={{ color: currentTheme.text }}
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    searchInputRef.current?.focus();
+                  }}
+                  className="w-5 h-5 rounded-full flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+                  style={{ color: currentTheme.text }}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setIsSearchOpen(false);
+                  setSearchTerm("");
+                }}
+                className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
+                style={{ color: currentTheme.secondary }}
+                title="إغلاق البحث"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -1393,7 +1422,7 @@ const HomePage: React.FC = () => {
                     onTouchEnd={handleTouchEnd}
                     onClick={() => handleCardClick(note)}
                     className={`
-                        group relative rounded-2xl backdrop-blur-2xl transition-all duration-300 cursor-pointer overflow-hidden w-full
+                        group relative rounded-[32px] backdrop-blur-2xl transition-all duration-300 cursor-pointer overflow-hidden w-full
                         ${viewMode === "grid" ? "p-4 min-h-[200px] sm:min-h-[220px] h-auto flex flex-col justify-between hover:-translate-y-1" : "p-4 hover:-translate-y-1"}
                       `}
                     style={{
@@ -1404,7 +1433,7 @@ const HomePage: React.FC = () => {
                         ? currentTheme.accent
                         : currentTheme.border,
                       borderWidth: "1px",
-                      borderRadius: viewMode === "grid" ? "22px" : "24px",
+                      borderRadius: "32px",
                       boxShadow: isSelected
                         ? `0 0 0 2px ${currentTheme.accent}, 0 8px 24px -4px ${currentTheme.shadow}`
                         : `0 8px 24px -4px ${currentTheme.shadow}`,

@@ -54,6 +54,8 @@ export type Message = {
   id: string;
   role: "user" | "assistant" | "system_ephemeral" | "agent_steps";
   content: string;
+  thought?: string;
+  rawParts?: any[];
   timestamp: Date;
   isNew?: boolean;
   isStreaming?: boolean;
@@ -680,11 +682,11 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
 
   return (
     <div dir="rtl" className="w-full my-1.5 select-none text-start relative">
-      {/* Pure CSS Hidden Checkbox Controller */}
+      {/* Pure CSS Hidden Checkbox Controller: collapsed by default */}
       <input
         type="checkbox"
         id={checkboxId}
-        defaultChecked={!result?.completed}
+        defaultChecked={false}
         className="agent-tree-checkbox"
         aria-label="تبديل عرض مسار الخطوات"
       />
@@ -879,10 +881,11 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
                             e.stopPropagation();
                             cancelDiacritizeJob();
                           }}
-                          className="px-2.5 py-0.5 rounded text-[11px] font-zain-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10.5px] font-zain-bold bg-rose-600 hover:bg-rose-700 active:scale-95 text-white transition-all shadow-xs cursor-pointer select-none border border-rose-700/50"
                           title="إلغاء خط إنتاج الضبط والتراجع الفوري عن أي تغييرات"
                         >
-                          إلغاء الضبط
+                          <X size={11} strokeWidth={2.5} />
+                          <span>إلغاء الضبط</span>
                         </button>
                       )}
                     </div>
@@ -1620,12 +1623,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           timestamp: m.timestamp,
         }));
 
+      let accumulatedThought = "";
+      let finalRawParts: any[] = [];
       await streamLiteraryAssistantResponse(
         apiHistory,
         trimmed,
         storyContext,
-        (chunk) => {
-          accumulated += chunk;
+        (chunkObj) => {
+          accumulated += chunkObj.text;
+          accumulatedThought += chunkObj.thought;
+          if (chunkObj.rawParts.length > 0) finalRawParts = chunkObj.rawParts;
+
           if (accumulated.includes("[[EXEC]]")) {
             detectedExec = true;
           }
@@ -1633,7 +1641,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === aiMsgId
-                ? { ...msg, content: displayContent, isStreaming: true }
+                ? { ...msg, content: displayContent, thought: accumulatedThought, rawParts: finalRawParts, isStreaming: true }
                 : msg
             )
           );
@@ -1643,7 +1651,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === aiMsgId ? { ...msg, isStreaming: false } : msg
+          msg.id === aiMsgId ? { ...msg, isStreaming: false, thought: accumulatedThought, rawParts: finalRawParts } : msg
         )
       );
       setStorageError(null);
@@ -2380,7 +2388,16 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 !isUser &&
                 idx === lastAssistantMessageIndex &&
                 m.isNew !== true &&
-                m.isStreaming !== true;
+                m.isStreaming !== true &&
+                !isLoading &&
+                !isAgentExecuting &&
+                !messages.slice(idx + 1).some((after) => after.role === "agent_steps");
+
+              const prevMessage = idx > 0 ? messages[idx - 1] : null;
+              const isContinuationFromAgent =
+                prevMessage &&
+                (prevMessage.role === "agent_steps" ||
+                  (prevMessage.role === "assistant" && prevMessage.isAgent && m.isAgent));
 
               return (
                 <div key={m.id} className="w-full flex flex-col">
@@ -2391,7 +2408,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         : "w-full"
                     }
                   >
-                    {!isUser && (
+                    {!isUser && !isContinuationFromAgent && (
                       <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
                         <Sparkles size={11} style={{ color: currentTheme.accent }} />
                         <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
@@ -2537,20 +2554,42 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         style={{ color: currentTheme.text }}
                       >
                         <div>
-                          {m.content.trim() === "" && m.isStreaming ? (
-                            <div className="flex items-center gap-1.5 py-2 justify-start">
+                          {m.thought && (
+                            <details className="mb-2 group">
+                              <summary className="flex items-center justify-end gap-1.5 py-1 select-none cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                                <ChevronDown size={13} className="text-gray-400 group-open:rotate-180 transition-transform" />
+                                <span
+                                  className="agent-text-shimmer text-xs font-mono font-bold tracking-wider select-none flex items-center"
+                                  style={{
+                                    backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${currentTheme.isDark ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)" : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"}`,
+                                    WebkitBackgroundClip: "text",
+                                    backgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                    color: "transparent",
+                                  }}
+                                >
+                                  DeepThink
+                                </span>
+                              </summary>
+                              <div dir="rtl" className="text-[12px] mt-1 pr-3 pl-1 py-1.5 border-r-[2.5px] border-black/10 dark:border-white/10 text-gray-500 dark:text-gray-400 text-right leading-relaxed font-zain opacity-85 whitespace-pre-wrap">
+                                {m.thought}
+                              </div>
+                            </details>
+                          )}
+                          {!m.thought && m.content.trim() === "" && m.isStreaming ? (
+                            <div className="flex items-center justify-end gap-2 py-1 select-none">
                               <span
-                                className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.3s]"
-                                style={{ backgroundColor: currentTheme.accent }}
-                              />
-                              <span
-                                className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.15s]"
-                                style={{ backgroundColor: currentTheme.accent }}
-                              />
-                              <span
-                                className="w-2 h-2 rounded-full animate-bounce"
-                                style={{ backgroundColor: currentTheme.accent }}
-                              />
+                                className="agent-text-shimmer text-xs font-mono font-bold tracking-wider select-none"
+                                style={{
+                                  backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${currentTheme.isDark ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)" : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"}`,
+                                  WebkitBackgroundClip: "text",
+                                  backgroundClip: "text",
+                                  WebkitTextFillColor: "transparent",
+                                  color: "transparent",
+                                }}
+                              >
+                                DeepThink
+                              </span>
                             </div>
                           ) : (
                             <MarkdownRenderer
@@ -2596,10 +2635,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                   }
                                 }
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-zain-bold border transition-all hover:bg-rose-500/15 text-rose-500 border-rose-500/30 cursor-pointer active:scale-95"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-zain-bold border transition-all cursor-pointer active:scale-95 shadow-xs"
+                              style={{
+                                backgroundColor: currentTheme.isDark ? "#2d1616" : "#fee2e2",
+                                borderColor: currentTheme.isDark ? "rgba(244, 63, 94, 0.45)" : "#fca5a5",
+                                color: currentTheme.isDark ? "#fda4af" : "#9f1239",
+                              }}
                               title="تراجع عن الضبط اللغوي واستعادة النص الأصلي كما كان قبل التشكيل"
                             >
-                              <Undo2 size={13} />
+                              <Undo2 size={12} strokeWidth={2.2} />
                               <span>تراجع عن الضبط</span>
                             </button>
                           </div>
@@ -2698,42 +2742,54 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             })}
 
             {(isLoading || isAgentExecuting) && !hasStreamingAssistantMessage && (
-              <div className="w-full flex flex-col animate-in fade-in duration-200">
-                <div className="w-full">
-                  <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
-                    <Sparkles size={11} style={{ color: currentTheme.accent }} />
-                    <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
-                    {isAgentExecuting && (
-                      <span
-                        className="text-[9px] font-sans font-bold tracking-wider px-1.5 py-0.5 rounded-full border leading-none uppercase select-none"
-                        style={{
-                          backgroundColor: `${currentTheme.accent}18`,
-                          borderColor: `${currentTheme.accent}40`,
-                          color: currentTheme.accent,
-                        }}
-                      >
-                        Agent
-                      </span>
-                    )}
-                  </div>
-                  <div className="w-full text-right bg-transparent border-none shadow-none px-0 py-1">
-                    <div className="flex items-center gap-1.5 py-2 justify-start">
-                      <span
-                        className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.3s]"
-                        style={{ backgroundColor: currentTheme.accent }}
-                      />
-                      <span
-                        className="w-2 h-2 rounded-full animate-bounce [animation-delay:-0.15s]"
-                        style={{ backgroundColor: currentTheme.accent }}
-                      />
-                      <span
-                        className="w-2 h-2 rounded-full animate-bounce"
-                        style={{ backgroundColor: currentTheme.accent }}
-                      />
+              (() => {
+                const lastMsg = messages[messages.length - 1];
+                const isAfterAgentItem =
+                  lastMsg &&
+                  (lastMsg.role === "agent_steps" ||
+                    (lastMsg.role === "assistant" && lastMsg.isAgent));
+
+                return (
+                  <div className="w-full flex flex-col animate-in fade-in duration-200">
+                    <div className="w-full">
+                      {!isAfterAgentItem && (
+                        <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
+                          <Sparkles size={11} style={{ color: currentTheme.accent }} />
+                          <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
+                          {isAgentExecuting && (
+                            <span
+                              className="text-[9px] font-sans font-bold tracking-wider px-1.5 py-0.5 rounded-full border leading-none uppercase select-none"
+                              style={{
+                                backgroundColor: `${currentTheme.accent}18`,
+                                borderColor: `${currentTheme.accent}40`,
+                                color: currentTheme.accent,
+                              }}
+                            >
+                              Agent
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="w-full text-right bg-transparent border-none shadow-none px-0 py-1">
+                        <div className="flex items-center gap-2 py-1 select-none">
+                          <span
+                            className="agent-text-shimmer text-xs font-mono font-bold tracking-wider select-none"
+                            style={{
+                              backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${currentTheme.isDark ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)" : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"}`,
+                              WebkitBackgroundClip: "text",
+                              backgroundClip: "text",
+                              WebkitTextFillColor: "transparent",
+                              color: "transparent",
+                            }}
+                          >
+                            DeepThink
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()
             )}
             <div ref={messagesEndRef} />
           </div>

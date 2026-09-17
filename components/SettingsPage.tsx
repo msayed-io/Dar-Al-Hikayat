@@ -488,13 +488,13 @@ const SettingsPage: React.FC = () => {
 
       {/* Content */}
       <div
-        className="px-4 sm:px-6 lg:px-8 flex-1 z-10 relative w-full max-w-5xl lg:max-w-7xl mx-auto flex flex-col"
-        style={{ paddingTop: "74px", paddingBottom: "48px" }}
+        className="settings-page-content px-4 sm:px-6 lg:px-8 flex-1 z-10 relative w-full max-w-5xl lg:max-w-7xl mx-auto flex flex-col"
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 w-full">
+        <div className="settings-grid grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 w-full">
           {/* ─── 1. أجواء وثيمات الدار ─── */}
           <div
-            className="border transition-all md:col-span-2 flex flex-col justify-center"
+            id="settings-card-theme"
+            className="settings-card border transition-all flex flex-col justify-center"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
@@ -559,7 +559,8 @@ const SettingsPage: React.FC = () => {
 
           {/* ─── 2. محراب المواقيت (الموقع) ─── */}
           <div
-            className="border transition-all flex flex-col justify-center"
+            id="settings-card-location"
+            className="settings-card border transition-all flex flex-col justify-center"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
@@ -633,7 +634,8 @@ const SettingsPage: React.FC = () => {
 
           {/* ─── 3. مفاتيح المساعد الأدبي ─── */}
           <div
-            className="border transition-all flex flex-col gap-4 justify-center"
+            id="settings-card-assistant-keys"
+            className="settings-card border transition-all flex flex-col gap-4 justify-center"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
@@ -743,7 +745,8 @@ const SettingsPage: React.FC = () => {
 
           {/* ─── 4. أرشيف المخطوطات والنسخ الاحتياطي ─── */}
           <div
-            className="border transition-all flex flex-col gap-4 justify-center"
+            id="settings-card-archive"
+            className="settings-card border transition-all flex flex-col gap-4 justify-center"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
@@ -818,7 +821,8 @@ const SettingsPage: React.FC = () => {
 
           {/* ─── 5. قفل الدار بالبصمة ─── */}
           <div
-            className="border transition-all flex flex-col justify-center"
+            id="settings-card-security"
+            className="settings-card border transition-all flex flex-col justify-center"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
@@ -883,7 +887,8 @@ const SettingsPage: React.FC = () => {
 
           {/* ─── 6. تحديثات التطبيق (OTA) ─── */}
           <div
-            className="border transition-all flex flex-col justify-center"
+            id="settings-card-updates"
+            className="settings-card border transition-all flex flex-col justify-center"
             style={{
               backgroundColor: currentTheme.glass,
               borderColor: currentTheme.border,
