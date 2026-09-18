@@ -18,6 +18,7 @@ import {
   getLastSavedLocation,
   saveSavedLocation,
 } from "../lib/prayer-alarms";
+import { StorageService } from "../lib/storage-service";
 
 export interface NoteStyles {
   fontSize: number;
@@ -121,6 +122,7 @@ interface AppContextType {
   openLocationSheet: () => void;
   closeLocationSheet: () => void;
   saveNote: (noteData: NoteSaveData) => void;
+  importNotesBulk: (newNotes: Note[]) => void;
   deleteNotes: (idsToDelete: number[]) => void;
   toggleTheme: (mode: ThemeMode) => void;
   clearLocationCache: () => void;
@@ -142,21 +144,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
 
-  // Initialize Notes from LocalStorage
-  const [notes, setNotes] = useState<Note[]>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("dar_notes");
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error("Failed to parse notes:", e);
-          return [];
-        }
-      }
-    }
-    return [];
-  });
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isNotesLoaded, setIsNotesLoaded] = useState(false);
+
+  // Initialize Notes from StorageService (IndexedDB)
+  useEffect(() => {
+    const initNotes = async () => {
+      const loaded = await StorageService.loadNotes();
+      setNotes(loaded);
+      setIsNotesLoaded(true);
+    };
+    initNotes();
+  }, []);
 
   // Initialize Theme from LocalStorage
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
@@ -191,10 +190,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const currentTheme = themes[themeMode];
 
-  // Persist Notes to LocalStorage
+  // Persist Notes to StorageService (IndexedDB)
   useEffect(() => {
-    localStorage.setItem("dar_notes", JSON.stringify(notes));
-  }, [notes]);
+    if (isNotesLoaded) {
+      StorageService.saveNotes(notes).catch((err) => {
+        console.error("Failed to persist notes:", err);
+      });
+    }
+  }, [notes, isNotesLoaded]);
 
   // Persist Theme to LocalStorage & synchronize html/body/root background colors dynamically
   useEffect(() => {
@@ -420,6 +423,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
+  const importNotesBulk = (newNotes: Note[]) => {
+    setNotes((prevNotes) => {
+      // Avoid duplicates based on ID if present, or just append
+      // For import, we usually append or merge.
+      // Let's merge and ensure no duplicates by ID.
+      const existingIds = new Set(prevNotes.map(n => n.id));
+      const filteredNew = newNotes.filter(n => !existingIds.has(n.id));
+      return [...filteredNew, ...prevNotes];
+    });
+  };
+
   const deleteNotes = (idsToDelete: number[]) => {
     setNotes((prevNotes) =>
       prevNotes.filter((note) => !idsToDelete.includes(note.id)),
@@ -445,6 +459,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     openLocationSheet,
     closeLocationSheet,
     saveNote,
+    importNotesBulk,
     deleteNotes,
     toggleTheme,
     clearLocationCache,

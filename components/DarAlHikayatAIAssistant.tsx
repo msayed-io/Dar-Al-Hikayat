@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowUp,
   ChevronRight,
+  ChevronLeft,
   MessageCirclePlus,
   PanelLeftOpen,
   X,
@@ -56,6 +57,7 @@ export type Message = {
   content: string;
   thought?: string;
   rawParts?: any[];
+  thinkingDuration?: number;
   timestamp: Date;
   isNew?: boolean;
   isStreaming?: boolean;
@@ -569,13 +571,17 @@ function UserMessageBubble({
   // Consistent rounded rectangle border radius matching edit mode exactly
   const borderRadiusClass = "rounded-[22px] rounded-tl-sm";
 
+  // Determine appropriate text color for content displayed on currentTheme.accent
+  const accentTextColor =
+    currentTheme.mode === "apple_dark" ? "#000000" : (currentTheme.bg || "#ffffff");
+
   return (
     <div
       className={`w-fit min-w-[240px] max-w-[85%] text-right border shadow-sm transition-all duration-300 overflow-hidden relative ${borderRadiusClass}`}
       style={{
         backgroundColor: currentTheme.accent,
         borderColor: currentTheme.accent,
-        color: "#ffffff",
+        color: accentTextColor,
       }}
     >
       {isEditingThisMessage ? (
@@ -585,13 +591,17 @@ function UserMessageBubble({
           value={editingContent}
           onChange={(event) => setEditingContent(event.target.value)}
           aria-label="تعديل رسالة المستخدم"
-          className="w-full min-w-[240px] resize-none bg-transparent px-5 py-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none text-white placeholder:text-white/60"
+          className="w-full min-w-[240px] resize-none bg-transparent px-5 py-3.5 text-right text-xs font-zain-bold leading-relaxed outline-none"
+          style={{
+            color: accentTextColor,
+          }}
         />
       ) : (
         <div className={`w-full px-5 py-3.5 relative ${isOverTwoLines ? "pb-9" : ""}`}>
           <p
             className="text-[14px] font-zain-bold leading-[23px] whitespace-pre-wrap break-words transition-all duration-300"
             style={{
+              color: accentTextColor,
               display: isOverTwoLines && !isExpanded ? "-webkit-box" : "block",
               WebkitBoxOrient: "vertical",
               WebkitLineClamp: isOverTwoLines && !isExpanded ? 3 : "none",
@@ -941,6 +951,30 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const [deleteTarget, setDeleteTarget] = useState<StoredConversation | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [shareResult, setShareResult] = useState<{ conversation: StoredConversation; url: string } | null>(null);
+  const [expandedThoughtIds, setExpandedThoughtIds] = useState<Record<string, boolean>>({});
+
+  const toggleThought = useCallback((id: string) => {
+    setExpandedThoughtIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  }, []);
+
+  const formatThinkingDuration = useCallback((seconds?: number) => {
+    const s = Math.max(1, Math.round(seconds || 3));
+    const toArabicDigits = (num: number) =>
+      String(num).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[parseInt(d, 10)]);
+
+    if (s < 60) {
+      return `تم التفكير لمدة ${toArabicDigits(s)} ثانية`;
+    }
+    const mins = Math.floor(s / 60);
+    const remSecs = s % 60;
+    if (remSecs === 0) {
+      return `تم التفكير لمدة ${toArabicDigits(mins)} دقيقة`;
+    }
+    return `تم التفكير لمدة ${toArabicDigits(mins)} دقيقة و ${toArabicDigits(remSecs)} ثانية`;
+  }, []);
 
   // Load saved conversations from localStorage
   const loadStoredConversations = useCallback((): StoredConversation[] => {
@@ -1232,6 +1266,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           id: m.id,
           role: m.role as "user" | "assistant",
           content: m.content,
+          thought: m.thought,
+          rawParts: m.rawParts,
           timestamp: m.timestamp,
         }));
 
@@ -1620,9 +1656,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           id: m.id,
           role: m.role as "user" | "assistant",
           content: m.content,
+          thought: m.thought,
+          rawParts: m.rawParts,
           timestamp: m.timestamp,
         }));
 
+      const thinkingStartTime = Date.now();
+      let thinkingDuration = 0;
+      let thinkingEnded = false;
       let accumulatedThought = "";
       let finalRawParts: any[] = [];
       await streamLiteraryAssistantResponse(
@@ -1634,6 +1675,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           accumulatedThought += chunkObj.thought;
           if (chunkObj.rawParts.length > 0) finalRawParts = chunkObj.rawParts;
 
+          if (!thinkingEnded && chunkObj.text) {
+            thinkingEnded = true;
+            thinkingDuration = Math.max(1, Math.round((Date.now() - thinkingStartTime) / 1000));
+          }
+
           if (accumulated.includes("[[EXEC]]")) {
             detectedExec = true;
           }
@@ -1641,7 +1687,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === aiMsgId
-                ? { ...msg, content: displayContent, thought: accumulatedThought, rawParts: finalRawParts, isStreaming: true }
+                ? {
+                    ...msg,
+                    content: displayContent,
+                    thought: accumulatedThought,
+                    rawParts: finalRawParts,
+                    thinkingDuration: thinkingDuration || Math.max(1, Math.round((Date.now() - thinkingStartTime) / 1000)),
+                    isStreaming: true,
+                  }
                 : msg
             )
           );
@@ -1649,9 +1702,21 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         mentionsContext
       );
 
+      if (!thinkingDuration) {
+        thinkingDuration = Math.max(1, Math.round((Date.now() - thinkingStartTime) / 1000));
+      }
+
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === aiMsgId ? { ...msg, isStreaming: false, thought: accumulatedThought, rawParts: finalRawParts } : msg
+          msg.id === aiMsgId
+            ? {
+                ...msg,
+                isStreaming: false,
+                thought: accumulatedThought,
+                rawParts: finalRawParts,
+                thinkingDuration,
+              }
+            : msg
         )
       );
       setStorageError(null);
@@ -1742,6 +1807,21 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         className="absolute bottom-[-10%] left-[-10%] w-[220px] h-[220px] rounded-full pointer-events-none blur-[80px] opacity-20"
         style={{ backgroundColor: currentTheme.accent }}
       />
+
+      {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
+      <div
+        className={`pointer-events-none transition-opacity duration-500 z-30 ${
+          currentTheme.mode === "royal_classic"
+            ? "apple-top-vignette-light"
+            : currentTheme.mode === "night_whisper"
+            ? "apple-top-vignette-night"
+            : "apple-top-vignette"
+        }`}
+        style={{ position: "absolute" }}
+      />
+
+      {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2 - Top) --- */}
+      <div className="apple-magnetic-dissolve" style={{ position: "absolute", zIndex: 31 }} />
 
       {/* ── FLOATING TOP HEADER CAPSULES: ABSOLUTE OVERLAY (ZERO BACKGROUND BAR) ── */}
       <header
@@ -2260,14 +2340,6 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         aria-hidden="true"
       />
 
-      {/* Bottom smooth fade gradient mask */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-24 transition-colors duration-300"
-        style={{
-          background: `linear-gradient(to top, ${currentTheme.bg} 0%, ${currentTheme.bg} 40%, transparent 100%)`,
-        }}
-        aria-hidden="true"
-      />
 
       {/* ── MAIN CHAT AREA / EMPTY STATE ── */}
       <div className="flex-1 min-h-0 flex flex-col relative z-10 overflow-hidden">
@@ -2409,20 +2481,83 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     }
                   >
                     {!isUser && !isContinuationFromAgent && (
-                      <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
-                        <Sparkles size={11} style={{ color: currentTheme.accent }} />
-                        <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
-                        {m.isAgent && (
-                          <span
-                            className="text-[9px] font-sans font-bold tracking-wider px-1.5 py-0.5 rounded-full border leading-none uppercase select-none"
-                            style={{
-                              backgroundColor: `${currentTheme.accent}18`,
-                              borderColor: `${currentTheme.accent}40`,
-                              color: currentTheme.accent,
-                            }}
-                          >
-                            Agent
-                          </span>
+                      <div className="w-full mb-1.5" dir="rtl">
+                        {m.isStreaming && (!m.content || m.content.trim() === "") ? (
+                          <div className="flex items-center gap-2 select-none">
+                            <span
+                              className="agent-text-shimmer text-xs font-zain-bold tracking-wide select-none"
+                              style={{
+                                backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${
+                                  currentTheme.isDark
+                                    ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)"
+                                    : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"
+                                }`,
+                                WebkitBackgroundClip: "text",
+                                backgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                                color: "transparent",
+                              }}
+                            >
+                              جاري التفكير...
+                            </span>
+                            {m.isAgent && (
+                              <span
+                                className="text-[10px] font-zain-bold tracking-wide px-2 py-0.5 rounded-full border leading-none select-none inline-flex items-center justify-center"
+                                style={{
+                                  backgroundColor: `${currentTheme.accent}18`,
+                                  borderColor: `${currentTheme.accent}40`,
+                                  color: currentTheme.accent,
+                                }}
+                              >
+                                إيجنت
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-center gap-2 select-none">
+                              <button
+                                type="button"
+                                onClick={() => toggleThought(m.id)}
+                                className="inline-flex items-center gap-1 py-0.5 text-xs font-zain-bold transition-opacity hover:opacity-80 cursor-pointer select-none"
+                                style={{ color: currentTheme.isDark ? "#9ca3af" : "#6b7280" }}
+                              >
+                                <span>{formatThinkingDuration(m.thinkingDuration || 3)}</span>
+                                <ChevronLeft
+                                  size={13}
+                                  className={`transition-transform duration-200 ${
+                                    expandedThoughtIds[m.id] ? "-rotate-90" : "rotate-0"
+                                  }`}
+                                />
+                              </button>
+                              {m.isAgent && (
+                                <span
+                                  className="text-[10px] font-zain-bold tracking-wide px-2 py-0.5 rounded-full border leading-none select-none inline-flex items-center justify-center"
+                                  style={{
+                                    backgroundColor: `${currentTheme.accent}18`,
+                                    borderColor: `${currentTheme.accent}40`,
+                                    color: currentTheme.accent,
+                                  }}
+                                >
+                                  إيجنت
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Accordion Content for Thinking Steps */}
+                            {expandedThoughtIds[m.id] && (
+                              <div
+                                dir="rtl"
+                                className="text-[12px] mt-1.5 mb-2 pr-3 pl-2 py-2 border-r-2 text-stone-500 dark:text-stone-400 text-right leading-relaxed font-zain whitespace-pre-wrap rounded-l-md"
+                                style={{
+                                  borderColor: `${currentTheme.accent}50`,
+                                  backgroundColor: currentTheme.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                                }}
+                              >
+                                {m.thought ? m.thought : "تم التفكير وتحليل السياق بواسطة نموذج Gemini الذكي."}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
@@ -2499,11 +2634,12 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                               type="button"
                               disabled={!hasEditedContent || !editingContent.trim()}
                               onClick={confirmEditingUserMessage}
-                              className={`inline-flex h-6 items-center justify-center rounded-full px-3.5 text-[11px] font-zain-bold transition-all text-white cursor-pointer ${
+                              className={`inline-flex h-6 items-center justify-center rounded-full px-3.5 text-[11px] font-zain-bold transition-all cursor-pointer ${
                                 (!hasEditedContent || !editingContent.trim()) ? "opacity-40" : "hover:opacity-90"
                               }`}
                               style={{ 
-                                backgroundColor: currentTheme.accent
+                                backgroundColor: currentTheme.accent,
+                                color: currentTheme.mode === "apple_dark" ? "#000000" : (currentTheme.bg || "#ffffff"),
                               }}
                             >
                                تعديل
@@ -2554,59 +2690,20 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                         style={{ color: currentTheme.text }}
                       >
                         <div>
-                          {m.thought && (
-                            <details className="mb-2 group">
-                              <summary className="flex items-center justify-end gap-1.5 py-1 select-none cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                                <ChevronDown size={13} className="text-gray-400 group-open:rotate-180 transition-transform" />
-                                <span
-                                  className="agent-text-shimmer text-xs font-mono font-bold tracking-wider select-none flex items-center"
-                                  style={{
-                                    backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${currentTheme.isDark ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)" : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"}`,
-                                    WebkitBackgroundClip: "text",
-                                    backgroundClip: "text",
-                                    WebkitTextFillColor: "transparent",
-                                    color: "transparent",
-                                  }}
-                                >
-                                  DeepThink
-                                </span>
-                              </summary>
-                              <div dir="rtl" className="text-[12px] mt-1 pr-3 pl-1 py-1.5 border-r-[2.5px] border-black/10 dark:border-white/10 text-gray-500 dark:text-gray-400 text-right leading-relaxed font-zain opacity-85 whitespace-pre-wrap">
-                                {m.thought}
-                              </div>
-                            </details>
-                          )}
-                          {!m.thought && m.content.trim() === "" && m.isStreaming ? (
-                            <div className="flex items-center justify-end gap-2 py-1 select-none">
-                              <span
-                                className="agent-text-shimmer text-xs font-mono font-bold tracking-wider select-none"
-                                style={{
-                                  backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${currentTheme.isDark ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)" : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"}`,
-                                  WebkitBackgroundClip: "text",
-                                  backgroundClip: "text",
-                                  WebkitTextFillColor: "transparent",
-                                  color: "transparent",
-                                }}
-                              >
-                                DeepThink
-                              </span>
-                            </div>
-                          ) : (
-                            <MarkdownRenderer
-                              content={m.content}
-                              animate={m.isNew && !m.isStreaming}
-                              theme={currentTheme}
-                              onComplete={() => {
-                                setMessages((prev) =>
-                                  prev.map((msg) =>
-                                    msg.id === m.id
-                                      ? { ...msg, isNew: false }
-                                      : msg
-                                  )
-                                );
-                              }}
-                            />
-                          )}
+                          <MarkdownRenderer
+                            content={m.content}
+                            animate={m.isNew && !m.isStreaming}
+                            theme={currentTheme}
+                            onComplete={() => {
+                              setMessages((prev) =>
+                                prev.map((msg) =>
+                                  msg.id === m.id
+                                    ? { ...msg, isNew: false }
+                                    : msg
+                                )
+                              );
+                            }}
+                          />
                         </div>
                         {m.diacritizeJobId && (
                           <div
@@ -2751,40 +2848,36 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
                 return (
                   <div className="w-full flex flex-col animate-in fade-in duration-200">
-                    <div className="w-full">
-                      {!isAfterAgentItem && (
-                        <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-zain-bold select-none">
-                          <Sparkles size={11} style={{ color: currentTheme.accent }} />
-                          <span style={{ color: currentTheme.accent }}>دار الحكايات AI</span>
-                          {isAgentExecuting && (
-                            <span
-                              className="text-[9px] font-sans font-bold tracking-wider px-1.5 py-0.5 rounded-full border leading-none uppercase select-none"
-                              style={{
-                                backgroundColor: `${currentTheme.accent}18`,
-                                borderColor: `${currentTheme.accent}40`,
-                                color: currentTheme.accent,
-                              }}
-                            >
-                              Agent
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div className="w-full text-right bg-transparent border-none shadow-none px-0 py-1">
-                        <div className="flex items-center gap-2 py-1 select-none">
+                    <div className="w-full" dir="rtl">
+                      <div className="flex items-center gap-2 mb-1.5 select-none">
+                        <span
+                          className="agent-text-shimmer text-xs font-zain-bold tracking-wide select-none"
+                          style={{
+                            backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${
+                              currentTheme.isDark
+                                ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)"
+                                : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"
+                            }`,
+                            WebkitBackgroundClip: "text",
+                            backgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            color: "transparent",
+                          }}
+                        >
+                          جاري التفكير...
+                        </span>
+                        {isAgentExecuting && (
                           <span
-                            className="agent-text-shimmer text-xs font-mono font-bold tracking-wider select-none"
+                            className="text-[10px] font-zain-bold tracking-wide px-2 py-0.5 rounded-full border leading-none select-none inline-flex items-center justify-center"
                             style={{
-                              backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${currentTheme.isDark ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)" : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"}`,
-                              WebkitBackgroundClip: "text",
-                              backgroundClip: "text",
-                              WebkitTextFillColor: "transparent",
-                              color: "transparent",
+                              backgroundColor: `${currentTheme.accent}18`,
+                              borderColor: `${currentTheme.accent}40`,
+                              color: currentTheme.accent,
                             }}
                           >
-                            DeepThink
+                            إيجنت
                           </span>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2795,10 +2888,25 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           </div>
         )}
 
+        {/* --- Apple Bottom Vignette Effect (Subtle Ambient Shadow Backdrop Underneath Input Area) --- */}
+        <div
+          className={`pointer-events-none transition-opacity duration-500 ${
+            currentTheme.mode === "royal_classic"
+              ? "apple-bottom-vignette-light"
+              : currentTheme.mode === "night_whisper"
+              ? "apple-bottom-vignette-night"
+              : "apple-bottom-vignette"
+          }`}
+          style={{ zIndex: 20 }}
+        />
+
+        {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2 - Bottom Around Input Area) --- */}
+        <div className="apple-magnetic-dissolve-bottom" style={{ zIndex: 21 }} />
+
         {/* ── FLOATING INPUT FIELD BAR: EXACT MATCH WITH DAR AL HIKAYAT BOTTOM FLOATING CAPSULE ── */}
         <footer 
           className="absolute bottom-4 z-40 flex flex-col items-center pointer-events-none w-full"
-          style={{ left: 0, padding: "0 16px" }}
+          style={{ left: 0, padding: "0 16px", zIndex: 40 }}
         >
           {/* Attached Mention Chips Row */}
           {attachedMentions && attachedMentions.length > 0 && (
@@ -2918,8 +3026,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     : `${currentTheme.accent}18`,
                 color:
                   inputValue.trim() && !isLoading && !isAgentExecuting && editingMessageId === null
-                    ? "#ffffff"
-                    : currentTheme.text,
+                    ? currentTheme.mode === "apple_dark"
+                      ? "#000000"
+                      : (currentTheme.bg || "#ffffff")
+                    : currentTheme.secondary,
                 opacity:
                   inputValue.trim() && !isLoading && !isAgentExecuting && editingMessageId === null
                     ? 1
@@ -2929,7 +3039,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               title="إرسال"
             >
               {isAgentExecuting ? (
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-white/60 border-t-white animate-spin" />
+                <span
+                  className="w-3.5 h-3.5 rounded-full border-2 animate-spin"
+                  style={{
+                    borderColor:
+                      currentTheme.mode === "apple_dark"
+                        ? "rgba(0,0,0,0.3)"
+                        : "rgba(255,255,255,0.4)",
+                    borderTopColor:
+                      currentTheme.mode === "apple_dark" ? "#000000" : "#ffffff",
+                  }}
+                />
               ) : (
                 <ArrowUp size={16} strokeWidth={2.4} />
               )}

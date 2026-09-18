@@ -760,6 +760,17 @@ export async function streamLiteraryAssistantResponse(
             }
           }
 
+          if (rawPartsAccumulated.length === 0) {
+            if (thoughtAccumulated) {
+              rawPartsAccumulated = [
+                { text: thoughtAccumulated, thought: true },
+                { text: candidateAccumulated },
+              ];
+            } else if (candidateAccumulated) {
+              rawPartsAccumulated = [{ text: candidateAccumulated }];
+            }
+          }
+
           return { text: candidateAccumulated, thought: thoughtAccumulated, rawParts: rawPartsAccumulated };
         } catch (serverErr: any) {
           if (

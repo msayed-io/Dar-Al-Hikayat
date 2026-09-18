@@ -128,9 +128,8 @@ async function startServer() {
             temperature: 0.7,
             topP: 0.9,
           };
-          if (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") {
-            config.thinkingConfig = { thinkingLevel };
-          }
+          const resolvedThinking = (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") ? thinkingLevel : "HIGH";
+          config.thinkingConfig = { thinkingLevel: resolvedThinking, includeThoughts: true };
 
           let streamResponse;
           try {
@@ -306,7 +305,7 @@ async function startServer() {
             config.responseMimeType = responseMimeType;
           }
           if (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") {
-            config.thinkingConfig = { thinkingLevel };
+            config.thinkingConfig = { thinkingLevel, includeThoughts: true };
           }
 
           if (tools && Array.isArray(tools) && tools.length > 0) {

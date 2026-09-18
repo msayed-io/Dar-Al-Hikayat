@@ -899,6 +899,20 @@ const HomePage: React.FC = () => {
             }}
           ></div>
 
+          {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
+          <div
+            className={`pointer-events-none transition-opacity duration-500 z-[110] ${
+              currentTheme.mode === "royal_classic"
+                ? "apple-top-vignette-light"
+                : currentTheme.mode === "night_whisper"
+                ? "apple-top-vignette-night"
+                : "apple-top-vignette"
+            }`}
+          />
+
+          {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2) --- */}
+          <div className="apple-magnetic-dissolve" style={{ zIndex: 115 }} />
+
           {/* --- FLOATING CAPSULE HEADER SYSTEM --- */}
           <header
             className="fixed top-0 left-0 right-0 z-[120] pointer-events-none"

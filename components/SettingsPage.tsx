@@ -60,6 +60,7 @@ const SettingsPage: React.FC = () => {
     toggleTheme,
     notes,
     saveNote,
+    importNotesBulk,
   } = useApp();
 
   const [isLocked, setIsLocked] = useState(false);
@@ -67,6 +68,7 @@ const SettingsPage: React.FC = () => {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [citySearch, setCitySearch] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── مفاتيح الاتصال بالمساعد الأدبي (Multi-Key Rotation) ───
@@ -339,46 +341,86 @@ const SettingsPage: React.FC = () => {
     linkElement.click();
   };
 
-  // استيراد نسخة احتياطية
-  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // استيراد نسخة احتياطية بشكل فائق السرعة وبدون تجميد
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
-          let count = 0;
-          parsed.forEach((item: any) => {
-            if (item.title && item.content) {
-              saveNote({
-                title: item.title,
-                content: item.content,
-                styles: item.styles || {
-                  fontSize: 18,
-                  fontWeight: 400,
-                  textAlign: "right",
-                  textColor: currentTheme.text,
-                  paperStyleIndex: 0,
-                },
-                isLocked: !!item.isLocked,
-                password: item.password || "",
+    setIsImporting(true);
+    setImportStatus("جاري معالجة البيانات...");
+
+    // استخدام setTimeout للسماح لواجهة المستخدم بالتحديث قبل البدء بالعملية الثقيلة
+    setTimeout(() => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          const parsed = JSON.parse(content);
+          
+          if (Array.isArray(parsed)) {
+            const validNotes = parsed
+              .filter((item: any) => item.title && item.content)
+              .map((item: any) => {
+                // التأكد من وجود الحقول الأساسية وتوليدها إن نقصت
+                const now = new Date();
+                const formattedDate = now.toLocaleDateString("ar-EG", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                });
+                
+                // حساب المعاينة إذا لم تكن موجودة
+                let preview = item.preview;
+                if (!preview) {
+                  const cleanContent = item.content.replace(/<[^>]*>/g, " ").trim();
+                  preview = cleanContent.substring(0, 100) + (cleanContent.length > 100 ? "..." : "");
+                }
+
+                return {
+                  id: item.id || Date.now() + Math.random(),
+                  title: item.title,
+                  content: item.content,
+                  preview: preview,
+                  date: item.date || formattedDate,
+                  category: item.category || "حكاية مستوردة",
+                  styles: item.styles || {
+                    fontSize: 18,
+                    fontWeight: 400,
+                    textAlign: "right",
+                    textColor: currentTheme.text,
+                    paperStyleIndex: 0,
+                  },
+                  isLocked: !!item.isLocked,
+                  password: item.password || "",
+                };
               });
-              count++;
+
+            if (validNotes.length > 0) {
+              importNotesBulk(validNotes);
+              setImportStatus(`تم استرجاع ${validNotes.length} حكاية بنجاح ✓`);
+            } else {
+              setImportStatus("لم يتم العثور على حكايات صالحة في الملف");
             }
-          });
-          setImportStatus(`تم استرجاع ${count} حكاية بنجاح`);
-        } else {
-          setImportStatus("صيغة الملف غير صالحة");
+          } else {
+            setImportStatus("صيغة الملف غير صالحة (يجب أن يكون مصفوفة)");
+          }
+        } catch (err) {
+          console.error("Import error:", err);
+          setImportStatus("تعذر قراءة أو تحليل ملف النسخة الاحتياطية");
+        } finally {
+          setIsImporting(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          setTimeout(() => setImportStatus(null), 5000);
         }
-      } catch (err) {
-        setImportStatus("تعذر قراءة ملف النسخة الاحتياطية");
-      }
-      setTimeout(() => setImportStatus(null), 4000);
-    };
-    reader.readAsText(file);
+      };
+      
+      reader.onerror = () => {
+        setImportStatus("حدث خطأ أثناء قراءة الملف");
+        setIsImporting(false);
+      };
+
+      reader.readAsText(file);
+    }, 100);
   };
 
   // المدن المفلترة
@@ -426,6 +468,9 @@ const SettingsPage: React.FC = () => {
             : "apple-top-vignette"
         }`}
       />
+
+      {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2) --- */}
+      <div className="apple-magnetic-dissolve" />
 
       {/* ─── Floating Capsule Header System ─── */}
       <header
@@ -796,7 +841,8 @@ const SettingsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportBackup}
-                className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2"
+                disabled={isImporting}
+                className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2 disabled:opacity-50"
                 style={{
                   backgroundColor: `${currentTheme.accent}10`,
                   borderColor: `${currentTheme.accent}30`,
@@ -808,15 +854,20 @@ const SettingsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2"
+                disabled={isImporting}
+                className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2 disabled:opacity-50"
                 style={{
-                  backgroundColor: `${currentTheme.bg}80`,
-                  borderColor: currentTheme.border,
+                  backgroundColor: isImporting ? `${currentTheme.accent}20` : `${currentTheme.bg}80`,
+                  borderColor: isImporting ? currentTheme.accent : currentTheme.border,
                   color: currentTheme.text,
                 }}
               >
-                <Upload className="w-3.5 h-3.5" style={{ color: currentTheme.accent }} />
-                <span>استيراد</span>
+                {isImporting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" style={{ color: currentTheme.accent }} />
+                )}
+                <span>{isImporting ? "جاري الاستيراد..." : "استيراد"}</span>
               </button>
               <input
                 ref={fileInputRef}
@@ -826,6 +877,15 @@ const SettingsPage: React.FC = () => {
                 className="hidden"
               />
             </div>
+
+            {importStatus && (
+              <div 
+                className="text-[10px] font-zain-bold text-center animate-in fade-in slide-in-from-top-1"
+                style={{ color: importStatus.includes("نجاح") ? "#10B981" : currentTheme.accent }}
+              >
+                {importStatus}
+              </div>
+            )}
           </div>
 
           {/* ─── 5. قفل الدار بالبصمة ─── */}

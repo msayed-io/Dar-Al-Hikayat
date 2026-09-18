@@ -15,11 +15,11 @@ export const THINKING_FOR_PATH = {
 
 export interface ReasoningConfig {
   temperature: number;
-  thinkingConfig?: { thinkingLevel: ThinkingLevelName };
+  thinkingConfig?: { thinkingLevel: ThinkingLevelName; includeThoughts?: boolean };
 }
 
 export function buildReasoningConfig(path: keyof typeof THINKING_FOR_PATH, temperature: number): ReasoningConfig {
-  return { temperature, thinkingConfig: { thinkingLevel: THINKING_FOR_PATH[path] } };
+  return { temperature, thinkingConfig: { thinkingLevel: THINKING_FOR_PATH[path], includeThoughts: true } };
 }
 
 export function isThinkingRejection(err: any): boolean {
@@ -279,7 +279,7 @@ export async function generateGeminiDirectly(
       const { thinkingLevel, ...restConfig } = params.generationConfig;
       localPayload.generationConfig = restConfig;
       if (thinkingLevel) {
-        localPayload.generationConfig.thinkingConfig = { thinkingLevel };
+        localPayload.generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: true };
       }
     }
 
@@ -442,7 +442,7 @@ export async function streamGeminiDirectly(
       const { thinkingLevel, ...restConfig } = params.generationConfig;
       localPayload.generationConfig = restConfig;
       if (thinkingLevel) {
-        localPayload.generationConfig.thinkingConfig = { thinkingLevel };
+        localPayload.generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: true };
       }
     }
 
