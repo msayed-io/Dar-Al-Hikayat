@@ -82,6 +82,7 @@ import {
   type PlannedOperation,
   type AttachedMention,
 } from "../lib/editor-block-system";
+import { StorageService } from "../lib/storage-service";
 
 // --- 20 Premium Ink Colors ---
 const inkColors = [
@@ -968,87 +969,102 @@ const DarAlHikayatMaster: React.FC = () => {
   const resizeIndicatorTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
-    const rawContent =
-      selectedNote?.content || selectedNote?.preview || defaultContent;
-    if (rawContent.includes(CHAPTER_SEPARATOR)) {
-      const parts = rawContent.split(CHAPTER_SEPARATOR).filter(Boolean);
-      const parsedChapters: Chapter[] = parts.map((part, index) => {
-        const [chTitle, chContent] = part.split(TITLE_CONTENT_SEPARATOR);
-        return {
-          id: Date.now().toString() + index,
-          title: chTitle || "",
-          content: chContent || "",
-        };
-      });
-      setChapters(
-        parsedChapters.length > 0
-          ? parsedChapters
-          : [{ id: Date.now().toString(), title: "الفصل الأول", content: "" }],
-      );
-      setIsNovelMode(true);
-      setContent("");
-    } else {
-      setContent(rawContent);
-      setChapters([
+    let isMounted = true;
+
+    const loadStoryBody = async () => {
+      let rawContent = defaultContent;
+      if (selectedNote?.id) {
+        const dbBody = await StorageService.getStoryBody(selectedNote.id);
+        rawContent = dbBody || selectedNote?.content || selectedNote?.preview || defaultContent;
+      }
+
+      if (!isMounted) return;
+
+      if (rawContent.includes(CHAPTER_SEPARATOR)) {
+        const parts = rawContent.split(CHAPTER_SEPARATOR).filter(Boolean);
+        const parsedChapters: Chapter[] = parts.map((part, index) => {
+          const [chTitle, chContent] = part.split(TITLE_CONTENT_SEPARATOR);
+          return {
+            id: Date.now().toString() + index,
+            title: chTitle || "",
+            content: chContent || "",
+          };
+        });
+        setChapters(
+          parsedChapters.length > 0
+            ? parsedChapters
+            : [{ id: Date.now().toString(), title: "الفصل الأول", content: "" }],
+        );
+        setIsNovelMode(true);
+        setContent("");
+      } else {
+        setContent(rawContent);
+        setChapters([
+          {
+            id: Date.now().toString(),
+            title: "الفصل الأول",
+            content: rawContent,
+          },
+        ]);
+        setIsNovelMode(false);
+      }
+      setTitle(selectedNote?.title || "");
+      if (selectedNote?.styles) {
+        setFontSize(selectedNote.styles.fontSize || 16);
+        setActiveFontWeight(selectedNote.styles.fontWeight || 400);
+        setTextAlign(selectedNote.styles.textAlign || "right");
+        const sIndex = selectedNote.styles.paperStyleIndex || 0;
+        let noteTextColor = selectedNote.styles.textColor;
+        if (currentTheme.isDark) {
+          if (
+            !noteTextColor ||
+            noteTextColor === "#2C3E30" ||
+            noteTextColor === "#121A1B" ||
+            noteTextColor === "#000000" ||
+            noteTextColor === "#333D40"
+          ) {
+            noteTextColor = paperStyles[sIndex]?.darkTextColor || currentTheme.text;
+          }
+        } else {
+          if (
+            !noteTextColor ||
+            noteTextColor === "#EAE6D2" ||
+            noteTextColor === "#E2DFD2" ||
+            noteTextColor === "#F0E6D8" ||
+            noteTextColor === "#FDFEFE" ||
+            noteTextColor === "#EBEBF5"
+          ) {
+            noteTextColor = paperStyles[sIndex]?.defaultTextColor || currentTheme.text;
+          }
+        }
+        setTextColor(noteTextColor);
+        setActivePaperStyleIndex(sIndex);
+      } else {
+        setTextColor(currentTheme.isDark ? currentTheme.text : "#121A1B");
+        setActivePaperStyleIndex(0);
+      }
+      setNoteIsLocked(selectedNote?.isLocked || false);
+      setNotePassword(selectedNote?.password || "");
+
+      setIsDirty(false);
+      setIsSavedMode(initialMode === "read");
+      setHistory([
         {
-          id: Date.now().toString(),
-          title: "الفصل الأول",
           content: rawContent,
+          chapters: isNovelMode
+            ? chapters
+            : [{ id: "1", title: "", content: rawContent }],
+          isNovel: isNovelMode,
         },
       ]);
-      setIsNovelMode(false);
-    }
-    setTitle(selectedNote?.title || "");
-    if (selectedNote?.styles) {
-      setFontSize(selectedNote.styles.fontSize || 16);
-      setActiveFontWeight(selectedNote.styles.fontWeight || 400);
-      setTextAlign(selectedNote.styles.textAlign || "right");
-      const sIndex = selectedNote.styles.paperStyleIndex || 0;
-      let noteTextColor = selectedNote.styles.textColor;
-      if (currentTheme.isDark) {
-        if (
-          !noteTextColor ||
-          noteTextColor === "#2C3E30" ||
-          noteTextColor === "#121A1B" ||
-          noteTextColor === "#000000" ||
-          noteTextColor === "#333D40"
-        ) {
-          noteTextColor = paperStyles[sIndex]?.darkTextColor || currentTheme.text;
-        }
-      } else {
-        if (
-          !noteTextColor ||
-          noteTextColor === "#EAE6D2" ||
-          noteTextColor === "#E2DFD2" ||
-          noteTextColor === "#F0E6D8" ||
-          noteTextColor === "#FDFEFE" ||
-          noteTextColor === "#EBEBF5"
-        ) {
-          noteTextColor = paperStyles[sIndex]?.defaultTextColor || currentTheme.text;
-        }
-      }
-      setTextColor(noteTextColor);
-      setActivePaperStyleIndex(sIndex);
-    } else {
-      setTextColor(currentTheme.isDark ? currentTheme.text : "#121A1B");
-      setActivePaperStyleIndex(0);
-    }
-    // Set Lock State
-    setNoteIsLocked(selectedNote?.isLocked || false);
-    setNotePassword(selectedNote?.password || "");
+    };
 
-    setIsDirty(false);
-    setIsSavedMode(initialMode === "read");
-    setHistory([
-      {
-        content: rawContent,
-        chapters: isNovelMode
-          ? chapters
-          : [{ id: "1", title: "", content: rawContent }],
-        isNovel: isNovelMode,
-      },
-    ]);
-  }, [selectedNote, initialMode]);
+    loadStoryBody();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedNote?.id, initialMode]);
 
   // Sync text color when theme mode is switched (e.g. from light to dark or vice versa)
   useEffect(() => {
@@ -1383,17 +1399,17 @@ const DarAlHikayatMaster: React.FC = () => {
 
   const handleContentChange = (newContent: string) => {
     if (isSavedMode || isNovelMode) return;
-    if (editorRef.current) {
-      ensureBlockIdsInElement(editorRef.current);
-      newContent = editorRef.current.innerHTML;
-    }
-    setContent(newContent);
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      pushHistory(newContent, [], false);
-    }, 1000);
     setIsDirty(true);
     setShowUI(false);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      if (editorRef.current) {
+        ensureBlockIdsInElement(editorRef.current);
+        const latestHtml = editorRef.current.innerHTML;
+        setContent(latestHtml);
+        pushHistory(latestHtml, [], false);
+      }
+    }, 1200);
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -1799,7 +1815,7 @@ const DarAlHikayatMaster: React.FC = () => {
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, [isSavedMode, isNovelMode, chapters, content, selectedHighlightColor]);
+  }, [isSavedMode, isNovelMode, selectedHighlightColor]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {

@@ -147,11 +147,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   const [notes, setNotes] = useState<Note[]>([]);
   const [isNotesLoaded, setIsNotesLoaded] = useState(false);
 
-  // Initialize Notes from StorageService (IndexedDB)
+  // Initialize Notes Metadata from StorageService
   useEffect(() => {
     const initNotes = async () => {
-      const loaded = await StorageService.loadNotes();
-      setNotes(loaded);
+      const loadedMeta = await StorageService.loadNotesMetadata();
+      setNotes(loadedMeta as Note[]);
       setIsNotesLoaded(true);
     };
     initNotes();
@@ -190,14 +190,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const currentTheme = themes[themeMode];
 
-  // Persist Notes to StorageService (IndexedDB)
-  useEffect(() => {
-    if (isNotesLoaded) {
-      StorageService.saveNotes(notes).catch((err) => {
-        console.error("Failed to persist notes:", err);
+  // Remove global saveNotes effect (now handled per single story)
+
+  const saveNote = (noteData: NoteSaveData) => {
+    StorageService.saveStory({
+      id: noteData.id,
+      title: noteData.title,
+      content: noteData.content,
+      styles: noteData.styles,
+      isLocked: noteData.isLocked,
+      password: noteData.password,
+    }).then((savedMeta) => {
+      setNotes((prevNotes) => {
+        const existingIndex = prevNotes.findIndex((n) => n.id === savedMeta.id);
+        if (existingIndex >= 0) {
+          const updated = [...prevNotes];
+          updated[existingIndex] = savedMeta as Note;
+          return updated;
+        } else {
+          return [savedMeta as Note, ...prevNotes];
+        }
       });
-    }
-  }, [notes, isNotesLoaded]);
+      if (currentView === "editor") {
+        setSelectedNote(savedMeta as Note);
+      }
+    }).catch((err) => {
+      console.error("Failed to save story:", err);
+    });
+  };
+
+  const importNotesBulk = (newNotes: Note[]) => {
+    StorageService.importBatch(newNotes).then((importedMetas) => {
+      setNotes((prevNotes) => {
+        const existingIds = new Set(prevNotes.map((n) => n.id));
+        const filteredNew = importedMetas.filter((n) => !existingIds.has(n.id));
+        return [...(filteredNew as Note[]), ...prevNotes];
+      });
+    }).catch((err) => {
+      console.error("Failed to import notes bulk:", err);
+    });
+  };
+
+  const deleteNotes = (idsToDelete: number[]) => {
+    StorageService.deleteStories(idsToDelete).then(() => {
+      setNotes((prevNotes) =>
+        prevNotes.filter((note) => !idsToDelete.includes(note.id))
+      );
+    }).catch((err) => {
+      console.error("Failed to delete stories:", err);
+    });
+  };
 
   // Persist Theme to LocalStorage & synchronize html/body/root background colors dynamically
   useEffect(() => {
@@ -364,81 +406,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setThemeMode(mode);
   };
 
-  const saveNote = (noteData: NoteSaveData) => {
-    const now = new Date();
-    const formattedDate = now.toLocaleDateString("ar-EG", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    const cleanContent = noteData.content.replace(/<[^>]*>/g, " ").trim();
-    const previewText =
-      cleanContent.substring(0, 100) +
-      (cleanContent.length > 100 ? "..." : "");
-
-    if (noteData.id) {
-      setNotes((prevNotes) => {
-        const updated = prevNotes.map((n) =>
-          n.id === noteData.id
-            ? {
-                ...n,
-                title: noteData.title || "بدون عنوان",
-                content: noteData.content,
-                preview: previewText,
-                date: formattedDate,
-                styles: noteData.styles,
-                isLocked:
-                  noteData.isLocked !== undefined
-                    ? noteData.isLocked
-                    : n.isLocked,
-                password:
-                  noteData.password !== undefined
-                    ? noteData.password
-                    : n.password,
-              }
-            : n,
-        );
-        if (currentView === "editor" && selectedNote?.id === noteData.id) {
-           const updatedNote = updated.find((n) => n.id === noteData.id);
-           if (updatedNote) setSelectedNote(updatedNote);
-        }
-        return updated;
-      });
-    } else {
-      const newNote: Note = {
-        id: Date.now(),
-        title: noteData.title || "بدون عنوان",
-        content: noteData.content,
-        preview: previewText,
-        date: formattedDate,
-        category: "حكاية جديدة",
-        styles: noteData.styles,
-        isLocked: noteData.isLocked || false,
-        password: noteData.password || "",
-      };
-      setNotes((prevNotes) => [newNote, ...prevNotes]);
-      if (currentView === "editor") {
-        setSelectedNote(newNote);
-      }
-    }
-  };
-
-  const importNotesBulk = (newNotes: Note[]) => {
-    setNotes((prevNotes) => {
-      // Avoid duplicates based on ID if present, or just append
-      // For import, we usually append or merge.
-      // Let's merge and ensure no duplicates by ID.
-      const existingIds = new Set(prevNotes.map(n => n.id));
-      const filteredNew = newNotes.filter(n => !existingIds.has(n.id));
-      return [...filteredNew, ...prevNotes];
-    });
-  };
-
-  const deleteNotes = (idsToDelete: number[]) => {
-    setNotes((prevNotes) =>
-      prevNotes.filter((note) => !idsToDelete.includes(note.id)),
-    );
-  };
+  // Handled above via StorageService O(1) calls
 
   const value = {
     notes,

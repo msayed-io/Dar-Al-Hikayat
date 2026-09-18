@@ -38,8 +38,10 @@ import {
   Award,
   BookHeart,
   Type,
+  RefreshCw,
 } from "lucide-react";
 import { useApp, Note } from "../contexts/AppContext";
+import { StorageService } from "../lib/storage-service";
 import { playStoryDissolve } from "../lib/story-dissolve-engine";
 
 const HomePage: React.FC = () => {
@@ -129,21 +131,11 @@ const HomePage: React.FC = () => {
     });
   }, [notes, searchTerm]);
 
-  // --- Dashboard Statistics Calculation ---
+  // --- Dashboard Statistics Calculation (Instant O(N) over Metadata Integers) ---
   const calculateDashboardStats = () => {
     const arabicMonths: { [key: string]: number } = {
-      يناير: 0,
-      فبراير: 1,
-      مارس: 2,
-      أبريل: 3,
-      مايو: 4,
-      يونيو: 5,
-      يوليو: 6,
-      أغسطس: 7,
-      سبتمبر: 8,
-      أكتوبر: 9,
-      نوفمبر: 10,
-      ديسمبر: 11,
+      يناير: 0, فبراير: 1, مارس: 2, أبريل: 3, مايو: 4, يونيو: 5,
+      يوليو: 6, أغسطس: 7, سبتمبر: 8, أكتوبر: 9, نوفمبر: 10, ديسمبر: 11,
     };
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -154,11 +146,8 @@ const HomePage: React.FC = () => {
     let longestStoryWords = 0;
 
     notes.forEach((note) => {
-      const text = (note.content || note.preview || "")
-        .replace(/<[^>]*>/g, "")
-        .trim();
-      const wordCount = text === "" ? 0 : text.split(/\s+/).length;
-      const charCount = text.length;
+      const wordCount = note.word_count || 0;
+      const charCount = note.char_count || 0;
 
       totalWords += wordCount;
       totalChars += charCount;
@@ -168,8 +157,7 @@ const HomePage: React.FC = () => {
     });
 
     const totalStories = notes.length;
-    const avgWords =
-      totalStories > 0 ? Math.round(totalWords / totalStories) : 0;
+    const avgWords = totalStories > 0 ? Math.round(totalWords / totalStories) : 0;
     const readingTimeMinutes = Math.ceil(totalWords / 200);
 
     const notesThisMonth = notes.filter((note) => {
@@ -186,13 +174,7 @@ const HomePage: React.FC = () => {
       }
     });
 
-    const wordsThisMonth = notesThisMonth.reduce((sum, note) => {
-      const text = (note.content || note.preview || "")
-        .replace(/<[^>]*>/g, "")
-        .trim();
-      return sum + (text === "" ? 0 : text.split(/\s+/).length);
-    }, 0);
-
+    const wordsThisMonth = notesThisMonth.reduce((sum, note) => sum + (note.word_count || 0), 0);
     const storiesThisMonth = notesThisMonth.length;
 
     let levelTitle = "بَذْرَةُ إِلهَام";
@@ -236,18 +218,30 @@ const HomePage: React.FC = () => {
   };
 
   // --- Backup & Restore Logic ---
-  const handleExportBackup = () => {
-    const dataStr = JSON.stringify(notes, null, 2);
-    const dataUri =
-      "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+  const [importStatus, setImportStatus] = useState<{ isImporting: boolean; processed: number; total: number }>({
+    isImporting: false,
+    processed: 0,
+    total: 0,
+  });
 
-    const exportFileDefaultName = `دَارُ_الحِكَايَاتِ_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
+  const handleExportBackup = async () => {
+    try {
+      const fullList = await StorageService.exportFullBackupStream();
+      const dataStr = JSON.stringify(fullList, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const exportFileDefaultName = `دَارُ_الحِكَايَاتِ_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
 
-    const linkElement = document.createElement("a");
-    linkElement.setAttribute("href", dataUri);
-    linkElement.setAttribute("download", exportFileDefaultName);
-    linkElement.click();
-    setShowBackupUI(false);
+      const linkElement = document.createElement("a");
+      linkElement.setAttribute("href", url);
+      linkElement.setAttribute("download", exportFileDefaultName);
+      linkElement.click();
+      URL.revokeObjectURL(url);
+      setShowBackupUI(false);
+    } catch (err) {
+      console.error("Export backup error:", err);
+      alert("حدث خطأ أثناء تصدير النسخة الاحتياطية.");
+    }
   };
 
   const handleImportClick = () => {
@@ -256,34 +250,27 @@ const HomePage: React.FC = () => {
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const fileObj = event.target.files && event.target.files[0];
-    if (!fileObj) {
-      return;
-    }
+    if (!fileObj) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const content = e.target?.result as string;
         const parsedNotes = JSON.parse(content) as Note[];
 
         if (Array.isArray(parsedNotes)) {
-          // Validate basic structure
           const validNotes = parsedNotes.filter(
             (n) => n.title && typeof n.content === "string",
           );
           if (validNotes.length > 0) {
-            // Import logic: Add new notes, don't overwrite existing IDs if possible,
-            // actually re-generating IDs is safer to avoid conflicts, but keeping history is good.
-            // Simple approach: Add all as new notes to avoid conflicts
-            validNotes.forEach((note) => {
-              saveNote({
-                title: note.title,
-                content: note.content,
-                styles: note.styles,
-                isLocked: note.isLocked,
-                password: note.password,
-              });
+            setImportStatus({ isImporting: true, processed: 0, total: validNotes.length });
+            
+            const importedMetas = await StorageService.importBatch(validNotes, (processed, total) => {
+              setImportStatus({ isImporting: true, processed, total });
             });
+
+            importNotesBulk(importedMetas as Note[]);
+            setImportStatus({ isImporting: false, processed: 0, total: 0 });
             alert(`تم استعادة ${validNotes.length} حكاية بنجاح إلى المكتبة.`);
           } else {
             alert("الملف لا يحتوي على حكايات صالحة.");
@@ -291,12 +278,12 @@ const HomePage: React.FC = () => {
         }
       } catch (error) {
         console.error(error);
+        setImportStatus({ isImporting: false, processed: 0, total: 0 });
         alert("حدث خطأ أثناء قراءة ملف النسخة الاحتياطية.");
       }
     };
     reader.readAsText(fileObj);
     setShowBackupUI(false);
-    // Reset input
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -1507,21 +1494,23 @@ const HomePage: React.FC = () => {
                       onTouchEnd={handleTouchEnd}
                       onClick={() => handleCardClick(note)}
                       className={`
-                        group relative rounded-[32px] backdrop-blur-2xl transition-all duration-300 cursor-pointer overflow-hidden w-full apple-elastic-pinch
+                        group relative rounded-[32px] transition-all duration-300 cursor-pointer overflow-hidden w-full apple-elastic-pinch
                         ${viewMode === "grid" ? "p-4 min-h-[200px] sm:min-h-[220px] h-auto flex flex-col justify-between hover:-translate-y-1" : "p-4 hover:-translate-y-1"}
                       `}
                       style={{
+                        contentVisibility: "auto",
+                        contain: "layout paint",
                         backgroundColor: isSelected
                           ? `${currentTheme.accent}20`
-                          : currentTheme.glass,
+                          : currentTheme.mode === "apple_dark" ? "#1C1C1E" : "rgba(255, 255, 255, 0.95)",
                         borderColor: isSelected
                           ? currentTheme.accent
                           : currentTheme.border,
                         borderWidth: "1px",
                         borderRadius: "32px",
                         boxShadow: isSelected
-                          ? `0 0 0 2px ${currentTheme.accent}, 0 8px 24px -4px ${currentTheme.shadow}`
-                          : `0 8px 24px -4px ${currentTheme.shadow}`,
+                          ? `0 0 0 2px ${currentTheme.accent}, 0 4px 16px -2px ${currentTheme.shadow}`
+                          : `0 4px 16px -2px ${currentTheme.shadow}`,
                       }}
                     >
                       {isSelectionMode && (
@@ -1650,6 +1639,44 @@ const HomePage: React.FC = () => {
         </div>
 
         {/* --- Selection Mode Footer (Apple Rounded Full Geometry) --- */}
+        {/* --- IMPORT PROGRESS MODAL --- */}
+        {importStatus.isImporting && (
+          <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+            <div
+              className="w-full max-w-sm rounded-[28px] p-6 text-center border shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200"
+              style={{
+                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : "#FFFFFF",
+                borderColor: currentTheme.border,
+                color: currentTheme.text,
+              }}
+            >
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center animate-spin"
+                style={{ backgroundColor: `${currentTheme.accent}15`, color: currentTheme.accent }}
+              >
+                <RefreshCw className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-zain-bold text-lg" style={{ color: currentTheme.accent }}>
+                  جاري استيراد الحكايات إلى قاعدة البيانات...
+                </h3>
+                <p className="font-zain-reg text-sm opacity-80 mt-1">
+                  تم معالجة {importStatus.processed} من {importStatus.total} حكاية
+                </p>
+              </div>
+              <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                <div
+                  className="h-full transition-all duration-200 rounded-full"
+                  style={{
+                    width: `${Math.round((importStatus.processed / (importStatus.total || 1)) * 100)}%`,
+                    backgroundColor: currentTheme.accent,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <AnimatePresence>
           {isSelectionMode && (
             <motion.div
