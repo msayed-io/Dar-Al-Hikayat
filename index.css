@@ -483,4 +483,176 @@
   }
 }
 
+/* ============================================================
+   تأثير آبل العالمي: الظل المحيطي المتدرج المدمج (Subtle Ambient Shadow / Top Vignette Effect)
+   1. العزل المتدرج (Top Gradient Backdrop)
+   2. الظل المحيطي المزدوج (Double Ambient Shadow)
+   3. الحواف الحادة Specular Hairline Border (0.5px)
+   ============================================================ */
+.apple-top-capsule {
+  background-color: #1C1C1E;
+  border-radius: 9999px;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 4px 30px rgba(0, 0, 0, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.apple-top-vignette {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 125px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.45) 45%, rgba(0, 0, 0, 0) 100%);
+  pointer-events: none;
+  z-index: 35;
+}
+
+.apple-top-vignette-light {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 125px;
+  background: linear-gradient(to bottom, rgba(234, 230, 210, 0.95) 0%, rgba(234, 230, 210, 0.45) 45%, rgba(234, 230, 210, 0) 100%);
+  pointer-events: none;
+  z-index: 35;
+}
+
+.apple-top-vignette-night {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 125px;
+  background: linear-gradient(to bottom, rgba(17, 23, 24, 0.95) 0%, rgba(17, 23, 24, 0.45) 45%, rgba(17, 23, 24, 0) 100%);
+  pointer-events: none;
+  z-index: 35;
+}
+
+.dar-ambient-capsule {
+  border-radius: 9999px !important;
+  border-width: 0.5px !important;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.dar-ambient-capsule-dark {
+  background-color: #1C1C1E !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+}
+
+.dar-ambient-capsule-night {
+  background-color: rgba(23, 31, 33, 0.94) !important;
+  border-color: rgba(226, 223, 210, 0.09) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dar-ambient-capsule-classic {
+  background-color: rgba(234, 230, 210, 0.94) !important;
+  border-color: rgba(18, 26, 27, 0.1) !important;
+  box-shadow: 0 4px 24px rgba(18, 26, 27, 0.08), 0 1px 3px rgba(18, 26, 27, 0.06) !important;
+}
+
+/* ============================================================
+   1. تأثير تمدد الضغط المرن (The Elastic Pinch / Scale Feedback)
+   استجابة فيزيائية فورية تنكمش إلى 0.96 مع منحنى آبل cubic-bezier(0.25, 1, 0.5, 1)
+   ============================================================ */
+.apple-elastic-pinch {
+  transition: transform 0.24s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.24s cubic-bezier(0.25, 1, 0.5, 1) !important;
+  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+}
+.apple-elastic-pinch:active {
+  transform: scale(0.96) !important;
+  transition-duration: 0.08s !important;
+}
+
+.apple-elastic-pinch-subtle {
+  transition: transform 0.22s cubic-bezier(0.25, 1, 0.5, 1) !important;
+  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+}
+.apple-elastic-pinch-subtle:active {
+  transform: scale(0.97) !important;
+  transition-duration: 0.08s !important;
+}
+
+/* ============================================================
+   2. التلاشي المغناطيسي عند حافة الشاشة (The Magnetic Blur Scroll Dissolve)
+   دمج backdrop-filter: blur(20px) مع تدرج ماسك شفاف لتلاشي وانحلال المحتوى تدريجياً
+   ============================================================ */
+.apple-magnetic-dissolve {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 125px;
+  pointer-events: none;
+  z-index: 34;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 45%, rgba(0, 0, 0, 0) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.75) 45%, rgba(0, 0, 0, 0) 100%);
+  transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ============================================================
+   3. التظليل التفاعلي الذكي لحقول الإدخال (Focus Glow Ring & Horizontal Shake)
+   توهج محيطي خافت مع اهتزاز فيزيائي خفيف عند التنبيه
+   ============================================================ */
+.apple-focus-glow {
+  transition: box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+.apple-focus-glow:focus-within,
+.apple-focus-glow:focus {
+  outline: none !important;
+}
+
+.apple-focus-glow-classic:focus-within,
+.apple-focus-glow-classic:focus {
+  border-color: rgba(167, 170, 99, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(167, 170, 99, 0.12), 0 8px 24px -4px rgba(167, 170, 99, 0.15) !important;
+}
+
+.apple-focus-glow-night:focus-within,
+.apple-focus-glow-night:focus {
+  border-color: rgba(159, 163, 101, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(159, 163, 101, 0.12), 0 8px 24px -4px rgba(159, 163, 101, 0.15) !important;
+}
+
+.apple-focus-glow-dark:focus-within,
+.apple-focus-glow-dark:focus {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 8px 28px -4px rgba(255, 255, 255, 0.14) !important;
+}
+
+/* الاهتزاز الفيزيائي الأفقي الخفيف (Horizontal Shake) */
+@keyframes apple-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-5px);
+  }
+  40%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+.apple-shake {
+  animation: apple-shake 0.38s cubic-bezier(0.36, 0.07, 0.19, 0.97) both !important;
+}
+
+/* ============================================================
+   4. حركات الانتقال الهيكلية التكبيرية (Shared Element Transitions)
+   ============================================================ */
+.apple-shared-card-expanding {
+  transition: transform 0.38s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.38s cubic-bezier(0.25, 1, 0.5, 1), border-radius 0.38s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+
+
 

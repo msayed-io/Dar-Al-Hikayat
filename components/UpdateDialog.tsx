@@ -174,7 +174,7 @@ export const UpdateDialog: React.FC = () => {
       <div
         className="unlock-modal border shadow-2xl text-center animate-in zoom-in-95 duration-200 relative flex flex-col items-center select-none"
         style={{
-          width: "290px",
+          width: "280px",
           maxWidth: "calc(100vw - 32px)",
           borderRadius: "28px",
           padding: "24px 20px",
@@ -198,16 +198,16 @@ export const UpdateDialog: React.FC = () => {
 
             {/* Dialog Title */}
             <h2
-              className="text-base font-zain-xbold mb-1 leading-tight text-center"
+              className="text-base font-zain-xbold mb-1.5 leading-tight text-center"
               style={{ color: currentTheme.text }}
             >
               تحديث دار الحكايات
             </h2>
 
             {/* Version Badge */}
-            <div className="flex justify-center mb-2.5">
+            <div className="flex justify-center mb-3.5">
               <span
-                className="px-3 py-0.5 rounded-full text-[11px] font-zain-bold border leading-tight"
+                className="px-3.5 py-1 rounded-full text-[11px] font-zain-bold border leading-tight flex items-center justify-center whitespace-nowrap"
                 style={{
                   backgroundColor: `${currentTheme.accent}12`,
                   borderColor: `${currentTheme.accent}30`,
@@ -221,17 +221,17 @@ export const UpdateDialog: React.FC = () => {
             {/* Release Notes (if any) */}
             {updateInfo.releaseNotes && updateInfo.releaseNotes.length > 0 ? (
               <div
-                className="w-full text-right p-2.5 rounded-2xl border mb-3 max-h-32 overflow-y-auto"
+                className="w-full text-right p-3 rounded-2xl border mb-3.5 max-h-36 overflow-y-auto"
                 style={{
                   backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: currentTheme.border,
+                  borderColor: `${currentTheme.accent}25`,
                 }}
               >
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {updateInfo.releaseNotes.map((note, index) => (
                     <li
                       key={index}
-                      className="text-[11px] font-zain-reg leading-relaxed opacity-85 flex items-start gap-1.5"
+                      className="text-xs font-zain-reg leading-relaxed opacity-90 flex items-start gap-2"
                       style={{ color: currentTheme.text }}
                     >
                       <span
@@ -245,16 +245,16 @@ export const UpdateDialog: React.FC = () => {
               </div>
             ) : (
               <p
-                className="text-xs font-zain-reg mb-3 opacity-70 leading-relaxed text-center px-1"
+                className="text-xs font-zain-reg mb-3.5 opacity-70 leading-relaxed text-center px-1"
                 style={{ color: currentTheme.text }}
               >
                 يتوفر إصدار أحدث يضم تحسينات للأداء وميزات جديدة.
               </p>
             )}
 
-            {/* Subtext reassurance */}
+            {/* Subtext reassurance - Single horizontal line, refined text size */}
             <p
-              className="text-[10.5px] font-zain-reg opacity-60 mb-4 text-center leading-tight"
+              className="text-[10px] font-zain-reg opacity-65 mb-4 text-center leading-normal whitespace-nowrap overflow-hidden text-ellipsis w-full"
               style={{ color: currentTheme.text }}
             >
               نسخة رسمية وموقعة • بياناتك وحكاياتك آمنة
@@ -264,12 +264,13 @@ export const UpdateDialog: React.FC = () => {
             <div className="flex items-center justify-center gap-2.5">
               <button
                 onClick={handleStartUpdate}
-                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
+                className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
                 style={{
                   height: "34px",
                   padding: "0 22px",
                   borderRadius: "9999px",
                   backgroundColor: currentTheme.accent,
+                  color: currentTheme.bg,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -425,12 +426,13 @@ export const UpdateDialog: React.FC = () => {
 
             <button
               onClick={handleStartUpdate}
-              className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
+              className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
               style={{
                 height: "34px",
                 padding: "0 22px",
                 borderRadius: "9999px",
                 backgroundColor: currentTheme.accent,
+                color: currentTheme.bg,
                 whiteSpace: "nowrap",
               }}
             >
@@ -467,12 +469,13 @@ export const UpdateDialog: React.FC = () => {
             <div className="flex items-center justify-center gap-2.5">
               <button
                 onClick={handleGrantPermission}
-                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                 style={{
                   height: "34px",
                   padding: "0 18px",
                   borderRadius: "9999px",
                   backgroundColor: currentTheme.accent,
+                  color: currentTheme.bg,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -521,12 +524,13 @@ export const UpdateDialog: React.FC = () => {
             <div className="flex items-center justify-center gap-2.5">
               <button
                 onClick={handleStartUpdate}
-                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
+                className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer gap-1.5"
                 style={{
                   height: "34px",
                   padding: "0 18px",
                   borderRadius: "9999px",
                   backgroundColor: currentTheme.accent,
+                  color: currentTheme.bg,
                   whiteSpace: "nowrap",
                 }}
               >

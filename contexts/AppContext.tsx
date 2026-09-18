@@ -49,7 +49,7 @@ export interface NoteSaveData {
 }
 
 // --- Theme Definitions ---
-export type ThemeMode = "royal_classic" | "night_whisper";
+export type ThemeMode = "royal_classic" | "night_whisper" | "apple_dark";
 
 export interface ThemeColors {
   mode: ThemeMode;
@@ -70,9 +70,9 @@ const themes: Record<ThemeMode, ThemeColors> = {
     text: "#121A1B",
     accent: "#A7AA63",
     secondary: "#4A5556",
-    glass: "rgba(234, 230, 210, 0.9)",
+    glass: "rgba(234, 230, 210, 0.94)",
     border: "rgba(18, 26, 27, 0.1)",
-    shadow: "rgba(0, 0, 0, 0.1)",
+    shadow: "0 4px 24px rgba(18, 26, 27, 0.08), 0 1px 3px rgba(18, 26, 27, 0.06)",
     isDark: false,
   },
   night_whisper: {
@@ -81,9 +81,20 @@ const themes: Record<ThemeMode, ThemeColors> = {
     text: "#E2DFD2",
     accent: "#9FA365",
     secondary: "#7F8C8E",
-    glass: "rgba(17, 23, 24, 0.88)",
-    border: "rgba(226, 223, 210, 0.08)",
-    shadow: "rgba(0, 0, 0, 0.45)",
+    glass: "rgba(23, 31, 33, 0.94)",
+    border: "rgba(226, 223, 210, 0.09)",
+    shadow: "0 4px 30px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.5)",
+    isDark: true,
+  },
+  apple_dark: {
+    mode: "apple_dark",
+    bg: "#000000",
+    text: "#F5F5F5",
+    accent: "#F5F5F5",
+    secondary: "#8E8E93",
+    glass: "#1C1C1E",
+    border: "rgba(255, 255, 255, 0.08)",
+    shadow: "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)",
     isDark: true,
   },
 };
@@ -185,17 +196,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     localStorage.setItem("dar_notes", JSON.stringify(notes));
   }, [notes]);
 
-  // Persist Theme to LocalStorage & update dark class
+  // Persist Theme to LocalStorage & synchronize html/body/root background colors dynamically
   useEffect(() => {
     localStorage.setItem("dar_theme", themeMode);
     if (typeof document !== "undefined") {
+      document.documentElement.style.backgroundColor = currentTheme.bg;
+      document.body.style.backgroundColor = currentTheme.bg;
+      const rootEl = document.getElementById("root");
+      if (rootEl) {
+        rootEl.style.backgroundColor = currentTheme.bg;
+      }
+
       if (currentTheme.isDark) {
         document.documentElement.classList.add("dark");
+        document.body.classList.add("dark");
       } else {
         document.documentElement.classList.remove("dark");
+        document.body.classList.remove("dark");
+      }
+
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (metaThemeColor) {
+        metaThemeColor.setAttribute("content", currentTheme.bg);
       }
     }
-  }, [themeMode, currentTheme.isDark]);
+  }, [themeMode, currentTheme.isDark, currentTheme.bg]);
 
   // تحديث حالة المواقيت + التخزين المستمر وتغذية الطبقة 2
   const updatePrayerState = (

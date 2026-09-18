@@ -490,6 +490,20 @@ const PrayerPage: React.FC = () => {
         </div>
       )}
 
+      {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
+      <div
+        className={`pointer-events-none transition-opacity duration-500 z-30 ${
+          currentTheme.mode === "royal_classic"
+            ? "apple-top-vignette-light"
+            : currentTheme.mode === "night_whisper"
+            ? "apple-top-vignette-night"
+            : "apple-top-vignette"
+        }`}
+      />
+
+      {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2) --- */}
+      <div className="apple-magnetic-dissolve" />
+
       {/* --- FLOATING HEADER CAPSULES SYSTEM (Apple Concentric Geometry) --- */}
       <header
         className="fixed top-0 left-0 right-0 z-50 p-2 pointer-events-none"
@@ -498,11 +512,13 @@ const PrayerPage: React.FC = () => {
         <div className="w-full max-w-7xl mx-auto relative flex items-center justify-between pointer-events-none px-4 sm:px-6 lg:px-8">
           {/* Right Capsule: Brand Title (Clean typography only) */}
           <div
-            className="pointer-events-auto h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl select-none"
+            className="pointer-events-auto h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl select-none transition-all duration-300"
             style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+              boxShadow: currentTheme.mode === "apple_dark"
+                ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                : currentTheme.shadow,
             }}
           >
             <span
@@ -517,15 +533,17 @@ const PrayerPage: React.FC = () => {
           <div className="relative header-menu-container pointer-events-auto flex-shrink-0">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="border flex items-center justify-center backdrop-blur-xl transition-colors hover:bg-black/5 active:bg-black/10 flex-shrink-0 aspect-square cursor-pointer"
+              className="border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:bg-black/5 active:scale-95 flex-shrink-0 aspect-square cursor-pointer apple-elastic-pinch"
               style={{
                 width: "44px",
                 height: "44px",
                 minWidth: "44px",
                 minHeight: "44px",
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                boxShadow: currentTheme.mode === "apple_dark"
+                  ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                  : currentTheme.shadow,
                 borderRadius: "50%",
               }}
               title="خيارات إضافية"
@@ -540,16 +558,18 @@ const PrayerPage: React.FC = () => {
 
             {/* Menu Dropdown Card */}
             <div
-              className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
+              className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border-[0.5px] shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
                 showMenu
                   ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
                   : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
               }`}
               style={{
-                backgroundColor: currentTheme.bg,
-                borderColor: currentTheme.border,
+                backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : currentTheme.bg,
+                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
                 borderRadius: "20px",
-                boxShadow: `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
+                boxShadow: currentTheme.mode === "apple_dark"
+                  ? "0 12px 36px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.6)"
+                  : `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
               }}
             >
               <div className="flex flex-col p-1 gap-0.5">
@@ -808,13 +828,13 @@ const PrayerPage: React.FC = () => {
               return (
                 <div
                   key={prayer.key}
-                  className={`relative flex items-center justify-between transition-all duration-200 ${
+                  className={`relative flex items-center justify-between transition-all duration-200 apple-elastic-pinch ${
                     isHighlighted ? "shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5"
                   }`}
                   style={{
                     borderRadius: "16px",
-                    backgroundColor: isHighlighted ? `${currentTheme.accent}18` : "transparent",
-                    borderColor: isHighlighted ? `${currentTheme.accent}35` : "transparent",
+                    backgroundColor: isHighlighted ? (currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}18`) : "transparent",
+                    borderColor: isHighlighted ? (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}35`) : "transparent",
                     borderWidth: "1px",
                     padding: "10px 14px", // Fixed item padding
                   }}
@@ -851,7 +871,7 @@ const PrayerPage: React.FC = () => {
                           borderRadius: "9999px",
                           backgroundColor: currentTheme.accent,
                           borderColor: currentTheme.accent,
-                          color: currentTheme.bg,
+                          color: currentTheme.mode === "apple_dark" ? "#000000" : currentTheme.bg,
                         }}
                       >
                         التالية

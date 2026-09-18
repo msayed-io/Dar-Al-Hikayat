@@ -83,7 +83,6 @@ const SettingsPage: React.FC = () => {
     success: boolean;
     message: string;
   } | null>(null);
-  const [isTestingNewKey, setIsTestingNewKey] = useState(false);
   const [newKeyTestFeedback, setNewKeyTestFeedback] = useState<{
     success: boolean;
     message: string;
@@ -188,31 +187,6 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleTestNewKeyInDialog = async () => {
-    const trimmed = newKeyInput.trim();
-    if (!trimmed) {
-      setAddKeyError("يرجى إدخال قيمة المفتاح أولاً لفحصه");
-      return;
-    }
-    setIsTestingNewKey(true);
-    setAddKeyError(null);
-    setNewKeyTestFeedback(null);
-    try {
-      const res = await testKeyConnection(trimmed);
-      setNewKeyTestFeedback(res);
-      if (!res.success) {
-        setAddKeyError(res.message);
-      }
-    } catch (e: any) {
-      setNewKeyTestFeedback({
-        success: false,
-        message: e?.message || "تعذر فحص الاتصال",
-      });
-    } finally {
-      setIsTestingNewKey(false);
-    }
-  };
-
   const handleSaveNewKey = async () => {
     const trimmedKey = newKeyInput.trim();
     if (!trimmedKey) {
@@ -221,7 +195,17 @@ const SettingsPage: React.FC = () => {
     }
     setIsSavingKey(true);
     setAddKeyError(null);
+    setNewKeyTestFeedback(null);
     try {
+      // Automatic validation test upon save
+      const testRes = await testKeyConnection(trimmedKey);
+      if (!testRes.success) {
+        setAddKeyError(testRes.message || "المفتاح غير صالح أو تعذر الاتصال به");
+        setNewKeyTestFeedback(testRes);
+        setIsSavingKey(false);
+        return;
+      }
+      
       await addManagedKey(trimmedKey, newKeyLabel.trim() || undefined);
       setShowAddKeyDialog(false);
       setNewKeyInput("");
@@ -407,24 +391,22 @@ const SettingsPage: React.FC = () => {
     groupedCities[city.countryAr].push(city);
   }
 
-  // ثيمات دار الحكايات (كلاسيكي ملكي وهمس الليالي) للكبسولة الاحترافية
+  // ثيمات دار الحكايات (كلاسيكي ملكي، همس الليالي، وداكن آبل) بتصميم الكبسولة الموحدة
   const themesCapsuleList: {
     id: ThemeMode;
     label: string;
-    dotColor: string;
-    borderColor: string;
   }[] = [
     {
       id: "royal_classic",
-      label: "كلاسيكي ملكي",
-      dotColor: "#EAE6D2",
-      borderColor: "#A7AA63",
+      label: "كلاسيكى •",
     },
     {
       id: "night_whisper",
-      label: "همس الليالي",
-      dotColor: "#111718",
-      borderColor: "#9FA365",
+      label: "• ليلى",
+    },
+    {
+      id: "apple_dark",
+      label: "داكن آبل",
     },
   ];
 
@@ -434,6 +416,17 @@ const SettingsPage: React.FC = () => {
       dir="rtl"
       style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
     >
+      {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
+      <div
+        className={`pointer-events-none transition-opacity duration-500 z-30 ${
+          currentTheme.mode === "royal_classic"
+            ? "apple-top-vignette-light"
+            : currentTheme.mode === "night_whisper"
+            ? "apple-top-vignette-night"
+            : "apple-top-vignette"
+        }`}
+      />
+
       {/* ─── Floating Capsule Header System ─── */}
       <header
         className="fixed top-0 left-0 right-0 z-50 pointer-events-none"
@@ -442,11 +435,13 @@ const SettingsPage: React.FC = () => {
         <div className="w-full max-w-5xl lg:max-w-7xl mx-auto flex items-center justify-between pointer-events-none px-2 sm:px-4 lg:px-6">
           {/* Right Capsule: Settings Title */}
           <div
-            className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all"
+            className="pointer-events-auto h-11 px-5 border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300"
             style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+              boxShadow: currentTheme.mode === "apple_dark"
+                ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                : currentTheme.shadow,
               borderRadius: "9999px",
             }}
           >
@@ -462,15 +457,17 @@ const SettingsPage: React.FC = () => {
           <div className="pointer-events-auto flex-shrink-0">
             <button
               onClick={backToHome}
-              className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
+              className="border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
               style={{
                 width: "44px",
                 height: "44px",
                 minWidth: "44px",
                 minHeight: "44px",
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                boxShadow: currentTheme.mode === "apple_dark"
+                  ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                  : currentTheme.shadow,
                 borderRadius: "50%",
               }}
               title="العودة للرئيسية"
@@ -503,29 +500,37 @@ const SettingsPage: React.FC = () => {
               boxShadow: `0 8px 32px -8px ${currentTheme.shadow}`,
             }}
           >
-            <div className="flex items-center justify-between mb-4 px-1">
+            <div className="flex items-center justify-between mb-3.5 px-1">
               <span
-                className="font-zain-bold text-sm"
+                className="font-zain-bold text-sm md:text-base"
                 style={{ color: currentTheme.accent }}
               >
                 أجواء الدار
               </span>
               <span
-                className="text-xs font-zain-reg opacity-60"
+                className="text-xs md:text-sm font-zain-reg opacity-60"
                 style={{ color: currentTheme.text }}
               >
                 {currentTheme.mode === "royal_classic"
                   ? "كلاسيكي ملكي"
-                  : "همس الليالي"}
+                  : currentTheme.mode === "night_whisper"
+                  ? "همس الليالي"
+                  : "داكن آبل"}
               </span>
             </div>
 
+            {/* شريط الكبسولات الموحد */}
             <div
-              className="flex p-1 border shadow-inner items-center gap-1.5"
+              className="w-full p-1 border flex items-center justify-between transition-all duration-300"
               style={{
-                backgroundColor: `${currentTheme.bg}90`,
-                borderColor: currentTheme.border,
+                backgroundColor: currentTheme.mode === "royal_classic"
+                  ? "rgba(18, 26, 27, 0.05)"
+                  : "rgba(0, 0, 0, 0.4)",
+                borderColor: currentTheme.mode === "royal_classic"
+                  ? "rgba(18, 26, 27, 0.12)"
+                  : "rgba(255, 255, 255, 0.08)",
                 borderRadius: "9999px",
+                height: "48px",
               }}
             >
               {themesCapsuleList.map((t) => {
@@ -534,22 +539,26 @@ const SettingsPage: React.FC = () => {
                   <button
                     key={t.id}
                     onClick={() => toggleTheme(t.id)}
-                    className="flex-1 py-2 px-3 rounded-full font-zain-bold text-xs transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    className="flex-1 h-full rounded-full font-zain-bold text-sm sm:text-base transition-all duration-300 flex items-center justify-center cursor-pointer active:scale-95 whitespace-nowrap select-none px-2"
                     style={{
-                      backgroundColor: isActive ? currentTheme.accent : "transparent",
-                      color: isActive ? "#FFFFFF" : currentTheme.text,
-                      opacity: isActive ? 1 : 0.75,
-                      boxShadow: isActive ? `0 4px 12px -2px ${currentTheme.shadow}` : "none",
+                      backgroundColor: isActive
+                        ? (currentTheme.mode === "apple_dark" ? "#2C2C2E" : currentTheme.accent)
+                        : "transparent",
+                      color: isActive
+                        ? "#FFFFFF"
+                        : (currentTheme.mode === "royal_classic"
+                            ? "rgba(18, 26, 27, 0.65)"
+                            : "rgba(245, 245, 245, 0.65)"),
+                      boxShadow: isActive
+                        ? (currentTheme.mode === "apple_dark"
+                            ? "0 2px 8px rgba(0,0,0,0.5)"
+                            : `0 4px 14px -2px ${currentTheme.shadow || "rgba(0,0,0,0.25)"}`)
+                        : "none",
+                      border: isActive && currentTheme.mode === "apple_dark"
+                        ? "1px solid rgba(255, 255, 255, 0.15)"
+                        : "none",
                     }}
                   >
-                    <span
-                      className="w-3 h-3 rounded-full border flex-shrink-0 transition-transform"
-                      style={{
-                        backgroundColor: t.dotColor,
-                        borderColor: isActive ? "rgba(255,255,255,0.8)" : currentTheme.border,
-                        transform: isActive ? "scale(1.15)" : "scale(1)",
-                      }}
-                    />
                     <span className="leading-none pt-0.5">{t.label}</span>
                   </button>
                 );
@@ -1199,43 +1208,21 @@ const SettingsPage: React.FC = () => {
             )}
 
             {/* Action Buttons - Capsule Pill Buttons matching Story Lock Dialog */}
-            <div className="flex items-center justify-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={handleTestNewKeyInDialog}
-                disabled={isTestingNewKey || isSavingKey || !newKeyInput.trim()}
-                className="font-zain-bold text-xs border active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-40 gap-1"
-                style={{
-                  height: "34px",
-                  padding: "0 14px",
-                  borderRadius: "9999px",
-                  backgroundColor: `${currentTheme.accent}12`,
-                  borderColor: `${currentTheme.accent}30`,
-                  color: currentTheme.accent,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {isTestingNewKey ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Wifi className="w-3 h-3" />
-                )}
-                <span>{isTestingNewKey ? "جارٍ الفحص..." : "فحص الاتصال"}</span>
-              </button>
-
+            <div className="flex items-center justify-center gap-3">
               <button
                 onClick={handleSaveNewKey}
                 disabled={isSavingKey}
-                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
                 style={{
                   height: "34px",
-                  padding: "0 20px",
+                  padding: "0 22px",
                   borderRadius: "9999px",
                   backgroundColor: currentTheme.accent,
+                  color: currentTheme.bg,
                   whiteSpace: "nowrap",
                 }}
               >
-                {isSavingKey ? "جارٍ الحفظ..." : "حفظ"}
+                {isSavingKey ? "جارٍ الفحص والحفظ..." : "حفظ"}
               </button>
 
               <button
@@ -1250,7 +1237,7 @@ const SettingsPage: React.FC = () => {
                 className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
                 style={{
                   height: "34px",
-                  padding: "0 14px",
+                  padding: "0 16px",
                   borderRadius: "9999px",
                   color: currentTheme.secondary,
                   whiteSpace: "nowrap",

@@ -1874,6 +1874,29 @@ const DarAlHikayatMaster: React.FC = () => {
     const style = paperStyles[activePaperStyleIndex] || paperStyles[0];
     const styleId = style.id;
 
+    // Apple Dark mode: Pure OLED black with precise Apple Notes aesthetic
+    if (currentTheme.mode === "apple_dark") {
+      if (styleId === "minimalist") {
+        return { backgroundColor: "#000000" };
+      }
+      if (styleId === "classic") {
+        return {
+          backgroundColor: "#000000",
+          backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px)`,
+          backgroundSize: `100% ${baseSize}px`,
+          backgroundAttachment: "local",
+        };
+      }
+      if (styleId === "linen") {
+        return {
+          backgroundColor: "#000000",
+          backgroundImage:
+            'url("https://www.transparenttextures.com/patterns/subtle-linen.png")',
+        };
+      }
+      return { backgroundColor: "#000000" };
+    }
+
     // Dark theme backgrounds: completely glare-free, matte, soothing dark tones for comfortable writing
     if (currentTheme.isDark) {
       if (styleId === "minimalist") {
@@ -2428,12 +2451,13 @@ const DarAlHikayatMaster: React.FC = () => {
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={saveLockSettings}
-                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                 style={{
                   height: "34px",
                   padding: "0 22px",
                   borderRadius: "9999px",
                   backgroundColor: currentTheme.accent,
+                  color: currentTheme.bg,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -2460,6 +2484,30 @@ const DarAlHikayatMaster: React.FC = () => {
         </div>
       )}
 
+      {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
+      <div
+        className={`pointer-events-none transition-opacity duration-500 z-30 ${
+          currentTheme.mode === "royal_classic"
+            ? "apple-top-vignette-light"
+            : currentTheme.mode === "night_whisper"
+            ? "apple-top-vignette-night"
+            : "apple-top-vignette"
+        }`}
+        style={{
+          opacity: showUI ? 1 : 0,
+          right: showAIAssistant && isWideScreen ? paneWidthCss : 0,
+        }}
+      />
+
+      {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2) --- */}
+      <div
+        className="apple-magnetic-dissolve"
+        style={{
+          opacity: showUI ? 1 : 0,
+          right: showAIAssistant && isWideScreen ? paneWidthCss : 0,
+        }}
+      />
+
       {/* Header (Editor and Reader Mode Top Bar) */}
       <header
         ref={headerRef}
@@ -2472,17 +2520,20 @@ const DarAlHikayatMaster: React.FC = () => {
         }}
       >
         <div
-          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-1.5 transition-all"
+          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-1.5 transition-all duration-300"
           style={{
-            backgroundColor: currentTheme.glass,
-            borderColor: currentTheme.border,
-            boxShadow: `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+            backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+            borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+            boxShadow: currentTheme.mode === "apple_dark"
+              ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+              : currentTheme.shadow,
+            borderRadius: "9999px",
           }}
         >
           <div className="flex items-center gap-1 flex-1 min-w-0 pr-1">
             <button
               onClick={handleBackNavigation}
-              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer flex-shrink-0"
+              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer flex-shrink-0 apple-elastic-pinch"
               style={{ color: currentTheme.text }}
               title={isSavedMode ? "خروج" : "رجوع"}
             >
@@ -2495,7 +2546,13 @@ const DarAlHikayatMaster: React.FC = () => {
                   placeholder="بدون عنوان"
                   onChange={(e) => updateTitle(e.target.value)}
                   onBlur={() => setIsEditingTitle(false)}
-                  className="bg-transparent text-sm font-zain-xbold text-right outline-none w-full border-b leading-tight"
+                  className={`bg-transparent text-sm font-zain-xbold text-right outline-none w-full border-b leading-tight px-1 rounded-sm apple-focus-glow ${
+                    currentTheme.mode === "royal_classic"
+                      ? "apple-focus-glow-classic"
+                      : currentTheme.mode === "night_whisper"
+                      ? "apple-focus-glow-night"
+                      : "apple-focus-glow-dark"
+                  }`}
                   style={{
                     color: currentTheme.text,
                     borderColor: currentTheme.border,
@@ -2677,10 +2734,10 @@ const DarAlHikayatMaster: React.FC = () => {
 
                 <button
                   onClick={handleSave}
-                  className="w-9 h-9 flex items-center justify-center rounded-full active:scale-95 transition-all cursor-pointer shadow-sm"
+                  className="w-9 h-9 flex items-center justify-center rounded-full active:scale-95 transition-all cursor-pointer shadow-sm apple-elastic-pinch"
                   style={{
-                    backgroundColor: currentTheme.accent,
-                    color: currentTheme.bg,
+                    backgroundColor: currentTheme.mode === "apple_dark" ? "#F5F5F5" : currentTheme.accent,
+                    color: currentTheme.mode === "apple_dark" ? "#000000" : currentTheme.bg,
                   }}
                   title="حفظ الحكاية"
                 >
@@ -3054,11 +3111,14 @@ const DarAlHikayatMaster: React.FC = () => {
           }}
         >
           <div
-            className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border flex justify-between items-center gap-2 transition-all"
+            className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-2 transition-all duration-300"
             style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              boxShadow: `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+              boxShadow: currentTheme.mode === "apple_dark"
+                ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                : currentTheme.shadow,
+              borderRadius: "9999px",
             }}
           >
             {/* Right Group */}

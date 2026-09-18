@@ -40,6 +40,7 @@ import {
   Type,
 } from "lucide-react";
 import { useApp, Note } from "../contexts/AppContext";
+import { playStoryDissolve } from "../lib/story-dissolve-engine";
 
 const HomePage: React.FC = () => {
   const {
@@ -57,10 +58,17 @@ const HomePage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchShake, setSearchShake] = useState(false);
+
+  const triggerSearchShake = () => {
+    setSearchShake(true);
+    setTimeout(() => setSearchShake(false), 400);
+  };
 
   // --- UI Controls State ---
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
+  const [deletingNoteIds, setDeletingNoteIds] = useState<number[]>([]);
   const [showMenu, setShowMenu] = useState(false);
 
   // --- New Feature State ---
@@ -88,10 +96,6 @@ const HomePage: React.FC = () => {
   }>({ show: false, noteId: null });
   const [unlockPassword, setUnlockPassword] = useState("");
   const [shakeInput, setShakeInput] = useState(false);
-
-  // --- Scroll & UI Visibility State (Matching Editor) ---
-  const [showUI, setShowUI] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
 
   // Refs for long press logic
   const longPressTimerRef = useRef<any>(null);
@@ -351,12 +355,53 @@ const HomePage: React.FC = () => {
     }
   };
 
-  const handleDeleteSelected = () => {
-    if (selectedNoteIds.length > 0) {
-      deleteNotes(selectedNoteIds);
-      setIsSelectionMode(false);
-      setSelectedNoteIds([]);
+  const handleDeleteSingleStory = (id: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const cardEl = document.getElementById(`story-card-${id}`);
+    setDeletingNoteIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+
+    if (cardEl) {
+      playStoryDissolve(cardEl, () => {
+        deleteNotes([id]);
+        setDeletingNoteIds((prev) => prev.filter((noteId) => noteId !== id));
+      });
+    } else {
+      deleteNotes([id]);
+      setDeletingNoteIds((prev) => prev.filter((noteId) => noteId !== id));
     }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedNoteIds.length === 0) return;
+
+    const idsToProcess = [...selectedNoteIds];
+    setDeletingNoteIds((prev) => Array.from(new Set([...prev, ...idsToProcess])));
+    setIsSelectionMode(false);
+    setSelectedNoteIds([]);
+
+    let completedCount = 0;
+    idsToProcess.forEach((id) => {
+      const cardEl = document.getElementById(`story-card-${id}`);
+      if (cardEl) {
+        playStoryDissolve(cardEl, () => {
+          completedCount++;
+          if (completedCount === idsToProcess.length) {
+            deleteNotes(idsToProcess);
+            setDeletingNoteIds((prev) =>
+              prev.filter((noteId) => !idsToProcess.includes(noteId))
+            );
+          }
+        });
+      } else {
+        completedCount++;
+        if (completedCount === idsToProcess.length) {
+          deleteNotes(idsToProcess);
+          setDeletingNoteIds((prev) =>
+            prev.filter((noteId) => !idsToProcess.includes(noteId))
+          );
+        }
+      }
+    });
   };
 
   // --- Long Press Logic ---
@@ -391,24 +436,6 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // --- Scroll Effect (Auto Hide UI) ---
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      // Show UI if scrolling up significantly or at the very top
-      if (currentScrollY < lastScrollY - 10 || currentScrollY < 50) {
-        setShowUI(true);
-      }
-      // Hide UI if scrolling down
-      else if (currentScrollY > lastScrollY + 10 && !isSelectionMode) {
-        setShowUI(false);
-      }
-      setLastScrollY(currentScrollY);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [lastScrollY, isSelectionMode]);
-
   // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -436,7 +463,6 @@ const HomePage: React.FC = () => {
       className="min-h-screen relative font-sans transition-colors duration-500"
       dir="rtl"
       style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
-      onClick={() => !showUI && setShowUI(true)}
     >
       <style>{`
         .font-zain-light { font-family: 'Zain', sans-serif; font-weight: 200; }
@@ -500,8 +526,8 @@ const HomePage: React.FC = () => {
               maxWidth: "calc(100vw - 32px)",
               borderRadius: "28px",
               padding: "24px 20px",
-              backgroundColor: currentTheme.bg,
-              borderColor: currentTheme.border,
+              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.bg,
+              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
               boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
             }}
           >
@@ -531,7 +557,7 @@ const HomePage: React.FC = () => {
             </p>
 
             {/* Password Input Field - Circular/Capsule border radius matching navigation pills */}
-            <div className={`mb-4 w-full flex justify-center ${shakeInput ? "animate-shake" : ""}`}>
+            <div className={`mb-4 w-full flex justify-center ${shakeInput ? "apple-shake" : ""}`}>
               <input
                 type="password"
                 placeholder="كلمة المرور"
@@ -542,14 +568,20 @@ const HomePage: React.FC = () => {
                 }}
                 onKeyDown={(e) => e.key === "Enter" && handleUnlockAttempt()}
                 autoFocus
-                className="w-full text-center font-zain-bold text-sm outline-none border transition-all"
+                className={`w-full text-center font-zain-bold text-sm outline-none border transition-all apple-focus-glow ${
+                  currentTheme.mode === "royal_classic"
+                    ? "apple-focus-glow-classic"
+                    : currentTheme.mode === "night_whisper"
+                    ? "apple-focus-glow-night"
+                    : "apple-focus-glow-dark"
+                }`}
                 style={{
                   height: "42px",
                   borderRadius: "9999px",
-                  backgroundColor: `${currentTheme.accent}0a`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
                   borderColor: shakeInput
                     ? "#ef4444"
-                    : `${currentTheme.accent}40`,
+                    : (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}40`),
                   color: currentTheme.text,
                 }}
               />
@@ -559,12 +591,13 @@ const HomePage: React.FC = () => {
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={handleUnlockAttempt}
-                className="font-zain-bold text-xs text-white shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                className="font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer apple-elastic-pinch"
                 style={{
                   height: "34px",
                   padding: "0 22px",
                   borderRadius: "9999px",
-                  backgroundColor: currentTheme.accent,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#F5F5F5" : currentTheme.accent,
+                  color: currentTheme.mode === "apple_dark" ? "#000000" : currentTheme.bg,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -575,7 +608,7 @@ const HomePage: React.FC = () => {
                   setUnlockModal({ show: false, noteId: null });
                   setUnlockPassword("");
                 }}
-                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
+                className="font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center apple-elastic-pinch"
                 style={{
                   height: "34px",
                   padding: "0 16px",
@@ -597,8 +630,8 @@ const HomePage: React.FC = () => {
           <div
             className="backup-modal w-full max-w-sm border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
             style={{
-              backgroundColor: currentTheme.bg,
-              borderColor: currentTheme.border,
+              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.bg,
+              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
               borderRadius: "28px",
             }}
           >
@@ -606,8 +639,8 @@ const HomePage: React.FC = () => {
               <div
                 className="w-14 h-14 flex items-center justify-center mx-auto mb-3.5 border shadow-sm"
                 style={{
-                  backgroundColor: `${currentTheme.accent}15`,
-                  borderColor: `${currentTheme.accent}30`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}15`,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
                   borderRadius: "18px",
                 }}
               >
@@ -717,8 +750,8 @@ const HomePage: React.FC = () => {
               maxWidth: "calc(100vw - 32px)",
               borderRadius: "28px",
               padding: "24px 20px",
-              backgroundColor: currentTheme.bg,
-              borderColor: currentTheme.border,
+              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.bg,
+              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
               boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
             }}
           >
@@ -734,8 +767,8 @@ const HomePage: React.FC = () => {
                 onClick={() => setShowDashboard(false)}
                 className="absolute left-0 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full border flex items-center justify-center opacity-60 hover:opacity-100 transition-all cursor-pointer"
                 style={{
-                  borderColor: `${currentTheme.accent}30`,
-                  backgroundColor: `${currentTheme.accent}08`,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}08`,
                   color: currentTheme.text,
                 }}
                 title="إغلاق"
@@ -760,8 +793,8 @@ const HomePage: React.FC = () => {
                 style={{
                   height: "42px",
                   borderRadius: "9999px",
-                  backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: `${currentTheme.accent}30`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
                 }}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -791,8 +824,8 @@ const HomePage: React.FC = () => {
                 style={{
                   height: "42px",
                   borderRadius: "9999px",
-                  backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: `${currentTheme.accent}30`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
                 }}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -822,8 +855,8 @@ const HomePage: React.FC = () => {
                 style={{
                   height: "42px",
                   borderRadius: "9999px",
-                  backgroundColor: `${currentTheme.accent}0a`,
-                  borderColor: `${currentTheme.accent}30`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
                 }}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -1125,9 +1158,23 @@ const HomePage: React.FC = () => {
           backgroundColor: "transparent",
         }}
       >
+        {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
+        <div
+          className={`pointer-events-none transition-opacity duration-500 z-30 ${
+            currentTheme.mode === "royal_classic"
+              ? "apple-top-vignette-light"
+              : currentTheme.mode === "night_whisper"
+              ? "apple-top-vignette-night"
+              : "apple-top-vignette"
+          }`}
+        />
+
+        {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2) --- */}
+        <div className="apple-magnetic-dissolve" />
+
         {/* --- FLOATING HEADER CAPSULES SYSTEM (Apple Concentric Geometry) --- */}
         <header
-          className={`fixed top-0 left-0 right-0 z-50 p-2 transition-all duration-500 ease-out pointer-events-none ${showUI ? "translate-y-0" : "-translate-y-full opacity-0"}`}
+          className="fixed top-0 left-0 right-0 z-50 p-2 pointer-events-none"
           style={{ top: 0 }}
         >
           <div className="w-full max-w-7xl mx-auto relative flex items-center justify-between pointer-events-none px-4 sm:px-6 lg:px-8">
@@ -1141,11 +1188,13 @@ const HomePage: React.FC = () => {
             >
               {/* Right Capsule: Brand Title (Clean typography only) */}
               <div
-                className="h-11 px-5 rounded-full border flex items-center justify-center backdrop-blur-xl"
+                className="h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300"
                 style={{
-                  backgroundColor: currentTheme.glass,
-                  borderColor: currentTheme.border,
-                  boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                  boxShadow: currentTheme.mode === "apple_dark"
+                    ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                    : currentTheme.shadow,
                 }}
               >
                 <span
@@ -1159,11 +1208,13 @@ const HomePage: React.FC = () => {
               {/* Left Capsule: Search Trigger + Three-lines Menu ("الثلاث شرط") */}
               <div className="relative header-menu-container">
                 <div
-                  className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl"
+                  className="h-11 px-2 rounded-full border-[0.5px] flex items-center gap-1 backdrop-blur-xl transition-all duration-300"
                   style={{
-                    backgroundColor: currentTheme.glass,
-                    borderColor: currentTheme.border,
-                    boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+                    backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                    borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                    boxShadow: currentTheme.mode === "apple_dark"
+                      ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                      : currentTheme.shadow,
                   }}
                 >
                   {/* Search Icon Button */}
@@ -1206,16 +1257,18 @@ const HomePage: React.FC = () => {
 
                 {/* Redesigned Menu Dropdown Card (Editor Smooth 500ms Animation Pattern) */}
                 <div
-                  className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
+                  className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border-[0.5px] shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
                     showMenu
                       ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
                       : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
                   }`}
                   style={{
-                    backgroundColor: currentTheme.bg,
-                    borderColor: currentTheme.border,
+                    backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : currentTheme.bg,
+                    borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
                     borderRadius: "20px",
-                    boxShadow: `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
+                    boxShadow: currentTheme.mode === "apple_dark"
+                      ? "0 12px 36px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.6)"
+                      : `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
                   }}
                 >
                   <div className="flex flex-col p-1 gap-0.5">
@@ -1349,19 +1402,30 @@ const HomePage: React.FC = () => {
 
             {/* Full-Width Search Floating Capsule (Smooth 500ms Animated Transition) */}
             <div
-              className={`absolute inset-x-4 sm:inset-x-6 lg:inset-x-8 top-0 h-11 px-3.5 rounded-full border flex items-center gap-2.5 backdrop-blur-xl transition-all duration-500 ease-out origin-top ${
+              className={`absolute inset-x-4 sm:inset-x-6 lg:inset-x-8 top-0 h-11 px-3.5 rounded-full border-[0.5px] flex items-center gap-2.5 backdrop-blur-xl transition-all duration-500 ease-out origin-top apple-focus-glow ${
+                currentTheme.mode === "royal_classic"
+                  ? "apple-focus-glow-classic"
+                  : currentTheme.mode === "night_whisper"
+                  ? "apple-focus-glow-night"
+                  : "apple-focus-glow-dark"
+              } ${searchShake ? "apple-shake" : ""} ${
                 isSearchOpen
                   ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
                   : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
               }`}
               style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                boxShadow: `0 8px 24px -4px ${currentTheme.shadow}`,
+                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                boxShadow: currentTheme.mode === "apple_dark"
+                  ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                  : currentTheme.shadow,
               }}
             >
               <Search
-                className="w-4 h-4 flex-shrink-0"
+                onClick={() => {
+                  if (!searchTerm.trim()) triggerSearchShake();
+                }}
+                className="w-4 h-4 flex-shrink-0 cursor-pointer"
                 style={{ color: currentTheme.accent }}
                 strokeWidth={2.2}
               />
@@ -1371,6 +1435,11 @@ const HomePage: React.FC = () => {
                 placeholder="ابحث في حكاياتك..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !searchTerm.trim()) {
+                    triggerSearchShake();
+                  }
+                }}
                 className="flex-1 bg-transparent border-none outline-none font-zain-reg text-sm pt-0.5"
                 style={{ color: currentTheme.text }}
               />
@@ -1380,7 +1449,7 @@ const HomePage: React.FC = () => {
                     setSearchTerm("");
                     searchInputRef.current?.focus();
                   }}
-                  className="w-5 h-5 rounded-full flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity cursor-pointer"
+                  className="w-5 h-5 rounded-full flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity cursor-pointer apple-elastic-pinch"
                   style={{ color: currentTheme.text }}
                 >
                   <X className="w-3 h-3" />
@@ -1391,7 +1460,7 @@ const HomePage: React.FC = () => {
                   setIsSearchOpen(false);
                   setSearchTerm("");
                 }}
-                className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
+                className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer apple-elastic-pinch"
                 style={{ color: currentTheme.secondary }}
                 title="إغلاق البحث"
               >
@@ -1410,145 +1479,159 @@ const HomePage: React.FC = () => {
           <div
             className={`${viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" : "max-w-2xl sm:max-w-3xl mx-auto space-y-4 w-full"}`}
           >
-            {filteredNotes.length > 0 ? (
-              filteredNotes.map((note) => {
-                const isSelected = selectedNoteIds.includes(note.id);
-                return (
-                  <div
-                    key={note.id}
-                    onMouseDown={() => handleTouchStart(note.id)}
-                    onMouseUp={handleTouchEnd}
-                    onTouchStart={() => handleTouchStart(note.id)}
-                    onTouchEnd={handleTouchEnd}
-                    onClick={() => handleCardClick(note)}
-                    className={`
-                        group relative rounded-[32px] backdrop-blur-2xl transition-all duration-300 cursor-pointer overflow-hidden w-full
+            <AnimatePresence>
+              {filteredNotes.length > 0 ? (
+                filteredNotes.map((note) => {
+                  const isSelected = selectedNoteIds.includes(note.id);
+                  return (
+                    <div
+                      key={note.id}
+                      id={`story-card-${note.id}`}
+                      onMouseDown={() => handleTouchStart(note.id)}
+                      onMouseUp={handleTouchEnd}
+                      onTouchStart={() => handleTouchStart(note.id)}
+                      onTouchEnd={handleTouchEnd}
+                      onClick={() => handleCardClick(note)}
+                      className={`
+                        group relative rounded-[32px] backdrop-blur-2xl transition-all duration-300 cursor-pointer overflow-hidden w-full apple-elastic-pinch
                         ${viewMode === "grid" ? "p-4 min-h-[200px] sm:min-h-[220px] h-auto flex flex-col justify-between hover:-translate-y-1" : "p-4 hover:-translate-y-1"}
                       `}
-                    style={{
-                      backgroundColor: isSelected
-                        ? `${currentTheme.accent}20`
-                        : currentTheme.glass,
-                      borderColor: isSelected
-                        ? currentTheme.accent
-                        : currentTheme.border,
-                      borderWidth: "1px",
-                      borderRadius: "32px",
-                      boxShadow: isSelected
-                        ? `0 0 0 2px ${currentTheme.accent}, 0 8px 24px -4px ${currentTheme.shadow}`
-                        : `0 8px 24px -4px ${currentTheme.shadow}`,
-                    }}
-                  >
-                    {isSelectionMode && (
-                      <div
-                        className={`absolute top-2.5 left-2.5 z-20 transition-all duration-300 ${isSelected ? "scale-100 opacity-100" : "scale-75 opacity-50"}`}
-                      >
-                        {isSelected ? (
-                          <CheckCircle2
-                            className="w-5 h-5 fill-current"
-                            style={{ color: currentTheme.accent }}
-                          />
-                        ) : (
-                          <div
-                            className="w-4 h-4 rounded-full border"
-                            style={{ borderColor: currentTheme.accent }}
-                          ></div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="relative z-10 flex flex-col h-full justify-between flex-1">
-                      <div>
+                      style={{
+                        backgroundColor: isSelected
+                          ? `${currentTheme.accent}20`
+                          : currentTheme.glass,
+                        borderColor: isSelected
+                          ? currentTheme.accent
+                          : currentTheme.border,
+                        borderWidth: "1px",
+                        borderRadius: "32px",
+                        boxShadow: isSelected
+                          ? `0 0 0 2px ${currentTheme.accent}, 0 8px 24px -4px ${currentTheme.shadow}`
+                          : `0 8px 24px -4px ${currentTheme.shadow}`,
+                      }}
+                    >
+                      {isSelectionMode && (
                         <div
-                          className={`flex justify-between items-start ${viewMode === "grid" ? "mb-2 flex-col gap-1" : "mb-1.5"}`}
+                          className={`absolute top-2.5 left-2.5 z-20 transition-all duration-300 ${isSelected ? "scale-100 opacity-100" : "scale-75 opacity-50"}`}
                         >
-                          <h2
-                            className={`${viewMode === "grid" ? "text-base line-clamp-2" : "text-lg"} font-zain-bold leading-relaxed`}
-                            style={{ color: currentTheme.accent }}
+                          {isSelected ? (
+                            <CheckCircle2
+                              className="w-5 h-5 fill-current"
+                              style={{ color: currentTheme.accent }}
+                            />
+                          ) : (
+                            <div
+                              className="w-4 h-4 rounded-full border"
+                              style={{ borderColor: currentTheme.accent }}
+                            ></div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="relative z-10 flex flex-col h-full justify-between flex-1">
+                        <div>
+                          <div
+                            className={`flex justify-between items-start ${viewMode === "grid" ? "mb-2 flex-col gap-1" : "mb-1.5"}`}
                           >
-                            {note.title}
-                          </h2>
-                          <span
-                            className={`text-[10px] px-2.5 py-0.5 rounded-full border font-zain-bold pt-0.5 backdrop-blur-md transition-all ${viewMode === "grid" ? "self-start" : ""}`}
-                            style={{
-                              borderColor: `${currentTheme.accent}35`,
-                              color: currentTheme.accent,
-                              backgroundColor: `${currentTheme.accent}12`,
-                            }}
-                          >
-                            {note.category}
-                          </span>
+                            <h2
+                              className={`${viewMode === "grid" ? "text-base line-clamp-2" : "text-lg"} font-zain-bold leading-relaxed`}
+                              style={{ color: currentTheme.accent }}
+                            >
+                              {note.title}
+                            </h2>
+                            <span
+                              className={`text-[10px] px-2.5 py-0.5 rounded-full border font-zain-bold pt-0.5 backdrop-blur-md transition-all ${viewMode === "grid" ? "self-start" : ""}`}
+                              style={{
+                                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}35`,
+                                color: currentTheme.mode === "apple_dark" ? "#8E8E93" : currentTheme.accent,
+                                backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}12`,
+                              }}
+                            >
+                              {note.category}
+                            </span>
+                          </div>
+
+                          {/* Lock Content Mask */}
+                          {note.isLocked ? (
+                            <div className="flex flex-col items-center justify-center opacity-40 py-4">
+                              <Lock
+                                className="w-5 h-5 mb-1.5"
+                                style={{ color: currentTheme.text }}
+                              />
+                              <p
+                                className="text-xs font-zain-reg text-center"
+                                style={{ color: currentTheme.text }}
+                              >
+                                حكاية مغلقة بأمر الكاتب
+                              </p>
+                            </div>
+                          ) : (
+                            <p
+                              className={`text-sm leading-relaxed font-zain-reg mb-3 ${viewMode === "grid" ? "line-clamp-3" : "line-clamp-2"}`}
+                              style={{ color: currentTheme.text, opacity: 0.8 }}
+                            >
+                              {note.preview}
+                            </p>
+                          )}
                         </div>
 
-                        {/* Lock Content Mask */}
-                        {note.isLocked ? (
-                          <div className="flex flex-col items-center justify-center opacity-40 py-4">
-                            <Lock
-                              className="w-5 h-5 mb-1.5"
-                              style={{ color: currentTheme.text }}
-                            />
-                            <p
-                              className="text-xs font-zain-reg text-center"
-                              style={{ color: currentTheme.text }}
-                            >
-                              حكاية مغلقة بأمر الكاتب
-                            </p>
-                          </div>
-                        ) : (
-                          <p
-                            className={`text-sm leading-relaxed font-zain-reg mb-3 ${viewMode === "grid" ? "line-clamp-3" : "line-clamp-2"}`}
-                            style={{ color: currentTheme.text, opacity: 0.8 }}
-                          >
-                            {note.preview}
-                          </p>
-                        )}
-                      </div>
-
-                      <div
-                        className={`flex justify-between items-center border-t pt-2 ${viewMode === "grid" ? "mt-4" : "mt-1"}`}
-                        style={{ borderColor: currentTheme.border }}
-                      >
-                        <span
-                          className="text-xs font-zain-reg"
-                          style={{ color: currentTheme.secondary }}
+                        <div
+                          className={`flex justify-between items-center border-t pt-2 ${viewMode === "grid" ? "mt-4" : "mt-1"}`}
+                          style={{ borderColor: currentTheme.border }}
                         >
-                          {note.date}
-                        </span>
-                        {viewMode === "list" &&
-                          !isSelectionMode &&
-                          !note.isLocked && (
-                            <button style={{ color: currentTheme.accent }}>
-                              <PenTool className="w-3 h-3 opacity-60" />
-                            </button>
-                          )}
-                        {note.isLocked && (
-                          <Lock
-                            className="w-3 h-3 opacity-60"
+                          <span
+                            className="text-xs font-zain-reg"
                             style={{ color: currentTheme.secondary }}
-                          />
-                        )}
+                          >
+                            {note.date}
+                          </span>
+                          <div
+                            className="flex items-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {!isSelectionMode && !note.isLocked && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditor(note);
+                                }}
+                                className="w-7 h-7 rounded-full flex items-center justify-center opacity-70 hover:opacity-100 hover:bg-black/5 active:scale-95 transition-all cursor-pointer"
+                                style={{ color: currentTheme.accent }}
+                                title="تعديل الحكاية"
+                              >
+                                <PenTool className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {note.isLocked && isSelectionMode && (
+                              <Lock
+                                className="w-3 h-3 opacity-60"
+                                style={{ color: currentTheme.secondary }}
+                              />
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div
-                className={`text-center py-20 opacity-40 flex flex-col items-center ${viewMode === "grid" ? "col-span-2" : ""}`}
-              >
-                <BookOpen
-                  className="w-10 h-10 mb-4"
-                  style={{ color: currentTheme.accent }}
-                  strokeWidth={1}
-                />
-                <p
-                  className="text-lg font-zain-reg"
-                  style={{ color: currentTheme.text }}
+                  );
+                })
+              ) : (
+                <div
+                  className={`text-center py-20 opacity-40 flex flex-col items-center ${viewMode === "grid" ? "col-span-full" : ""}`}
                 >
-                  لا توجد حكايات مطابقة...
-                </p>
-              </div>
-            )}
+                  <BookOpen
+                    className="w-10 h-10 mb-4"
+                    style={{ color: currentTheme.accent }}
+                    strokeWidth={1}
+                  />
+                  <p
+                    className="text-lg font-zain-reg"
+                    style={{ color: currentTheme.text }}
+                  >
+                    لا توجد حكايات مطابقة...
+                  </p>
+                </div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
