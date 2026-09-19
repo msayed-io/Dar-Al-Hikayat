@@ -43,6 +43,8 @@ import {
 import { useApp, Note } from "../contexts/AppContext";
 import { StorageService } from "../lib/storage-service";
 import { playStoryDissolve } from "../lib/story-dissolve-engine";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { downloadBlob } from "../lib/pdf-export";
 
 const HomePage: React.FC = () => {
   const {
@@ -56,6 +58,7 @@ const HomePage: React.FC = () => {
     openPrayer,
     isSelectionMode,
     setIsSelectionMode,
+    reloadNotes,
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -114,22 +117,36 @@ const HomePage: React.FC = () => {
     }
   }, [isSearchOpen]);
 
-  // --- Powerful Filtering Logic ---
-  const filteredNotes = React.useMemo(() => {
-    const trimmedSearch = searchTerm.trim().toLowerCase();
-    if (!trimmedSearch) {
-      return notes;
+  // --- Powerful Filtering Logic via SQLite FTS5 ---
+  const [ftsResults, setFtsResults] = useState<Note[] | null>(null);
+
+  useEffect(() => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed) {
+      setFtsResults(null);
+      return;
     }
+    let isCancelled = false;
+    const timer = setTimeout(() => {
+      StorageService.searchStories(trimmed).then((results) => {
+        if (!isCancelled) {
+          setFtsResults(results as Note[]);
+        }
+      });
+    }, 120);
 
-    // Split search query into individual words
-    const searchTerms = trimmedSearch.split(/\s+/).filter(Boolean);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
-    return notes.filter((note) => {
-      const noteText = `${note.title.toLowerCase()} ${note.preview.toLowerCase()}`;
-      // The note is a match only if ALL search terms are found within its combined text
-      return searchTerms.every((term) => noteText.includes(term));
-    });
-  }, [notes, searchTerm]);
+  const filteredNotes = React.useMemo(() => {
+    if (ftsResults !== null) {
+      return ftsResults;
+    }
+    return notes;
+  }, [notes, ftsResults]);
 
   // --- Dashboard Statistics Calculation (Instant O(N) over Metadata Integers) ---
   const calculateDashboardStats = () => {
@@ -223,20 +240,19 @@ const HomePage: React.FC = () => {
     processed: 0,
     total: 0,
   });
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelImport = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
 
   const handleExportBackup = async () => {
     try {
-      const fullList = await StorageService.exportFullBackupStream();
-      const dataStr = JSON.stringify(fullList, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
+      const blob = await StorageService.exportFullBackupBlob();
       const exportFileDefaultName = `دَارُ_الحِكَايَاتِ_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
-
-      const linkElement = document.createElement("a");
-      linkElement.setAttribute("href", url);
-      linkElement.setAttribute("download", exportFileDefaultName);
-      linkElement.click();
-      URL.revokeObjectURL(url);
+      await downloadBlob(blob, exportFileDefaultName);
       setShowBackupUI(false);
     } catch (err) {
       console.error("Export backup error:", err);
@@ -260,21 +276,35 @@ const HomePage: React.FC = () => {
 
         if (Array.isArray(parsedNotes)) {
           const validNotes = parsedNotes.filter(
-            (n) => n.title && typeof n.content === "string",
+            (n) => n && (n.title || typeof n.content === "string")
           );
           if (validNotes.length > 0) {
+            abortControllerRef.current = new AbortController();
             setImportStatus({ isImporting: true, processed: 0, total: validNotes.length });
-            
-            const importedMetas = await StorageService.importBatch(validNotes, (processed, total) => {
-              setImportStatus({ isImporting: true, processed, total });
-            });
 
-            importNotesBulk(importedMetas as Note[]);
+            const result = await StorageService.importBatch(
+              validNotes,
+              (processed, total) => {
+                setImportStatus({ isImporting: true, processed, total });
+              },
+              abortControllerRef.current.signal
+            );
+
+            await reloadNotes();
             setImportStatus({ isImporting: false, processed: 0, total: 0 });
-            alert(`تم استعادة ${validNotes.length} حكاية بنجاح إلى المكتبة.`);
+
+            if (result.failed.length > 0) {
+              alert(`تم استيراد ${result.imported.length} حكاية — فشل ${result.failed.length}`);
+            } else if (result.isCancelled) {
+              alert(`تم إيقاف الاستيراد. تم استيراد ${result.imported.length} حكاية.`);
+            } else {
+              alert(`تم استعادة ${result.imported.length} حكاية بنجاح إلى المكتبة.`);
+            }
           } else {
             alert("الملف لا يحتوي على حكايات صالحة.");
           }
+        } else {
+          alert("صيغة الملف غير صالحة.");
         }
       } catch (error) {
         console.error(error);

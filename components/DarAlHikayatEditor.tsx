@@ -1266,7 +1266,7 @@ const DarAlHikayatMaster: React.FC = () => {
     setShowTOC(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const endTime = new Date();
     setSessionEndTime(endTime);
     setSessionDuration(calculateDuration(sessionStartTime, endTime));
@@ -1276,7 +1276,7 @@ const DarAlHikayatMaster: React.FC = () => {
           .join(CHAPTER_SEPARATOR)
       : content;
     if (onSave) {
-      onSave({
+      const success = await onSave({
         id: noteId,
         title: title,
         content: finalContent,
@@ -1290,6 +1290,9 @@ const DarAlHikayatMaster: React.FC = () => {
         isLocked: noteIsLocked,
         password: notePassword,
       });
+      if (!success) {
+        return;
+      }
     }
     setIsSavedMode(true);
     setShowUI(true);

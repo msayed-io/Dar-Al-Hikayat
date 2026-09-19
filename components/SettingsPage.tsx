@@ -50,6 +50,9 @@ import {
   type ManagedApiKey,
 } from "../lib/api-key-repository";
 
+import { downloadBlob } from "../lib/pdf-export";
+import { StorageService } from "../lib/storage-service";
+
 const SettingsPage: React.FC = () => {
   const {
     currentTheme,
@@ -329,19 +332,19 @@ const SettingsPage: React.FC = () => {
     [prayerState.method, updatePrayerState]
   );
 
-  // تصدير نسخة احتياطية من الحكايات
-  const handleExportBackup = () => {
-    const dataStr = JSON.stringify(notes, null, 2);
-    const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `دار_الحكايات_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
-
-    const linkElement = document.createElement("a");
-    linkElement.setAttribute("href", dataUri);
-    linkElement.setAttribute("download", exportFileDefaultName);
-    linkElement.click();
+  // تصدير نسخة احتياطية من الحكايات عبر downloadBlob الداعم للأندرويد
+  const handleExportBackup = async () => {
+    try {
+      const blob = await StorageService.exportFullBackupBlob();
+      const exportFileDefaultName = `دار_الحكايات_نسخة_احتياطية_${new Date().toISOString().slice(0, 10)}.json`;
+      await downloadBlob(blob, exportFileDefaultName);
+    } catch (err) {
+      console.error("Export backup error:", err);
+      alert("حدث خطأ أثناء تصدير النسخة الاحتياطية.");
+    }
   };
 
-  // استيراد نسخة احتياطية بشكل فائق السرعة وبدون تجميد
+  // استيراد نسخة احتياطية عبر StorageService.importBatch مع دعم التظليل والإلغاء
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -349,78 +352,51 @@ const SettingsPage: React.FC = () => {
     setIsImporting(true);
     setImportStatus("جاري معالجة البيانات...");
 
-    // استخدام setTimeout للسماح لواجهة المستخدم بالتحديث قبل البدء بالعملية الثقيلة
-    setTimeout(() => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const content = e.target?.result as string;
-          const parsed = JSON.parse(content);
-          
-          if (Array.isArray(parsed)) {
-            const validNotes = parsed
-              .filter((item: any) => item.title && item.content)
-              .map((item: any) => {
-                // التأكد من وجود الحقول الأساسية وتوليدها إن نقصت
-                const now = new Date();
-                const formattedDate = now.toLocaleDateString("ar-EG", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                });
-                
-                // حساب المعاينة إذا لم تكن موجودة
-                let preview = item.preview;
-                if (!preview) {
-                  const cleanContent = item.content.replace(/<[^>]*>/g, " ").trim();
-                  preview = cleanContent.substring(0, 100) + (cleanContent.length > 100 ? "..." : "");
-                }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+        
+        if (Array.isArray(parsed)) {
+          const validNotes = parsed.filter((item: any) => item && (item.title || item.content));
 
-                return {
-                  id: item.id || Date.now() + Math.random(),
-                  title: item.title,
-                  content: item.content,
-                  preview: preview,
-                  date: item.date || formattedDate,
-                  category: item.category || "حكاية مستوردة",
-                  styles: item.styles || {
-                    fontSize: 18,
-                    fontWeight: 400,
-                    textAlign: "right",
-                    textColor: currentTheme.text,
-                    paperStyleIndex: 0,
-                  },
-                  isLocked: !!item.isLocked,
-                  password: item.password || "",
-                };
-              });
+          if (validNotes.length > 0) {
+            const result = await StorageService.importBatch(validNotes, (processed, total) => {
+              setImportStatus(`جاري الاستيراد... (${processed}/${total})`);
+            });
 
-            if (validNotes.length > 0) {
-              importNotesBulk(validNotes);
-              setImportStatus(`تم استرجاع ${validNotes.length} حكاية بنجاح ✓`);
+            if (result.imported.length > 0) {
+              importNotesBulk(result.imported as any);
+            }
+
+            if (result.failed.length > 0) {
+              setImportStatus(`تم استيراد ${result.imported.length} حكاية — فشل ${result.failed.length}`);
             } else {
-              setImportStatus("لم يتم العثور على حكايات صالحة في الملف");
+              setImportStatus(`تم استرجاع ${result.imported.length} حكاية بنجاح ✓`);
             }
           } else {
-            setImportStatus("صيغة الملف غير صالحة (يجب أن يكون مصفوفة)");
+            setImportStatus("لم يتم العثور على حكايات صالحة في الملف");
           }
-        } catch (err) {
-          console.error("Import error:", err);
-          setImportStatus("تعذر قراءة أو تحليل ملف النسخة الاحتياطية");
-        } finally {
-          setIsImporting(false);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-          setTimeout(() => setImportStatus(null), 5000);
+        } else {
+          setImportStatus("صيغة الملف غير صالحة (يجب أن يكون مصفوفة)");
         }
-      };
-      
-      reader.onerror = () => {
-        setImportStatus("حدث خطأ أثناء قراءة الملف");
+      } catch (err) {
+        console.error("Import error:", err);
+        setImportStatus("تعذر قراءة أو تحليل ملف النسخة الاحتياطية");
+      } finally {
         setIsImporting(false);
-      };
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setTimeout(() => setImportStatus(null), 6000);
+      }
+    };
+    
+    reader.onerror = () => {
+      setImportStatus("حدث خطأ أثناء قراءة الملف");
+      setIsImporting(false);
+    };
 
-      reader.readAsText(file);
-    }, 100);
+    reader.readAsText(file);
   };
 
   // المدن المفلترة

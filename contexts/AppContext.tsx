@@ -18,7 +18,7 @@ import {
   getLastSavedLocation,
   saveSavedLocation,
 } from "../lib/prayer-alarms";
-import { StorageService } from "../lib/storage-service";
+import { StorageService, NoteMetadata } from "../lib/storage-service";
 
 export interface NoteStyles {
   fontSize: number;
@@ -38,6 +38,10 @@ export interface Note {
   styles: NoteStyles;
   isLocked?: boolean;
   password?: string;
+  word_count?: number;
+  char_count?: number;
+  updated_at?: number;
+  created_at?: number;
 }
 
 export interface NoteSaveData {
@@ -45,6 +49,8 @@ export interface NoteSaveData {
   title: string;
   content: string;
   styles: NoteStyles;
+  category?: string;
+  date?: string;
   isLocked?: boolean;
   password?: string;
 }
@@ -121,11 +127,12 @@ interface AppContextType {
   isLocationSheetOpen: boolean;
   openLocationSheet: () => void;
   closeLocationSheet: () => void;
-  saveNote: (noteData: NoteSaveData) => void;
+  saveNote: (noteData: NoteSaveData) => Promise<boolean>;
   importNotesBulk: (newNotes: Note[]) => void;
   deleteNotes: (idsToDelete: number[]) => void;
   toggleTheme: (mode: ThemeMode) => void;
   clearLocationCache: () => void;
+  reloadNotes: () => Promise<void>;
 }
 
 export type { PrayerLocation, PrayerState, CalculationMethodId } from "../lib/prayer-config";
@@ -146,6 +153,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const [notes, setNotes] = useState<Note[]>([]);
   const [isNotesLoaded, setIsNotesLoaded] = useState(false);
+
+  const reloadNotes = async () => {
+    const loadedMeta = await StorageService.loadNotesMetadata();
+    setNotes(loadedMeta as Note[]);
+  };
 
   // Initialize Notes Metadata from StorageService
   useEffect(() => {
@@ -168,7 +180,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     return "royal_classic";
   });
 
-  // تهيئة حالة الصلاة: الاعتماد الدقيق على الطبقة 2 (آخر موقع تم استشعاره بنجاح وحفظه من الـ GPS)
+  // تهيئة حالة الصلاة: الاعتماد الدقيق على الطبقة 2
   const [prayerState, setPrayerState] = useState<PrayerState>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -190,40 +202,51 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const currentTheme = themes[themeMode];
 
-  // Remove global saveNotes effect (now handled per single story)
+  const saveNote = async (noteData: NoteSaveData): Promise<boolean> => {
+    try {
+      const savedMeta = await StorageService.saveStory({
+        id: noteData.id,
+        title: noteData.title,
+        content: noteData.content,
+        category: noteData.category || selectedNote?.category,
+        date: noteData.date || selectedNote?.date,
+        styles: noteData.styles,
+        isLocked: noteData.isLocked,
+        password: noteData.password,
+      });
 
-  const saveNote = (noteData: NoteSaveData) => {
-    StorageService.saveStory({
-      id: noteData.id,
-      title: noteData.title,
-      content: noteData.content,
-      styles: noteData.styles,
-      isLocked: noteData.isLocked,
-      password: noteData.password,
-    }).then((savedMeta) => {
+      const fullNote: Note = {
+        ...savedMeta,
+        content: noteData.content,
+      };
+
       setNotes((prevNotes) => {
-        const existingIndex = prevNotes.findIndex((n) => n.id === savedMeta.id);
+        const existingIndex = prevNotes.findIndex((n) => n.id === fullNote.id);
         if (existingIndex >= 0) {
           const updated = [...prevNotes];
-          updated[existingIndex] = savedMeta as Note;
+          updated[existingIndex] = fullNote;
           return updated;
         } else {
-          return [savedMeta as Note, ...prevNotes];
+          return [fullNote, ...prevNotes];
         }
       });
+
       if (currentView === "editor") {
-        setSelectedNote(savedMeta as Note);
+        setSelectedNote(fullNote);
       }
-    }).catch((err) => {
+      return true;
+    } catch (err) {
       console.error("Failed to save story:", err);
-    });
+      alert("حدث خطأ أثناء حفظ الحكاية. يرجى المحاولة مرة أخرى.");
+      return false;
+    }
   };
 
   const importNotesBulk = (newNotes: Note[]) => {
-    StorageService.importBatch(newNotes).then((importedMetas) => {
+    StorageService.importBatch(newNotes).then((result) => {
       setNotes((prevNotes) => {
         const existingIds = new Set(prevNotes.map((n) => n.id));
-        const filteredNew = importedMetas.filter((n) => !existingIds.has(n.id));
+        const filteredNew = result.imported.filter((n) => !existingIds.has(n.id));
         return [...(filteredNew as Note[]), ...prevNotes];
       });
     }).catch((err) => {
@@ -318,7 +341,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     let appListenerHandle: { remove: () => Promise<void> } | null = null;
 
     const runSilentResumeUpdate = async () => {
-      // فقط إذا كان الموقع تم تحديده تلقائياً مسبقاً
       if (!prayerState.location?.isAutoDetected) return;
       try {
         const freshLocation = await performSilentResumeLocationRefresh();
@@ -326,7 +348,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
           updatePrayerState({ location: freshLocation });
         }
       } catch {
-        // بدون إظهار أي خطأ للمستخدم إن فشل — لأن لديه أصلاً موقعاً سابقاً معروضاً
+        // بدون إظهار أي خطأ للمستخدم إن فشل
       }
     };
 
@@ -406,8 +428,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setThemeMode(mode);
   };
 
-  // Handled above via StorageService O(1) calls
-
   const value = {
     notes,
     currentView,
@@ -431,6 +451,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     deleteNotes,
     toggleTheme,
     clearLocationCache,
+    reloadNotes,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

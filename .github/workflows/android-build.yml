@@ -42,6 +42,9 @@ jobs:
             bun install
           fi
 
+      - name: Type check with TypeScript
+        run: npx tsc --noEmit
+
       - name: Build web application
         run: bun run build
 

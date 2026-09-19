@@ -29,6 +29,12 @@ export interface NoteSavePayload {
   password?: string;
 }
 
+export interface ImportBatchResult {
+  imported: NoteMetadata[];
+  failed: { id: any; title: string; reason: string }[];
+  isCancelled?: boolean;
+}
+
 // Helpers
 export function computeTextStats(htmlContent: string): { wordCount: number; charCount: number; preview: string } {
   const clean = (htmlContent || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -72,7 +78,7 @@ class StorageServiceManager {
 
         await this.db.open();
         
-        // Create tables
+        // Create tables (no user data in statements; execute is used safely with ; \n separator)
         const createTablesQuery = `
           CREATE TABLE IF NOT EXISTS stories (
             id INTEGER PRIMARY KEY,
@@ -99,7 +105,7 @@ class StorageServiceManager {
         `;
         await this.db.execute(createTablesQuery);
 
-        // Try creating FTS5 table
+        // Try creating FTS5 table inside try/catch
         try {
           await this.db.execute(`
             CREATE VIRTUAL TABLE IF NOT EXISTS stories_fts USING fts5(
@@ -128,8 +134,12 @@ class StorageServiceManager {
     try {
       let isMigrated = false;
       if (this.isNativeSQLite) {
-        const res = await this.db.query("SELECT value FROM app_meta WHERE key = 'migrated_to_sqlite_v3'");
-        isMigrated = res.values && res.values.length > 0 && res.values[0].value === "true";
+        try {
+          const res = await this.db.query("SELECT value FROM app_meta WHERE key = 'migrated_to_sqlite_v3'");
+          isMigrated = res.values && res.values.length > 0 && res.values[0].value === "true";
+        } catch (e) {
+          isMigrated = false;
+        }
       } else {
         const val = await appMetaStore.getItem<string>("migrated_to_sqlite_v3");
         isMigrated = val === "true";
@@ -151,17 +161,21 @@ class StorageServiceManager {
 
       if (Array.isArray(legacyNotes) && legacyNotes.length > 0) {
         console.log(`Migrating ${legacyNotes.length} legacy stories to split storage...`);
-        await this.importBatch(legacyNotes, () => {});
+        const result = await this.importBatch(legacyNotes);
+        console.log(`Migration result: ${result.imported.length} succeeded, ${result.failed.length} failed.`);
       }
-
-      if (this.isNativeSQLite) {
-        await this.db.execute("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('migrated_to_sqlite_v3', 'true');");
-      } else {
-        await appMetaStore.setItem("migrated_to_sqlite_v3", "true");
-      }
-      console.log("Migration completed successfully.");
     } catch (err) {
       console.error("Migration error:", err);
+    } finally {
+      try {
+        if (this.isNativeSQLite) {
+          await this.db.run("INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?);", ["migrated_to_sqlite_v3", "true"]);
+        } else {
+          await appMetaStore.setItem("migrated_to_sqlite_v3", "true");
+        }
+      } catch (err) {
+        console.error("Failed to write migration flag in finally:", err);
+      }
     }
   }
 
@@ -196,6 +210,81 @@ class StorageServiceManager {
     }
   }
 
+  async searchStories(searchTerm: string): Promise<NoteMetadata[]> {
+    await this.init();
+    const cleanTerm = searchTerm.trim();
+    if (!cleanTerm) {
+      return this.loadNotesMetadata();
+    }
+
+    if (this.isNativeSQLite) {
+      try {
+        const safeFtsTerm = cleanTerm.replace(/["*]/g, "");
+        if (safeFtsTerm) {
+          const ftsQuery = `
+            SELECT s.id, s.title, s.preview, s.date, s.category, s.styles, s.is_locked, s.password, s.word_count, s.char_count, s.updated_at, s.created_at
+            FROM stories s
+            JOIN stories_fts fts ON s.id = fts.rowid
+            WHERE stories_fts MATCH ?
+            ORDER BY bm25(stories_fts);
+          `;
+          const res = await this.db.query(ftsQuery, [`"${safeFtsTerm}"*`]);
+          if (res.values && res.values.length > 0) {
+            return res.values.map((row: any) => ({
+              id: row.id,
+              title: row.title,
+              preview: row.preview || "",
+              date: row.date || "",
+              category: row.category || "حكاية",
+              styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
+              isLocked: !!row.is_locked,
+              password: row.password || "",
+              word_count: row.word_count || 0,
+              char_count: row.char_count || 0,
+              updated_at: row.updated_at || Date.now(),
+              created_at: row.created_at || Date.now(),
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("FTS search failed, falling back to LIKE query:", err);
+      }
+
+      // Fallback LIKE query with parameterized values
+      const likeQuery = `
+        SELECT id, title, preview, date, category, styles, is_locked, password, word_count, char_count, updated_at, created_at
+        FROM stories
+        WHERE title LIKE ? OR preview LIKE ?
+        ORDER BY id DESC;
+      `;
+      const term = `%${cleanTerm}%`;
+      const res = await this.db.query(likeQuery, [term, term]);
+      if (!res.values) return [];
+      return res.values.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        preview: row.preview || "",
+        date: row.date || "",
+        category: row.category || "حكاية",
+        styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
+        isLocked: !!row.is_locked,
+        password: row.password || "",
+        word_count: row.word_count || 0,
+        char_count: row.char_count || 0,
+        updated_at: row.updated_at || Date.now(),
+        created_at: row.created_at || Date.now(),
+      }));
+    } else {
+      const all = await this.loadNotesMetadata();
+      const lower = cleanTerm.toLowerCase();
+      return all.filter(
+        (n) =>
+          (n.title && n.title.toLowerCase().includes(lower)) ||
+          (n.preview && n.preview.toLowerCase().includes(lower))
+      );
+    }
+  }
+
   async getStoryBody(storyId: number): Promise<string> {
     await this.init();
     if (this.isNativeSQLite) {
@@ -222,6 +311,14 @@ class StorageServiceManager {
       year: "numeric",
     });
 
+    let existingCreatedAt: number = now;
+    if (!this.isNativeSQLite && payload.id) {
+      const existingMeta = await metaStore.getItem<NoteMetadata>(String(id));
+      if (existingMeta && existingMeta.created_at) {
+        existingCreatedAt = existingMeta.created_at;
+      }
+    }
+
     const metadata: NoteMetadata = {
       id,
       title: payload.title || "بدون عنوان",
@@ -240,32 +337,27 @@ class StorageServiceManager {
       word_count: stats.wordCount,
       char_count: stats.charCount,
       updated_at: now,
-      created_at: payload.id ? undefined : now,
+      created_at: existingCreatedAt,
     };
 
     if (this.isNativeSQLite) {
-      const stylesJson = JSON.stringify(metadata.styles);
-      await this.db.execute(`
-        INSERT OR REPLACE INTO stories (id, title, preview, date, category, styles, is_locked, password, word_count, char_count, updated_at, created_at)
-        VALUES (
-          ${id},
-          '${metadata.title.replace(/'/g, "''")}',
-          '${metadata.preview.replace(/'/g, "''")}',
-          '${metadata.date.replace(/'/g, "''")}',
-          '${metadata.category.replace(/'/g, "''")}',
-          '${stylesJson.replace(/'/g, "''")}',
-          ${metadata.isLocked ? 1 : 0},
-          '${(metadata.password || "").replace(/'/g, "''")}',
-          ${metadata.word_count},
-          ${metadata.char_count},
-          ${now},
-          COALESCE((SELECT created_at FROM stories WHERE id = ${id}), ${now})
-        );
-      `);
-      await this.db.execute(`
-        INSERT OR REPLACE INTO story_bodies (story_id, html)
-        VALUES (${id}, '${payload.content.replace(/'/g, "''")}');
-      `);
+      const stylesJson = typeof metadata.styles === "string" ? metadata.styles : JSON.stringify(metadata.styles);
+      // Strictly parameterized query via executeSet transaction - NO user string interpolation!
+      await this.db.executeSet([
+        {
+          statement: `INSERT OR REPLACE INTO stories (id,title,preview,date,category,styles,is_locked,password,word_count,char_count,updated_at,created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?, COALESCE((SELECT created_at FROM stories WHERE id = ?), ?))`,
+          values: [id, metadata.title, metadata.preview, metadata.date, metadata.category, stylesJson, metadata.isLocked ? 1 : 0, metadata.password || "", metadata.word_count, metadata.char_count, now, id, now]
+        },
+        {
+          statement: `INSERT OR REPLACE INTO story_bodies (story_id, html) VALUES (?,?)`,
+          values: [id, payload.content]
+        }
+      ], true);
+
+      try {
+        await this.db.run(`INSERT OR REPLACE INTO stories_fts (rowid, title, body) VALUES (?,?,?)`, [id, metadata.title, payload.content]);
+      } catch (ftsErr) {}
     } else {
       await metaStore.setItem(String(id), metadata);
       await bodyStore.setItem(String(id), payload.content);
@@ -279,9 +371,14 @@ class StorageServiceManager {
     if (ids.length === 0) return;
 
     if (this.isNativeSQLite) {
-      const idList = ids.join(",");
-      await this.db.execute(`DELETE FROM stories WHERE id IN (${idList});`);
-      await this.db.execute(`DELETE FROM story_bodies WHERE story_id IN (${idList});`);
+      const placeholders = ids.map(() => "?").join(",");
+      await this.db.executeSet([
+        { statement: `DELETE FROM stories WHERE id IN (${placeholders})`, values: ids },
+        { statement: `DELETE FROM story_bodies WHERE story_id IN (${placeholders})`, values: ids },
+      ], true);
+      try {
+        await this.db.run(`DELETE FROM stories_fts WHERE rowid IN (${placeholders})`, ids);
+      } catch (e) {}
     } else {
       for (const id of ids) {
         await metaStore.removeItem(String(id));
@@ -292,22 +389,28 @@ class StorageServiceManager {
 
   async importBatch(
     rawStories: any[],
-    onProgress?: (processed: number, total: number) => void
-  ): Promise<NoteMetadata[]> {
+    onProgress?: (processed: number, total: number) => void,
+    abortSignal?: AbortSignal
+  ): Promise<ImportBatchResult> {
     await this.init();
     const total = rawStories.length;
     const importedMetadata: NoteMetadata[] = [];
+    const failed: { id: any; title: string; reason: string }[] = [];
     const chunkSize = 25;
 
     for (let i = 0; i < total; i += chunkSize) {
+      if (abortSignal?.aborted) {
+        break;
+      }
       const chunk = rawStories.slice(i, i + chunkSize);
-      
-      for (const item of chunk) {
-        if (!item.title && !item.content) continue;
-        const now = Date.now();
-        const id = item.id || now + Math.floor(Math.random() * 10000);
-        const stats = computeTextStats(item.content || "");
 
+      for (const item of chunk) {
+        if (abortSignal?.aborted) break;
+        if (!item || (!item.title && !item.content)) continue;
+
+        const now = Date.now();
+        const id = item.id || now + Math.floor(Math.random() * 100000);
+        const stats = computeTextStats(item.content || "");
         const formattedDate = item.date || new Date().toLocaleDateString("ar-EG", {
           day: "numeric",
           month: "long",
@@ -332,37 +435,52 @@ class StorageServiceManager {
           word_count: item.word_count || stats.wordCount,
           char_count: item.char_count || stats.charCount,
           updated_at: now,
-          created_at: now,
+          created_at: item.created_at || now,
         };
 
-        if (this.isNativeSQLite) {
-          const stylesJson = JSON.stringify(meta.styles);
-          const safeContent = (item.content || "").replace(/'/g, "''");
-          await this.db.execute(`
-            INSERT OR REPLACE INTO stories (id, title, preview, date, category, styles, is_locked, password, word_count, char_count, updated_at, created_at)
-            VALUES (
-              ${id},
-              '${meta.title.replace(/'/g, "''")}',
-              '${meta.preview.replace(/'/g, "''")}',
-              '${meta.date.replace(/'/g, "''")}',
-              '${meta.category.replace(/'/g, "''")}',
-              '${stylesJson.replace(/'/g, "''")}',
-              ${meta.isLocked ? 1 : 0},
-              '${(meta.password || "").replace(/'/g, "''")}',
-              ${meta.word_count},
-              ${meta.char_count},
-              ${now},
-              ${now}
-            );
-            INSERT OR REPLACE INTO story_bodies (story_id, html)
-            VALUES (${id}, '${safeContent}');
-          `);
-        } else {
-          await metaStore.setItem(String(id), meta);
-          await bodyStore.setItem(String(id), item.content || "");
+        // Retry mechanism: try 2 attempts per story
+        let success = false;
+        let lastError = "";
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            if (this.isNativeSQLite) {
+              const stylesJson = typeof meta.styles === "string" ? meta.styles : JSON.stringify(meta.styles);
+              await this.db.executeSet([
+                {
+                  statement: `INSERT OR REPLACE INTO stories (id,title,preview,date,category,styles,is_locked,password,word_count,char_count,updated_at,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?, COALESCE((SELECT created_at FROM stories WHERE id = ?), ?))`,
+                  values: [id, meta.title, meta.preview, meta.date, meta.category, stylesJson, meta.isLocked ? 1 : 0, meta.password || "", meta.word_count, meta.char_count, now, id, meta.created_at]
+                },
+                {
+                  statement: `INSERT OR REPLACE INTO story_bodies (story_id, html) VALUES (?,?)`,
+                  values: [id, item.content || ""]
+                }
+              ], true);
+
+              try {
+                await this.db.run(`INSERT OR REPLACE INTO stories_fts (rowid, title, body) VALUES (?,?,?)`, [id, meta.title, item.content || ""]);
+              } catch (ftsErr) {}
+            } else {
+              await metaStore.setItem(String(id), meta);
+              await bodyStore.setItem(String(id), item.content || "");
+            }
+            success = true;
+            break;
+          } catch (err: any) {
+            lastError = err?.message || String(err);
+          }
         }
 
-        importedMetadata.push(meta);
+        if (success) {
+          importedMetadata.push(meta);
+        } else {
+          failed.push({
+            id,
+            title: item.title || "بدون عنوان",
+            reason: lastError || "فشل الكتابة في قاعدة البيانات",
+          });
+        }
       }
 
       if (onProgress) {
@@ -373,7 +491,11 @@ class StorageServiceManager {
       await new Promise((r) => setTimeout(r, 0));
     }
 
-    return importedMetadata;
+    return {
+      imported: importedMetadata,
+      failed,
+      isCancelled: !!abortSignal?.aborted,
+    };
   }
 
   async exportFullBackupStream(): Promise<any[]> {
@@ -390,6 +512,46 @@ class StorageServiceManager {
     }
 
     return fullList;
+  }
+
+  async exportFullBackupBlob(): Promise<Blob> {
+    await this.init();
+    const metadataList = await this.loadNotesMetadata();
+    const chunks: string[] = ["[\n"];
+
+    for (let i = 0; i < metadataList.length; i++) {
+      const meta = metadataList[i];
+      const html = await this.getStoryBody(meta.id);
+      const item = {
+        id: meta.id,
+        title: meta.title,
+        preview: meta.preview,
+        date: meta.date,
+        category: meta.category,
+        styles: meta.styles,
+        isLocked: meta.isLocked,
+        password: meta.password || "",
+        word_count: meta.word_count || 0,
+        char_count: meta.char_count || 0,
+        updated_at: meta.updated_at,
+        created_at: meta.created_at,
+        content: html,
+      };
+      const itemJson = JSON.stringify(item, null, 2)
+        .split("\n")
+        .map((line) => "  " + line)
+        .join("\n");
+
+      chunks.push(itemJson);
+      if (i < metadataList.length - 1) {
+        chunks.push(",\n");
+      } else {
+        chunks.push("\n");
+      }
+    }
+
+    chunks.push("]");
+    return new Blob(chunks, { type: "application/json;charset=utf-8" });
   }
 }
 
