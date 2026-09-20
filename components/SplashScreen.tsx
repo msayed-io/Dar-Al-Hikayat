@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Feather } from "lucide-react";
+import { useApp } from "../contexts/AppContext";
 
 interface SplashScreenProps {
   onFinish: () => void;
 }
 
 const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
+  const { currentTheme } = useApp();
   const [isMounted, setIsMounted] = useState(false);
   const [shouldUnmount, setShouldUnmount] = useState(false);
 
@@ -14,11 +16,9 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
     const mountTimer = setTimeout(() => setIsMounted(true), 50);
 
     // Sequence:
-    // 0s: Start
-    // 1.5s: Background transition completes
+    // 0s: Start entrance
     // 2.2s: Begin exit sequence (fade out)
     // 2.8s: Remove component
-
     const exitTimer = setTimeout(() => {
       setShouldUnmount(true);
     }, 2200);
@@ -34,14 +34,36 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
     };
   }, [onFinish]);
 
+  // Determine theme-aligned color values
+  const isDark = currentTheme.isDark;
+  const logoSrc = isDark ? "/logo-dark-bg.png" : "/logo-light-bg.png";
+  const titleColor = currentTheme.mode === "apple_dark" ? "#F5F5F5" : currentTheme.accent;
+  const subtitleColor = currentTheme.mode === "apple_dark"
+    ? "#A1A1A6"
+    : (isDark ? "#E2DFD2" : "#2C3E30");
+
+  const glassBg = currentTheme.mode === "apple_dark"
+    ? "linear-gradient(135deg, rgba(28,28,30,0.85), rgba(28,28,30,0.45))"
+    : isDark
+    ? "linear-gradient(135deg, rgba(23,31,33,0.85), rgba(23,31,33,0.45))"
+    : "linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0.25))";
+
+  const glassBorder = currentTheme.mode === "apple_dark"
+    ? "rgba(255, 255, 255, 0.12)"
+    : `${currentTheme.accent}40`;
+
+  const glassShadow = isDark
+    ? "0 20px 50px -12px rgba(0, 0, 0, 0.6)"
+    : "0 20px 50px -12px rgba(167, 170, 99, 0.25)";
+
   return (
     <div
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden transition-all duration-[1500ms] ease-in-out
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden transition-all duration-[1000ms] ease-in-out
         ${shouldUnmount ? "opacity-0 pointer-events-none" : "opacity-100"}
       `}
       dir="rtl"
       style={{
-        backgroundColor: isMounted ? "#F4F1EA" : "#0F1617", // Transition from Deep Olive to Porcelain
+        backgroundColor: currentTheme.bg,
       }}
     >
       <style>{`
@@ -102,25 +124,27 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
         <div
           className={`
             relative w-28 h-28 rounded-3xl flex items-center justify-center
-            backdrop-blur-xl border border-[#A7AA63]/40 shadow-2xl
+            backdrop-blur-xl border shadow-2xl
             overflow-hidden animate-entrance-3d group
             transition-all duration-1000
           `}
           style={{
-            background: isMounted
-              ? "linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1))"
-              : "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))",
-            boxShadow: isMounted
-              ? "0 20px 50px -12px rgba(167, 170, 99, 0.25)"
-              : "0 20px 50px -12px rgba(0,0,0,0.5)",
+            background: glassBg,
+            borderColor: glassBorder,
+            boxShadow: glassShadow,
           }}
         >
           {/* Shimmer Effect Layer */}
-          <div className="absolute inset-0 z-10 opacity-40 animate-shimmer pointer-events-none bg-gradient-to-r from-transparent via-[#A7AA63]/50 to-transparent w-full h-full" />
+          <div
+            className="absolute inset-0 z-10 opacity-40 animate-shimmer pointer-events-none w-full h-full"
+            style={{
+              background: `linear-gradient(to right, transparent, ${currentTheme.accent}50, transparent)`,
+            }}
+          />
 
           {/* Icon */}
           <img
-            src={isMounted ? "/logo-light-bg.png" : "/logo-dark-bg.png"}
+            src={logoSrc}
             alt="شعار الترحيب"
             className="w-24 h-24 md:w-24 md:h-24 object-contain relative z-20 transition-all duration-1000 drop-shadow-md"
             onError={(e) => {
@@ -131,33 +155,36 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           <Feather
             className="w-16 h-16 drop-shadow-md relative z-20 transition-colors duration-1000 hidden"
             strokeWidth={1.2}
-            style={{ color: "#A7AA63", display: "none" }}
+            style={{ color: currentTheme.accent, display: "none" }}
           />
 
           {/* Internal Glow */}
-          <div className="absolute inset-0 rounded-3xl opacity-30 bg-[#A7AA63]/10 mix-blend-overlay"></div>
+          <div
+            className="absolute inset-0 rounded-3xl opacity-30 mix-blend-overlay"
+            style={{ backgroundColor: `${currentTheme.accent}15` }}
+          />
         </div>
       </div>
 
       {/* --- Text Container --- */}
       <div className="text-center animate-blur-reveal flex flex-col items-center">
-        {/* Title matches the Header style perfectly now */}
+        {/* Title */}
         <h1
           className="text-5xl font-zain-xbold tracking-wide mb-3 transition-colors duration-1000 drop-shadow-sm"
-          style={{ color: "#A7AA63" }}
+          style={{ color: titleColor }}
         >
           دَارُ الحِكَايَاتِ
         </h1>
 
-        <div className="h-px w-16 bg-[#A7AA63]/40 mb-3"></div>
+        <div
+          className="h-px w-16 mb-3 transition-colors duration-1000"
+          style={{ backgroundColor: `${currentTheme.accent}40` }}
+        />
 
-        {/* Subtitle with better contrast and matching font */}
+        {/* Subtitle with matching font and theme contrast */}
         <p
           className="text-lg font-zain-reg tracking-[0.1em] transition-colors duration-1000"
-          style={{
-            // Dark Olive in light mode (very visible), Cream in dark mode (very visible)
-            color: isMounted ? "#2C3E30" : "#EAE6D2",
-          }}
+          style={{ color: subtitleColor }}
         >
           للكاتبة رحمه السيد موافي
         </p>

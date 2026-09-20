@@ -243,24 +243,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const importNotesBulk = (newNotes: Note[]) => {
-    StorageService.importBatch(newNotes).then((result) => {
-      setNotes((prevNotes) => {
-        const existingIds = new Set(prevNotes.map((n) => n.id));
-        const filteredNew = result.imported.filter((n) => !existingIds.has(n.id));
-        return [...(filteredNew as Note[]), ...prevNotes];
-      });
-    }).catch((err) => {
-      console.error("Failed to import notes bulk:", err);
+    setNotes((prevNotes) => {
+      const map = new Map(prevNotes.map((n) => [n.id, n]));
+      for (const note of newNotes) {
+        map.set(note.id, { ...(map.get(note.id) || {}), ...note });
+      }
+      return Array.from(map.values()).sort((a, b) => (b.id || 0) - (a.id || 0));
     });
   };
 
   const deleteNotes = (idsToDelete: number[]) => {
-    StorageService.deleteStories(idsToDelete).then(() => {
-      setNotes((prevNotes) =>
-        prevNotes.filter((note) => !idsToDelete.includes(note.id))
-      );
-    }).catch((err) => {
+    if (idsToDelete.length === 0) return;
+    let prevList: Note[] = [];
+    setNotes((prevNotes) => {
+      prevList = prevNotes;
+      return prevNotes.filter((note) => !idsToDelete.includes(note.id));
+    });
+
+    StorageService.deleteStories(idsToDelete).catch((err) => {
       console.error("Failed to delete stories:", err);
+      setNotes(prevList);
+      alert("حدث خطأ أثناء حذف الحكايات من قاعدة البيانات.");
     });
   };
 

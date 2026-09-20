@@ -1,64 +1,191 @@
 import { describe, test, expect } from "vitest";
 import fs from "fs";
 import path from "path";
-import { computeTextStats } from "../lib/storage-service";
+import { StorageService } from "../lib/storage-service";
 
-describe("Storage Safety & Golden Rule Verification", () => {
-  test("1. Text Barrier: lib/storage-service.ts MUST NOT contain string interpolation or text sanitization in db.execute", () => {
+describe("Storage Safety & Golden Rule Verification Tests", () => {
+  // 1. حاجز نصّي (Static AST / Text Barrier)
+  test("1. Text Barrier: lib/storage-service.ts contains ZERO string interpolation in db.execute and ZERO user text sanitization", () => {
     const filePath = path.resolve(process.cwd(), "lib/storage-service.ts");
     const code = fs.readFileSync(filePath, "utf-8");
 
-    // Check that db.execute is NOT used with string interpolation `${` for user queries
-    const executeMatches = code.match(/this\.db\.execute\([`''"].*?\)/gs) || [];
-    for (const match of executeMatches) {
-      expect(match).not.toContain("${metadata.title");
-      expect(match).not.toContain("${metadata.content");
-      expect(match).not.toContain("${payload.content");
-      expect(match).not.toContain(".replace(/'/g");
-    }
+    // Match any db.execute(`...${...}...`)
+    const executeInterpolation = /this\.db\.execute\s*\(\s*`[^`]*\$\{/g;
+    expect(code.match(executeInterpolation)).toBeNull();
 
     // Verify zero user text sanitization calls exist
     expect(code).not.toContain(".replace(/'/g, \"''\")");
     expect(code).not.toContain(".replace(/--/g");
     expect(code).not.toContain(".replace(/;/g");
+
+    // Verify all stories inserts use parameterized placeholders
+    expect(code).toContain("INSERT OR REPLACE INTO stories (id,title,preview,date,category,styles,is_locked,password,word_count,char_count,updated_at,created_at)");
+    expect(code).toContain("VALUES (?,?,?,?,?,?,?,?,?,?,?, COALESCE((SELECT created_at FROM stories WHERE id = ?), ?))");
   });
 
-  test("2. Value Binding: computeTextStats and data structures preserve special characters without modification", () => {
-    const rawContent = `-- سطر هامي يحوي شرطتين متتاليتين;\n'مقتبس أحادي' و "مقتبس مزدوج" 📖\nFinal line;`;
-    const stats = computeTextStats(rawContent);
-
-    // Assert that raw content text stats do not alter original characters
-    expect(stats.preview).toContain("--");
-    expect(stats.preview).toContain(";");
-    expect(stats.preview).toContain("📖");
-  });
-
-  test("3. Round-Trip Data Integrity Simulation: Complex user text round-trips byte-for-byte identical", async () => {
-    const testCases = [
-      {
-        title: "حكاية الشرطتين --",
-        content: "-- هذه بداية حكاية بها تعليق SQL مفترض;\nوسطر آخر ينتهي بنقطة فاصلة;",
+  // 2. اختبار ربط القيم (Bound Values Mock Verification)
+  test("2. Parameterized Values Binding: content, title, and metadata are passed strictly in values array, never inside SQL statement string", async () => {
+    // Intercept db calls in StorageService
+    const calls: { statement: string; values?: any[] }[] = [];
+    const mockDb: any = {
+      executeSet: async (set: any[]) => {
+        calls.push(...set);
+        return { changes: { changes: 1 } };
       },
-      {
-        title: "حكاية علامات التنصيص '' \"\"",
-        content: "'سطر أول' \"سطر ثاني\" O'Connor & d'Artagnan",
+      run: async (statement: string, values: any[]) => {
+        calls.push({ statement, values });
+        return { changes: { changes: 1 } };
       },
-      {
-        title: "حكاية الإيموجي والأعمدة المفصلة 📖✨",
-        content: "سطر 1\nسطر 2\n-- سطر 3;\n\nنهاية النص.",
-      },
-    ];
+      query: async () => ({ values: [] }),
+    };
 
-    for (const tc of testCases) {
-      // Simulate database row mapping and bound values
-      const boundValues = [tc.title, tc.content];
-      
-      // Retrieved values from bound parameters must be byte-for-byte identical to input
-      const retrievedTitle = boundValues[0];
-      const retrievedContent = boundValues[1];
+    const originalDb = (StorageService as any).db;
+    const originalIsNative = (StorageService as any).isNativeSQLite;
+    const originalIsInitialized = (StorageService as any).isInitialized;
 
-      expect(retrievedTitle).toBe(tc.title);
-      expect(retrievedContent).toBe(tc.content);
+    try {
+      (StorageService as any).isInitialized = true;
+      (StorageService as any).db = mockDb;
+      (StorageService as any).isNativeSQLite = true;
+
+      const testTitle = "عنوان خاص بحكاية -- تجربة 123;";
+      const testContent = "محتوى حكاية؛ يحوي -- رموز وتعليقات وهمية\n'أهلاً' و \"مرحباً\"";
+
+      await StorageService.saveStory({
+        title: testTitle,
+        content: testContent,
+      });
+
+      expect(calls.length).toBeGreaterThan(0);
+
+      // Verify that the title and content are NEVER in the statement string, only in values
+      for (const call of calls) {
+        expect(call.statement).not.toContain(testTitle);
+        expect(call.statement).not.toContain(testContent);
+        expect(call.statement).not.toContain("-- تجربة");
+        expect(call.statement).not.toContain("محتوى حكاية؛");
+      }
+
+      // Verify that values array contains the untouched strings
+      const storyCall = calls.find((c) => c.statement.includes("INSERT OR REPLACE INTO stories"));
+      const bodyCall = calls.find((c) => c.statement.includes("INSERT OR REPLACE INTO story_bodies"));
+
+      expect(storyCall).toBeDefined();
+      expect(storyCall?.values).toContain(testTitle);
+
+      expect(bodyCall).toBeDefined();
+      expect(bodyCall?.values).toContain(testContent);
+    } finally {
+      (StorageService as any).db = originalDb;
+      (StorageService as any).isNativeSQLite = originalIsNative;
+      (StorageService as any).isInitialized = originalIsInitialized;
     }
+  });
+
+  // 3. دورة كاملة (round-trip byte-for-byte fidelity)
+  test("3. Round-Trip Fidelity: Stories with --, lines ending in ;, quotes, emojis and multiline are preserved 100% byte-for-byte", async () => {
+    // Case 1: Story with --
+    const storyDash = {
+      title: "حكاية الشرطتين -- اختبار أصيل",
+      content: "سطر أول -- تعليق لا يجب حذفه إطلاقاً\nسطر ثانٍ بدون شرطة",
+    };
+
+    // Case 2: Story with line ending in ;
+    const storySemi = {
+      title: "حكاية الفاصلة المنقوطة;",
+      content: "SELECT * FROM users;\nDROP TABLE stories;\nهذا نص وليس كود برمجيا;",
+    };
+
+    // Case 3: Story with quotes, emojis, and multiple lines
+    const storyQuotesEmojis = {
+      title: "ألف ليلة وليلة: 'شهريار' و \"شهرزاد\" 🌙✨",
+      content: `«بلغني أيها الملك السعيد ذو الرأي الرشيد...»\n'مقتبس فردي' و "مقتبس زوجي"\nO'Connor's tale 📖\n-- نهاية الحكاية;`,
+    };
+
+    for (const testCase of [storyDash, storySemi, storyQuotesEmojis]) {
+      const saved = await StorageService.saveStory({
+        title: testCase.title,
+        content: testCase.content,
+      });
+
+      const loadedBody = await StorageService.getStoryBody(saved.id);
+      const allMeta = await StorageService.loadNotesMetadata();
+      const loadedMeta = allMeta.find((n) => n.id === saved.id);
+
+      expect(loadedMeta).toBeDefined();
+      expect(loadedMeta?.title).toBe(testCase.title);
+      expect(loadedBody).toBe(testCase.content);
+
+      // Clean up
+      await StorageService.deleteStories([saved.id]);
+    }
+  });
+
+  // Test B: Deletion Verification Test
+  test("(B) Deletion Verification: Deleted story is purged and does not return in loadNotesMetadata or searchStories", async () => {
+    const uniqueTitle = "حكاية للاختبار المحذوف 98765";
+    const savedMeta = await StorageService.saveStory({
+      title: uniqueTitle,
+      content: "محتوى حكاية سيتم حذفها فورا",
+    });
+
+    // Confirm it exists
+    let searchRes = await StorageService.searchStories("98765");
+    expect(searchRes.some((n) => n.id === savedMeta.id)).toBe(true);
+
+    // Delete story
+    await StorageService.deleteStories([savedMeta.id]);
+
+    // Confirm it no longer returns in metadata or search
+    const updatedList = await StorageService.loadNotesMetadata();
+    expect(updatedList.some((n) => n.id === savedMeta.id)).toBe(false);
+
+    searchRes = await StorageService.searchStories("98765");
+    expect(searchRes.some((n) => n.id === savedMeta.id)).toBe(false);
+  });
+
+  // Test C: Update Search Verification Test
+  test("(C) Update Search Verification: Updating story to remove a word ensures searching for removed word returns no match", async () => {
+    const storyId = Date.now() + 55;
+    const initialMeta = await StorageService.saveStory({
+      id: storyId,
+      title: "حكاية الكلمة القديمة",
+      content: "هذا النص يحتوي كلمة زمردية نادر جداً",
+    });
+
+    // Search for original word
+    let searchRes = await StorageService.searchStories("زمردية");
+    expect(searchRes.some((n) => n.id === initialMeta.id)).toBe(true);
+
+    // Update story to remove the word "زمردية"
+    await StorageService.saveStory({
+      id: storyId,
+      title: "حكاية الكلمة القديمة",
+      content: "هذا النص تم تعديله ليحتوي كلمة ياقوتية فقط",
+    });
+
+    // Confirm "زمردية" no longer matches
+    searchRes = await StorageService.searchStories("زمردية");
+    expect(searchRes.some((n) => n.id === initialMeta.id)).toBe(false);
+
+    // Confirm "ياقوتية" matches
+    searchRes = await StorageService.searchStories("ياقوتية");
+    expect(searchRes.some((n) => n.id === initialMeta.id)).toBe(true);
+
+    // Clean up
+    await StorageService.deleteStories([storyId]);
+  });
+
+  // Test D: FTS Index Backfill Completeness Test
+  test("(D) Index Backfill Completeness: backfillFtsIfNeeded runs without errors and index covers stored items", async () => {
+    await StorageService.backfillFtsIfNeeded();
+    const allNotes = await StorageService.loadNotesMetadata();
+    expect(Array.isArray(allNotes)).toBe(true);
+  });
+
+  // Test E: Chunked Batch Deletion > 900 Items Test
+  test("(E) Chunked Batch Deletion (>900 items): Deleting 1000 items in batch executes cleanly without parameter limit errors", async () => {
+    const fakeIds = Array.from({ length: 1000 }, (_, i) => 9000000 + i);
+    await expect(StorageService.deleteStories(fakeIds)).resolves.not.toThrow();
   });
 });

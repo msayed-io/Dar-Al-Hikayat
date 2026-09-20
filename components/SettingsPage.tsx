@@ -52,6 +52,7 @@ import {
 
 import { downloadBlob } from "../lib/pdf-export";
 import { StorageService } from "../lib/storage-service";
+import { ImportResultModal, type FailedImportItem } from "./ImportResultModal";
 
 const SettingsPage: React.FC = () => {
   const {
@@ -72,6 +73,14 @@ const SettingsPage: React.FC = () => {
   const [citySearch, setCitySearch] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ processed: 0, total: 0 });
+  const [importResult, setImportResult] = useState<{
+    isOpen: boolean;
+    imported: number;
+    failed: FailedImportItem[];
+    isCancelled?: boolean;
+  }>({ isOpen: false, imported: 0, failed: [] });
+  const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── مفاتيح الاتصال بالمساعد الأدبي (Multi-Key Rotation) ───
@@ -344,13 +353,16 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleCancelImport = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
   // استيراد نسخة احتياطية عبر StorageService.importBatch مع دعم التظليل والإلغاء
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    setIsImporting(true);
-    setImportStatus("جاري معالجة البيانات...");
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -362,38 +374,47 @@ const SettingsPage: React.FC = () => {
           const validNotes = parsed.filter((item: any) => item && (item.title || item.content));
 
           if (validNotes.length > 0) {
-            const result = await StorageService.importBatch(validNotes, (processed, total) => {
-              setImportStatus(`جاري الاستيراد... (${processed}/${total})`);
-            });
+            abortControllerRef.current = new AbortController();
+            setIsImporting(true);
+            setImportProgress({ processed: 0, total: validNotes.length });
+
+            const result = await StorageService.importBatch(
+              validNotes,
+              (processed, total) => {
+                setImportProgress({ processed, total });
+              },
+              abortControllerRef.current.signal
+            );
 
             if (result.imported.length > 0) {
               importNotesBulk(result.imported as any);
             }
 
-            if (result.failed.length > 0) {
-              setImportStatus(`تم استيراد ${result.imported.length} حكاية — فشل ${result.failed.length}`);
-            } else {
-              setImportStatus(`تم استرجاع ${result.imported.length} حكاية بنجاح ✓`);
-            }
+            setIsImporting(false);
+            setImportResult({
+              isOpen: true,
+              imported: result.imported.length,
+              failed: result.failed,
+              isCancelled: result.isCancelled,
+            });
           } else {
-            setImportStatus("لم يتم العثور على حكايات صالحة في الملف");
+            alert("لم يتم العثور على حكايات صالحة في الملف");
           }
         } else {
-          setImportStatus("صيغة الملف غير صالحة (يجب أن يكون مصفوفة)");
+          alert("صيغة الملف غير صالحة (يجب أن يكون مصفوفة)");
         }
       } catch (err) {
         console.error("Import error:", err);
-        setImportStatus("تعذر قراءة أو تحليل ملف النسخة الاحتياطية");
-      } finally {
         setIsImporting(false);
+        alert("تعذر قراءة أو تحليل ملف النسخة الاحتياطية");
+      } finally {
         if (fileInputRef.current) fileInputRef.current.value = "";
-        setTimeout(() => setImportStatus(null), 6000);
       }
     };
     
     reader.onerror = () => {
-      setImportStatus("حدث خطأ أثناء قراءة الملف");
       setIsImporting(false);
+      alert("حدث خطأ أثناء قراءة الملف");
     };
 
     reader.readAsText(file);
@@ -1036,6 +1057,60 @@ const SettingsPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* ─── نافذة تقدم الاستيراد مع زر الإلغاء ─── */}
+      {isImporting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div
+            className="w-full max-w-sm rounded-[28px] border shadow-2xl p-6 flex flex-col items-center text-center gap-4"
+            style={{
+              backgroundColor: currentTheme.bg,
+              borderColor: currentTheme.border,
+              color: currentTheme.text,
+            }}
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center animate-spin"
+              style={{ backgroundColor: `${currentTheme.accent}15`, color: currentTheme.accent }}
+            >
+              <RefreshCw className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-zain-bold text-lg" style={{ color: currentTheme.accent }}>
+                جاري استيراد الحكايات إلى قاعدة البيانات...
+              </h3>
+              <p className="font-zain-reg text-xs opacity-75 mt-1">
+                تمت معالجة {importProgress.processed} من {importProgress.total} حكاية
+              </p>
+            </div>
+            <div className="w-full h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+              <div
+                className="h-full transition-all duration-200 rounded-full"
+                style={{
+                  width: `${Math.round((importProgress.processed / (importProgress.total || 1)) * 100)}%`,
+                  backgroundColor: currentTheme.accent,
+                }}
+              />
+            </div>
+            <button
+              onClick={handleCancelImport}
+              className="mt-2 px-6 py-2 rounded-full font-zain-bold text-xs border border-red-500/30 text-red-500 hover:bg-red-500/10 active:scale-95 transition-all cursor-pointer"
+            >
+              إلغاء الاستيراد
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── مودال نتيجة الاستيراد ─── */}
+      <ImportResultModal
+        isOpen={importResult.isOpen}
+        onClose={() => setImportResult({ isOpen: false, imported: 0, failed: [] })}
+        importedCount={importResult.imported}
+        failedItems={importResult.failed}
+        isCancelled={importResult.isCancelled}
+        theme={currentTheme}
+      />
 
       {/* ─── نافذة اختيار المدينة السلسة (Bottom Sheet) ─── */}
       {showCityPicker && (

@@ -2498,7 +2498,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                 color: "transparent",
                               }}
                             >
-                              جاري التفكير...
+                              جَارٍ التفكير...
                             </span>
                             {m.isAgent && (
                               <span
@@ -2864,7 +2864,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             color: "transparent",
                           }}
                         >
-                          جاري التفكير...
+                          جَارٍ التفكير...
                         </span>
                         {isAgentExecuting && (
                           <span

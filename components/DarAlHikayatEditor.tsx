@@ -317,21 +317,42 @@ const ChapterItem = React.memo(
     containerRef: (el: HTMLDivElement | null) => void;
   }) => {
     const divRef = useRef<HTMLDivElement>(null);
+    const debounceTimerRef = useRef<any>(null);
     const { fontSize, fontWeight, textAlign, textColor, accentColor } = styles;
 
-    // Sync content updates (e.g. undo, redo, or initial load)
+    const flushContent = React.useCallback(() => {
+      if (divRef.current) {
+        ensureBlockIdsInElement(divRef.current);
+        onUpdate(chapter.id, "content", divRef.current.innerHTML);
+      }
+    }, [chapter.id, onUpdate]);
+
+    // Sync content updates only when not currently focused or on external updates
     useEffect(() => {
-      if (divRef.current && divRef.current.innerHTML !== chapter.content) {
+      if (
+        divRef.current &&
+        divRef.current !== document.activeElement &&
+        divRef.current.innerHTML !== chapter.content
+      ) {
         divRef.current.innerHTML = chapter.content;
         ensureBlockIdsInElement(divRef.current);
       }
     }, [chapter.content]);
 
+    useEffect(() => {
+      return () => {
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      };
+    }, []);
+
     const handleInput = () => {
-      if (divRef.current) {
-        ensureBlockIdsInElement(divRef.current);
-        onUpdate(chapter.id, "content", divRef.current.innerHTML);
-      }
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(flushContent, 1000);
+    };
+
+    const handleBlur = () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      flushContent();
     };
 
     const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -366,7 +387,7 @@ const ChapterItem = React.memo(
       }
 
       if (divRef.current) {
-        onUpdate(chapter.id, "content", divRef.current.innerHTML);
+        flushContent();
       }
     };
 
@@ -415,6 +436,7 @@ const ChapterItem = React.memo(
             ref={divRef}
             contentEditable={!isSavedMode}
             onInput={handleInput}
+            onBlur={handleBlur}
             onPaste={handlePaste}
             data-chapter-id={chapter.id}
             data-placeholder="اكتب محتوى الفصل هنا..."
@@ -980,6 +1002,10 @@ const DarAlHikayatMaster: React.FC = () => {
 
       if (!isMounted) return;
 
+      let resolvedNovelMode = false;
+      let resolvedChapters: Chapter[] = [];
+      let resolvedContent = "";
+
       if (rawContent.includes(CHAPTER_SEPARATOR)) {
         const parts = rawContent.split(CHAPTER_SEPARATOR).filter(Boolean);
         const parsedChapters: Chapter[] = parts.map((part, index) => {
@@ -990,24 +1016,26 @@ const DarAlHikayatMaster: React.FC = () => {
             content: chContent || "",
           };
         });
-        setChapters(
+        resolvedChapters =
           parsedChapters.length > 0
             ? parsedChapters
-            : [{ id: Date.now().toString(), title: "الفصل الأول", content: "" }],
-        );
-        setIsNovelMode(true);
-        setContent("");
+            : [{ id: Date.now().toString(), title: "الفصل الأول", content: "" }];
+        resolvedNovelMode = true;
+        resolvedContent = "";
       } else {
-        setContent(rawContent);
-        setChapters([
+        resolvedContent = rawContent;
+        resolvedChapters = [
           {
             id: Date.now().toString(),
             title: "الفصل الأول",
             content: rawContent,
           },
-        ]);
-        setIsNovelMode(false);
+        ];
+        resolvedNovelMode = false;
       }
+      setChapters(resolvedChapters);
+      setIsNovelMode(resolvedNovelMode);
+      setContent(resolvedContent);
       setTitle(selectedNote?.title || "");
       if (selectedNote?.styles) {
         setFontSize(selectedNote.styles.fontSize || 16);
@@ -1050,11 +1078,9 @@ const DarAlHikayatMaster: React.FC = () => {
       setIsSavedMode(initialMode === "read");
       setHistory([
         {
-          content: rawContent,
-          chapters: isNovelMode
-            ? chapters
-            : [{ id: "1", title: "", content: rawContent }],
-          isNovel: isNovelMode,
+          content: resolvedContent,
+          chapters: resolvedChapters,
+          isNovel: resolvedNovelMode,
         },
       ]);
     };
@@ -1270,27 +1296,51 @@ const DarAlHikayatMaster: React.FC = () => {
     const endTime = new Date();
     setSessionEndTime(endTime);
     setSessionDuration(calculateDuration(sessionStartTime, endTime));
-    let finalContent = isNovelMode
-      ? chapters
+
+    // مزامنة فورية ومباشرة من الـ DOM قبل الحفظ لضمان عدم فقدان أي حرف كتبته الكاتبة
+    let currentChapters = chapters;
+    let currentContent = content;
+
+    if (isNovelMode) {
+      currentChapters = chapters.map((c) => {
+        const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+        return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+      });
+      setChapters(currentChapters);
+    } else if (editorRef.current) {
+      currentContent = editorRef.current.innerHTML;
+      setContent(currentContent);
+    }
+
+    const finalContent = isNovelMode
+      ? currentChapters
           .map((c) => `${c.title}${TITLE_CONTENT_SEPARATOR}${c.content}`)
           .join(CHAPTER_SEPARATOR)
-      : content;
+      : currentContent;
+
     if (onSave) {
-      const success = await onSave({
-        id: noteId,
-        title: title,
-        content: finalContent,
-        styles: {
-          fontSize,
-          fontWeight: activeFontWeight,
-          textAlign,
-          textColor,
-          paperStyleIndex: activePaperStyleIndex,
-        },
-        isLocked: noteIsLocked,
-        password: notePassword,
-      });
-      if (!success) {
+      try {
+        const success = await onSave({
+          id: noteId,
+          title: title,
+          content: finalContent,
+          styles: {
+            fontSize,
+            fontWeight: activeFontWeight,
+            textAlign,
+            textColor,
+            paperStyleIndex: activePaperStyleIndex,
+          },
+          isLocked: noteIsLocked,
+          password: notePassword,
+        });
+        if (!success) {
+          alert("تعذر حفظ الحكاية. تم الاحتفاظ بالنص المكتوب دون أي تعديل.");
+          return;
+        }
+      } catch (saveErr) {
+        console.error("Save failed:", saveErr);
+        alert("حدث خطأ غير متوقع أثناء الحفظ. تم الاحتفاظ بكل ما كتبته.");
         return;
       }
     }

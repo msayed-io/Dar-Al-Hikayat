@@ -44,10 +44,61 @@ export function computeTextStats(htmlContent: string): { wordCount: number; char
   return { wordCount, charCount, preview };
 }
 
-// IndexedDB fallback stores using localforage
-const metaStore = localforage.createInstance({ name: "DarAlHikayat", storeName: "stories_meta" });
-const bodyStore = localforage.createInstance({ name: "DarAlHikayat", storeName: "story_bodies" });
-const appMetaStore = localforage.createInstance({ name: "DarAlHikayat", storeName: "app_meta" });
+class MemoryStore {
+  private items = new Map<string, any>();
+  async getItem<T>(key: string): Promise<T | null> {
+    return this.items.has(key) ? (this.items.get(key) as T) : null;
+  }
+  async setItem<T>(key: string, value: T): Promise<T> {
+    this.items.set(key, value);
+    return value;
+  }
+  async removeItem(key: string): Promise<void> {
+    this.items.delete(key);
+  }
+  async keys(): Promise<string[]> {
+    return Array.from(this.items.keys());
+  }
+}
+
+function createSafeStore(storeName: string) {
+  const lf = localforage.createInstance({ name: "DarAlHikayat", storeName });
+  const mem = new MemoryStore();
+  return {
+    async getItem<T>(key: string): Promise<T | null> {
+      try {
+        return await lf.getItem<T>(key);
+      } catch (e) {
+        return await mem.getItem<T>(key);
+      }
+    },
+    async setItem<T>(key: string, value: T): Promise<T> {
+      try {
+        return await lf.setItem<T>(key, value);
+      } catch (e) {
+        return await mem.setItem<T>(key, value);
+      }
+    },
+    async removeItem(key: string): Promise<void> {
+      try {
+        await lf.removeItem(key);
+      } catch (e) {
+        await mem.removeItem(key);
+      }
+    },
+    async keys(): Promise<string[]> {
+      try {
+        return await lf.keys();
+      } catch (e) {
+        return await mem.keys();
+      }
+    },
+  };
+}
+
+const metaStore = createSafeStore("stories_meta");
+const bodyStore = createSafeStore("story_bodies");
+const appMetaStore = createSafeStore("app_meta");
 
 class StorageServiceManager {
   private sqliteConnection: SQLiteConnection | null = null;
@@ -105,11 +156,11 @@ class StorageServiceManager {
         `;
         await this.db.execute(createTablesQuery);
 
-        // Try creating FTS5 table inside try/catch
+        // Try creating FTS5 table inside try/catch (standard FTS5 without content='')
         try {
           await this.db.execute(`
             CREATE VIRTUAL TABLE IF NOT EXISTS stories_fts USING fts5(
-              title, body, content='', tokenize='unicode61 remove_diacritics 2'
+              title, body, tokenize='unicode61 remove_diacritics 2'
             );
           `);
         } catch (e) {
@@ -125,9 +176,29 @@ class StorageServiceManager {
       this.isNativeSQLite = false;
     }
 
-    // Run migration if needed
-    await this.migrateLegacyDataIfNeeded();
     this.isInitialized = true;
+    // Run migration & backfill asynchronously without blocking initial load
+    this.migrateLegacyDataIfNeeded().catch((e) => console.warn("Migration warning:", e));
+    this.backfillFtsIfNeeded().catch((e) => console.warn("FTS backfill warning:", e));
+  }
+
+  public async backfillFtsIfNeeded(): Promise<void> {
+    if (!this.isNativeSQLite || !this.db) return;
+    try {
+      const res = await this.db.query("SELECT value FROM app_meta WHERE key = 'fts_backfilled_v2'");
+      if (res.values && res.values.length > 0 && res.values[0].value === "true") return;
+
+      const all = await this.db.query("SELECT s.id, s.title, sb.html FROM stories s LEFT JOIN story_bodies sb ON s.id = sb.story_id;");
+      if (all.values && all.values.length > 0) {
+        for (const row of all.values) {
+          const plainBody = (row.html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+          await this.db.run("INSERT OR REPLACE INTO stories_fts (rowid, title, body) VALUES (?, ?, ?);", [row.id, row.title || "", plainBody]);
+        }
+      }
+      await this.db.run("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('fts_backfilled_v2', 'true');");
+    } catch (err) {
+      console.warn("FTS backfill error:", err);
+    }
   }
 
   private async migrateLegacyDataIfNeeded(): Promise<void> {
@@ -163,19 +234,22 @@ class StorageServiceManager {
         console.log(`Migrating ${legacyNotes.length} legacy stories to split storage...`);
         const result = await this.importBatch(legacyNotes);
         console.log(`Migration result: ${result.imported.length} succeeded, ${result.failed.length} failed.`);
-      }
-    } catch (err) {
-      console.error("Migration error:", err);
-    } finally {
-      try {
+        if (result.failed.length === 0) {
+          if (this.isNativeSQLite) {
+            await this.db.run("INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?);", ["migrated_to_sqlite_v3", "true"]);
+          } else {
+            await appMetaStore.setItem("migrated_to_sqlite_v3", "true");
+          }
+        }
+      } else {
         if (this.isNativeSQLite) {
           await this.db.run("INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?);", ["migrated_to_sqlite_v3", "true"]);
         } else {
           await appMetaStore.setItem("migrated_to_sqlite_v3", "true");
         }
-      } catch (err) {
-        console.error("Failed to write migration flag in finally:", err);
       }
+    } catch (err) {
+      console.error("Migration error:", err);
     }
   }
 
@@ -210,6 +284,23 @@ class StorageServiceManager {
     }
   }
 
+  private mapRowToMetadata(row: any): NoteMetadata {
+    return {
+      id: row.id,
+      title: row.title,
+      preview: row.preview || "",
+      date: row.date || "",
+      category: row.category || "حكاية",
+      styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
+      isLocked: !!row.is_locked,
+      password: row.password || "",
+      word_count: row.word_count || 0,
+      char_count: row.char_count || 0,
+      updated_at: row.updated_at || Date.now(),
+      created_at: row.created_at || Date.now(),
+    };
+  }
+
   async searchStories(searchTerm: string): Promise<NoteMetadata[]> {
     await this.init();
     const cleanTerm = searchTerm.trim();
@@ -217,10 +308,24 @@ class StorageServiceManager {
       return this.loadNotesMetadata();
     }
 
+    const words = cleanTerm.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return this.loadNotesMetadata();
+
     if (this.isNativeSQLite) {
+      let isFtsComplete = false;
       try {
-        const safeFtsTerm = cleanTerm.replace(/["*]/g, "");
-        if (safeFtsTerm) {
+        const cntRes = await this.db.query(
+          "SELECT (SELECT COUNT(*) FROM stories_fts) as fts_cnt, (SELECT COUNT(*) FROM stories) as total_cnt;"
+        );
+        if (cntRes.values && cntRes.values.length > 0) {
+          const { fts_cnt, total_cnt } = cntRes.values[0];
+          isFtsComplete = total_cnt > 0 && fts_cnt >= total_cnt;
+        }
+      } catch (e) {}
+
+      if (isFtsComplete) {
+        try {
+          const ftsMatchStr = words.map((w) => `${w.replace(/["*]/g, "")}*`).join(" ");
           const ftsQuery = `
             SELECT s.id, s.title, s.preview, s.date, s.category, s.styles, s.is_locked, s.password, s.word_count, s.char_count, s.updated_at, s.created_at
             FROM stories s
@@ -228,60 +333,37 @@ class StorageServiceManager {
             WHERE stories_fts MATCH ?
             ORDER BY bm25(stories_fts);
           `;
-          const res = await this.db.query(ftsQuery, [`"${safeFtsTerm}"*`]);
+          const res = await this.db.query(ftsQuery, [ftsMatchStr]);
           if (res.values && res.values.length > 0) {
-            return res.values.map((row: any) => ({
-              id: row.id,
-              title: row.title,
-              preview: row.preview || "",
-              date: row.date || "",
-              category: row.category || "حكاية",
-              styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
-              isLocked: !!row.is_locked,
-              password: row.password || "",
-              word_count: row.word_count || 0,
-              char_count: row.char_count || 0,
-              updated_at: row.updated_at || Date.now(),
-              created_at: row.created_at || Date.now(),
-            }));
+            return res.values.map(this.mapRowToMetadata);
           }
+        } catch (err) {
+          console.warn("FTS search failed, falling back to LIKE query:", err);
         }
-      } catch (err) {
-        console.warn("FTS search failed, falling back to LIKE query:", err);
       }
 
-      // Fallback LIKE query with parameterized values
+      // Multi-word LIKE query with parameterized values
+      const likeConditions = words.map(() => "(title LIKE ? OR preview LIKE ?)").join(" AND ");
       const likeQuery = `
         SELECT id, title, preview, date, category, styles, is_locked, password, word_count, char_count, updated_at, created_at
         FROM stories
-        WHERE title LIKE ? OR preview LIKE ?
+        WHERE ${likeConditions}
         ORDER BY id DESC;
       `;
-      const term = `%${cleanTerm}%`;
-      const res = await this.db.query(likeQuery, [term, term]);
+      const params: string[] = [];
+      for (const w of words) {
+        const p = `%${w}%`;
+        params.push(p, p);
+      }
+      const res = await this.db.query(likeQuery, params);
       if (!res.values) return [];
-      return res.values.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        preview: row.preview || "",
-        date: row.date || "",
-        category: row.category || "حكاية",
-        styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
-        isLocked: !!row.is_locked,
-        password: row.password || "",
-        word_count: row.word_count || 0,
-        char_count: row.char_count || 0,
-        updated_at: row.updated_at || Date.now(),
-        created_at: row.created_at || Date.now(),
-      }));
+      return res.values.map(this.mapRowToMetadata);
     } else {
       const all = await this.loadNotesMetadata();
-      const lower = cleanTerm.toLowerCase();
-      return all.filter(
-        (n) =>
-          (n.title && n.title.toLowerCase().includes(lower)) ||
-          (n.preview && n.preview.toLowerCase().includes(lower))
-      );
+      return all.filter((n) => {
+        const fullText = `${n.title || ""} ${n.preview || ""}`.toLowerCase();
+        return words.every((w) => fullText.includes(w.toLowerCase()));
+      });
     }
   }
 
@@ -356,7 +438,8 @@ class StorageServiceManager {
       ], true);
 
       try {
-        await this.db.run(`INSERT OR REPLACE INTO stories_fts (rowid, title, body) VALUES (?,?,?)`, [id, metadata.title, payload.content]);
+        const plainBody = (payload.content || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        await this.db.run(`INSERT OR REPLACE INTO stories_fts (rowid, title, body) VALUES (?,?,?)`, [id, metadata.title, plainBody]);
       } catch (ftsErr) {}
     } else {
       await metaStore.setItem(String(id), metadata);
@@ -371,18 +454,26 @@ class StorageServiceManager {
     if (ids.length === 0) return;
 
     if (this.isNativeSQLite) {
-      const placeholders = ids.map(() => "?").join(",");
-      await this.db.executeSet([
-        { statement: `DELETE FROM stories WHERE id IN (${placeholders})`, values: ids },
-        { statement: `DELETE FROM story_bodies WHERE story_id IN (${placeholders})`, values: ids },
-      ], true);
-      try {
-        await this.db.run(`DELETE FROM stories_fts WHERE rowid IN (${placeholders})`, ids);
-      } catch (e) {}
+      const CHUNK_SIZE = 800;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const placeholders = chunk.map(() => "?").join(",");
+        await this.db.executeSet([
+          { statement: `DELETE FROM stories WHERE id IN (${placeholders})`, values: chunk },
+          { statement: `DELETE FROM story_bodies WHERE story_id IN (${placeholders})`, values: chunk },
+          { statement: `DELETE FROM stories_fts WHERE rowid IN (${placeholders})`, values: chunk },
+        ], true);
+      }
     } else {
-      for (const id of ids) {
-        await metaStore.removeItem(String(id));
-        await bodyStore.removeItem(String(id));
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.flatMap((id) => [
+            metaStore.removeItem(String(id)),
+            bodyStore.removeItem(String(id)),
+          ])
+        );
       }
     }
   }

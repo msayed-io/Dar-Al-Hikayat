@@ -42,9 +42,10 @@ import {
 } from "lucide-react";
 import { useApp, Note } from "../contexts/AppContext";
 import { StorageService } from "../lib/storage-service";
-import { playStoryDissolve } from "../lib/story-dissolve-engine";
+import { playStoryDissolve, playStoryDissolveBatch } from "../lib/story-dissolve-engine";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { downloadBlob } from "../lib/pdf-export";
+import { ImportResultModal, type FailedImportItem } from "./ImportResultModal";
 
 const HomePage: React.FC = () => {
   const {
@@ -139,7 +140,7 @@ const HomePage: React.FC = () => {
       isCancelled = true;
       clearTimeout(timer);
     };
-  }, [searchTerm]);
+  }, [searchTerm, notes]);
 
   const filteredNotes = React.useMemo(() => {
     if (ftsResults !== null) {
@@ -240,6 +241,12 @@ const HomePage: React.FC = () => {
     processed: 0,
     total: 0,
   });
+  const [importResult, setImportResult] = useState<{
+    isOpen: boolean;
+    imported: number;
+    failed: FailedImportItem[];
+    isCancelled?: boolean;
+  }>({ isOpen: false, imported: 0, failed: [] });
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleCancelImport = () => {
@@ -293,13 +300,12 @@ const HomePage: React.FC = () => {
             await reloadNotes();
             setImportStatus({ isImporting: false, processed: 0, total: 0 });
 
-            if (result.failed.length > 0) {
-              alert(`تم استيراد ${result.imported.length} حكاية — فشل ${result.failed.length}`);
-            } else if (result.isCancelled) {
-              alert(`تم إيقاف الاستيراد. تم استيراد ${result.imported.length} حكاية.`);
-            } else {
-              alert(`تم استعادة ${result.imported.length} حكاية بنجاح إلى المكتبة.`);
-            }
+            setImportResult({
+              isOpen: true,
+              imported: result.imported.length,
+              failed: result.failed,
+              isCancelled: result.isCancelled,
+            });
           } else {
             alert("الملف لا يحتوي على حكايات صالحة.");
           }
@@ -375,16 +381,9 @@ const HomePage: React.FC = () => {
   const handleDeleteSingleStory = (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const cardEl = document.getElementById(`story-card-${id}`);
-    setDeletingNoteIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-
+    deleteNotes([id]);
     if (cardEl) {
-      playStoryDissolve(cardEl, () => {
-        deleteNotes([id]);
-        setDeletingNoteIds((prev) => prev.filter((noteId) => noteId !== id));
-      });
-    } else {
-      deleteNotes([id]);
-      setDeletingNoteIds((prev) => prev.filter((noteId) => noteId !== id));
+      playStoryDissolveBatch([{ id, el: cardEl }]);
     }
   };
 
@@ -392,33 +391,19 @@ const HomePage: React.FC = () => {
     if (selectedNoteIds.length === 0) return;
 
     const idsToProcess = [...selectedNoteIds];
-    setDeletingNoteIds((prev) => Array.from(new Set([...prev, ...idsToProcess])));
     setIsSelectionMode(false);
     setSelectedNoteIds([]);
 
-    let completedCount = 0;
-    idsToProcess.forEach((id) => {
-      const cardEl = document.getElementById(`story-card-${id}`);
-      if (cardEl) {
-        playStoryDissolve(cardEl, () => {
-          completedCount++;
-          if (completedCount === idsToProcess.length) {
-            deleteNotes(idsToProcess);
-            setDeletingNoteIds((prev) =>
-              prev.filter((noteId) => !idsToProcess.includes(noteId))
-            );
-          }
-        });
-      } else {
-        completedCount++;
-        if (completedCount === idsToProcess.length) {
-          deleteNotes(idsToProcess);
-          setDeletingNoteIds((prev) =>
-            prev.filter((noteId) => !idsToProcess.includes(noteId))
-          );
-        }
-      }
-    });
+    const cardItems = idsToProcess.map((id) => ({
+      id,
+      el: document.getElementById(`story-card-${id}`),
+    }));
+
+    // Trigger immediate DB deletion and state update
+    deleteNotes(idsToProcess);
+
+    // Run unified batch particle animation concurrently
+    playStoryDissolveBatch(cardItems);
   };
 
   // --- Long Press Logic ---
@@ -1703,9 +1688,25 @@ const HomePage: React.FC = () => {
                   }}
                 />
               </div>
+              <button
+                onClick={handleCancelImport}
+                className="mt-2 px-6 py-2 rounded-full font-zain-bold text-xs border border-red-500/30 text-red-500 hover:bg-red-500/10 active:scale-95 transition-all cursor-pointer"
+              >
+                إلغاء الاستيراد
+              </button>
             </div>
           </div>
         )}
+
+        {/* --- Import Result Modal --- */}
+        <ImportResultModal
+          isOpen={importResult.isOpen}
+          onClose={() => setImportResult({ isOpen: false, imported: 0, failed: [] })}
+          importedCount={importResult.imported}
+          failedItems={importResult.failed}
+          isCancelled={importResult.isCancelled}
+          theme={currentTheme}
+        />
 
         <AnimatePresence>
           {isSelectionMode && (
