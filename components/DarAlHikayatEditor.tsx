@@ -46,7 +46,10 @@ import {
   Eraser,
   Save,
   PenTool,
+  Smartphone,
 } from "lucide-react";
+import RemoteKeyboardModal from "./RemoteKeyboardModal";
+import type { RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
 import {
   Document,
   Packer,
@@ -598,6 +601,8 @@ const DarAlHikayatMaster: React.FC = () => {
   const [title, setTitle] = useState(initialTitle || "");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isNovelMode, setIsNovelMode] = useState(false);
+  const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false);
+  const [isRemoteConnected, setIsRemoteConnected] = useState(false);
   const [chapters, setChapters] = useState<Chapter[]>([
     { id: "1", title: "", content: "" },
   ]);
@@ -877,19 +882,13 @@ const DarAlHikayatMaster: React.FC = () => {
   const handleHandwritingChange = (newStrokes: Stroke[], ruled: boolean, dataUrl: string) => {
     setHandwritingStrokes(newStrokes);
     setIsPageRuled(ruled);
-    if (dataUrl) {
-      setHandwritingDataUrl(dataUrl);
-    }
+    setHandwritingDataUrl(dataUrl);
     setIsDirty(true);
     if (noteId) {
       try {
         localStorage.setItem(
           `dar_hw_${noteId}`,
-          JSON.stringify({
-            strokes: newStrokes,
-            isPageRuled: ruled,
-            dataUrl: dataUrl || handwritingDataUrl || "",
-          })
+          JSON.stringify({ strokes: newStrokes, isPageRuled: ruled, dataUrl })
         );
       } catch {}
     }
@@ -1294,6 +1293,115 @@ const DarAlHikayatMaster: React.FC = () => {
       setIsDirty(true);
     }
   };
+
+  const handleRemoteKeystroke = React.useCallback(
+    (payload: RemoteKeystrokePayload) => {
+      setIsRemoteConnected(true);
+
+      let activeEl = document.activeElement as HTMLElement | null;
+      const editorEl = isNovelMode
+        ? (document.querySelector(".chapter-item-editable[contenteditable='true']") as HTMLElement) ||
+          (document.querySelector("#story-content [contenteditable='true']") as HTMLElement)
+        : editorRef.current;
+
+      if (!activeEl || !activeEl.isContentEditable) {
+        if (editorEl) {
+          editorEl.focus();
+          activeEl = editorEl;
+        }
+      }
+
+      const insertTextToSelection = (textToInsert: string) => {
+        try {
+          if (document.queryCommandSupported("insertText")) {
+            document.execCommand("insertText", false, textToInsert);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          const node = document.createTextNode(textToInsert);
+          range.insertNode(node);
+          range.setStartAfter(node);
+          range.setEndAfter(node);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } else if (editorEl) {
+          editorEl.innerHTML += textToInsert;
+        }
+      };
+
+      if (payload.type === "KEY" || payload.type === "TASHKEEL") {
+        if (payload.char) {
+          insertTextToSelection(payload.char);
+          setIsDirty(true);
+        }
+      } else if (payload.type === "PASTE_TEXT") {
+        if (payload.text) {
+          insertTextToSelection(payload.text);
+          setIsDirty(true);
+        }
+      } else if (payload.type === "COMMAND") {
+        if (payload.action === "NEWLINE") {
+          try {
+            document.execCommand("insertParagraph");
+          } catch {
+            insertTextToSelection("\n");
+          }
+          setIsDirty(true);
+        } else if (payload.action === "BACKSPACE") {
+          try {
+            document.execCommand("delete");
+          } catch {
+            // fallback
+          }
+          setIsDirty(true);
+        } else if (payload.action === "DELETE_WORD") {
+          try {
+            document.execCommand("delete");
+            document.execCommand("delete");
+          } catch {
+            // fallback
+          }
+          setIsDirty(true);
+        } else if (payload.action === "UNDO") {
+          handleUndo();
+        } else if (payload.action === "REDO") {
+          handleRedo();
+        } else if (payload.action === "NAVIGATE_LEFT") {
+          const sel = window.getSelection();
+          if (sel) {
+            try {
+              (sel as any).modify?.("move", "forward", "character");
+            } catch {
+              // fallback
+            }
+          }
+        } else if (payload.action === "NAVIGATE_RIGHT") {
+          const sel = window.getSelection();
+          if (sel) {
+            try {
+              (sel as any).modify?.("move", "backward", "character");
+            } catch {
+              // fallback
+            }
+          }
+        } else if (payload.action === "SELECT_ALL") {
+          try {
+            document.execCommand("selectAll");
+          } catch {
+            // fallback
+          }
+        }
+      }
+    },
+    [isNovelMode, handleUndo, handleRedo]
+  );
 
   const commitAgentMutationsToState = React.useCallback(() => {
     if (isNovelMode) {
@@ -3007,6 +3115,25 @@ const DarAlHikayatMaster: React.FC = () => {
                   </div>
                 )}
 
+                {/* REMOTE NOVEL KEYBOARD BUTTON */}
+                <button
+                  onClick={() => setIsRemoteModalOpen(true)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer relative ${
+                    isRemoteConnected ? "text-emerald-500" : ""
+                  }`}
+                  style={{
+                    color: isRemoteConnected
+                      ? "#10B981"
+                      : currentTheme.secondary,
+                  }}
+                  title="لوحة المفاتيح اللاسلكية الروائية (عن بُعد)"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  {isRemoteConnected && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                </button>
+
                 {/* LOCK BUTTON */}
                 {showLockButton && (
                   <button
@@ -4151,6 +4278,14 @@ const DarAlHikayatMaster: React.FC = () => {
           </span>
         </button>
       )}
+
+      {/* Remote Novel Writer Keyboard Modal */}
+      <RemoteKeyboardModal
+        isOpen={isRemoteModalOpen}
+        onClose={() => setIsRemoteModalOpen(false)}
+        onKeystrokeReceived={handleRemoteKeystroke}
+        currentTheme={currentTheme}
+      />
     </div>
   );
 };

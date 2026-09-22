@@ -1,8 +1,12 @@
 import express from "express";
 import path from "path";
+import os from "os";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { getModelsToTry, isModelFallbackError } from "./lib/gemini-models";
+
+// Active SSE client connections for remote keyboard
+const remoteKeyboardClients = new Set<express.Response>();
 
 async function startServer() {
   const app = express();
@@ -13,6 +17,97 @@ async function startServer() {
   // API routes FIRST
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Remote Keyboard: Get true local network IPv4 address
+  app.get("/api/remote-keyboard/ip", (_req, res) => {
+    const interfaces = os.networkInterfaces();
+    const ips: string[] = [];
+    let primaryIp = "";
+
+    for (const name of Object.keys(interfaces)) {
+      const iface = interfaces[name];
+      if (!iface) continue;
+      const lowerName = name.toLowerCase();
+      if (lowerName.includes("tun") || lowerName.includes("p2p") || lowerName.includes("vnet") || lowerName.includes("docker")) {
+        continue;
+      }
+      for (const net of iface) {
+        if (net.family === "IPv4" && !net.internal) {
+          if (net.address.startsWith("127.") || net.address.startsWith("169.254.")) {
+            continue;
+          }
+          ips.push(net.address);
+          if (!primaryIp || lowerName.includes("wlan") || lowerName.includes("wi-fi") || lowerName.includes("eth") || lowerName.includes("en0")) {
+            primaryIp = net.address;
+          }
+        }
+      }
+    }
+
+    res.json({
+      ips,
+      primaryIp: primaryIp || ips[0] || "127.0.0.1",
+      port: PORT,
+    });
+  });
+
+  // Remote Keyboard: SSE endpoint for receiving instant keystroke events (< 5ms)
+  app.get("/api/remote-keyboard/events", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    res.write(`data: ${JSON.stringify({ type: "INIT_LISTENING", timestamp: Date.now() })}\n\n`);
+
+    remoteKeyboardClients.add(res);
+
+    req.on("close", () => {
+      remoteKeyboardClients.delete(res);
+    });
+  });
+
+  // Remote Keyboard: POST keystroke or command from Mobile Phone
+  app.post("/api/remote-keyboard/type", (req, res) => {
+    const payload = req.body;
+    const dataString = `data: ${JSON.stringify(payload)}\n\n`;
+
+    for (const clientRes of remoteKeyboardClients) {
+      try {
+        clientRes.write(dataString);
+      } catch {
+        remoteKeyboardClients.delete(clientRes);
+      }
+    }
+
+    res.json({ ok: true, timestamp: Date.now() });
+  });
+
+  // Remote Keyboard: WebRTC Signaling exchange endpoint
+  app.post("/api/remote-keyboard/signal", (req, res) => {
+    const { sessionPin, signal, sender } = req.body;
+    if (!sessionPin) {
+      res.status(400).json({ error: "Missing sessionPin" });
+      return;
+    }
+    const payload = { type: "WEBRTC_SIGNAL", sessionPin, signal, sender, timestamp: Date.now() };
+    const dataString = `data: ${JSON.stringify(payload)}\n\n`;
+
+    for (const clientRes of remoteKeyboardClients) {
+      try {
+        clientRes.write(dataString);
+      } catch {
+        remoteKeyboardClients.delete(clientRes);
+      }
+    }
+
+    res.json({ ok: true });
+  });
+
+  // Remote Keyboard: Health check & latency test endpoint
+  app.get("/api/remote-keyboard/status", (_req, res) => {
+    res.json({ status: "active", clientCount: remoteKeyboardClients.size, serverTime: Date.now() });
   });
 
   // Helper function to resolve API key

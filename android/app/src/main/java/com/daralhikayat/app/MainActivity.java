@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PrayerAlarmPlugin.class);
         registerPlugin(DownloadNotificationPlugin.class);
         registerPlugin(AppUpdatePlugin.class);
+        registerPlugin(RemoteServerPlugin.class);
         super.onCreate(savedInstanceState);
         hideSystemBars();
     }
