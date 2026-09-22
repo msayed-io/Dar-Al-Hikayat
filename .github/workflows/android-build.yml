@@ -45,6 +45,9 @@ jobs:
       - name: Type check with TypeScript
         run: npx tsc --noEmit
 
+      - name: Run vitest test suite
+        run: npx vitest run
+
       - name: Build web application
         run: bun run build
 

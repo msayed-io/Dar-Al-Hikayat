@@ -100,6 +100,17 @@ const metaStore = createSafeStore("stories_meta");
 const bodyStore = createSafeStore("story_bodies");
 const appMetaStore = createSafeStore("app_meta");
 
+let lastGeneratedId = 0;
+function generateUniqueStoryId(): number {
+  const now = Date.now();
+  if (now > lastGeneratedId) {
+    lastGeneratedId = now;
+  } else {
+    lastGeneratedId += 1;
+  }
+  return lastGeneratedId;
+}
+
 class StorageServiceManager {
   private sqliteConnection: SQLiteConnection | null = null;
   private db: any = null;
@@ -156,15 +167,34 @@ class StorageServiceManager {
         `;
         await this.db.execute(createTablesQuery);
 
-        // Try creating FTS5 table inside try/catch (standard FTS5 without content='')
+        // Check if existing stories_fts was created with content=''
         try {
-          await this.db.execute(`
-            CREATE VIRTUAL TABLE IF NOT EXISTS stories_fts USING fts5(
-              title, body, tokenize='unicode61 remove_diacritics 2'
-            );
-          `);
+          const ftsTableInfo = await this.db.query(
+            "SELECT sql FROM sqlite_master WHERE name='stories_fts';"
+          );
+          if (
+            ftsTableInfo.values &&
+            ftsTableInfo.values.length > 0 &&
+            (ftsTableInfo.values[0].sql || "").includes("content=''")
+          ) {
+            console.log("Migrating legacy contentless FTS5 table to standard FTS5...");
+            await this.db.execute(`
+              DROP TABLE IF EXISTS stories_fts;
+              CREATE VIRTUAL TABLE stories_fts USING fts5(
+                title, body, tokenize='unicode61 remove_diacritics 2'
+              );
+            `);
+            await this.db.run("INSERT OR REPLACE INTO app_meta (key, value) VALUES ('fts_v2_migrated', 'true');");
+            await this.db.run("DELETE FROM app_meta WHERE key = 'fts_backfilled_v2';");
+          } else {
+            await this.db.execute(`
+              CREATE VIRTUAL TABLE IF NOT EXISTS stories_fts USING fts5(
+                title, body, tokenize='unicode61 remove_diacritics 2'
+              );
+            `);
+          }
         } catch (e) {
-          console.warn("FTS5 table creation warning (non-fatal):", e);
+          console.warn("FTS5 table initialization / migration warning (non-fatal):", e);
         }
 
         this.isNativeSQLite = true;
@@ -312,6 +342,9 @@ class StorageServiceManager {
     if (words.length === 0) return this.loadNotesMetadata();
 
     if (this.isNativeSQLite) {
+      const ftsMatches: NoteMetadata[] = [];
+      const seenIds = new Set<number>();
+
       let isFtsComplete = false;
       try {
         const cntRes = await this.db.query(
@@ -335,14 +368,18 @@ class StorageServiceManager {
           `;
           const res = await this.db.query(ftsQuery, [ftsMatchStr]);
           if (res.values && res.values.length > 0) {
-            return res.values.map(this.mapRowToMetadata);
+            for (const row of res.values) {
+              const meta = this.mapRowToMetadata(row);
+              ftsMatches.push(meta);
+              seenIds.add(meta.id);
+            }
           }
         } catch (err) {
-          console.warn("FTS search failed, falling back to LIKE query:", err);
+          console.warn("FTS search failed, continuing to LIKE search:", err);
         }
       }
 
-      // Multi-word LIKE query with parameterized values
+      // Parameterized substring LIKE search to guarantee zero missed Arabic infixes/prefixes
       const likeConditions = words.map(() => "(title LIKE ? OR preview LIKE ?)").join(" AND ");
       const likeQuery = `
         SELECT id, title, preview, date, category, styles, is_locked, password, word_count, char_count, updated_at, created_at
@@ -355,9 +392,20 @@ class StorageServiceManager {
         const p = `%${w}%`;
         params.push(p, p);
       }
-      const res = await this.db.query(likeQuery, params);
-      if (!res.values) return [];
-      return res.values.map(this.mapRowToMetadata);
+      const likeRes = await this.db.query(likeQuery, params);
+      const combined: NoteMetadata[] = [...ftsMatches];
+
+      if (likeRes.values && likeRes.values.length > 0) {
+        for (const row of likeRes.values) {
+          const meta = this.mapRowToMetadata(row);
+          if (!seenIds.has(meta.id)) {
+            combined.push(meta);
+            seenIds.add(meta.id);
+          }
+        }
+      }
+
+      return combined;
     } else {
       const all = await this.loadNotesMetadata();
       return all.filter((n) => {
@@ -384,7 +432,7 @@ class StorageServiceManager {
   async saveStory(payload: NoteSavePayload): Promise<NoteMetadata> {
     await this.init();
     const now = Date.now();
-    const id = payload.id || now;
+    const id = payload.id || generateUniqueStoryId();
     const stats = computeTextStats(payload.content);
 
     const formattedDate = payload.date || new Date().toLocaleDateString("ar-EG", {
@@ -458,11 +506,19 @@ class StorageServiceManager {
       for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
         const chunk = ids.slice(i, i + CHUNK_SIZE);
         const placeholders = chunk.map(() => "?").join(",");
+
+        // 1. Data deletion in atomic transaction
         await this.db.executeSet([
           { statement: `DELETE FROM stories WHERE id IN (${placeholders})`, values: chunk },
           { statement: `DELETE FROM story_bodies WHERE story_id IN (${placeholders})`, values: chunk },
-          { statement: `DELETE FROM stories_fts WHERE rowid IN (${placeholders})`, values: chunk },
         ], true);
+
+        // 2. FTS index deletion in separate non-blocking call (index failure must never prevent data deletion)
+        try {
+          await this.db.run(`DELETE FROM stories_fts WHERE rowid IN (${placeholders})`, chunk);
+        } catch (ftsErr) {
+          console.warn("FTS deletion warning (non-fatal):", ftsErr);
+        }
       }
     } else {
       const CHUNK_SIZE = 100;
@@ -587,22 +643,6 @@ class StorageServiceManager {
       failed,
       isCancelled: !!abortSignal?.aborted,
     };
-  }
-
-  async exportFullBackupStream(): Promise<any[]> {
-    await this.init();
-    const metadataList = await this.loadNotesMetadata();
-    const fullList: any[] = [];
-
-    for (const meta of metadataList) {
-      const html = await this.getStoryBody(meta.id);
-      fullList.push({
-        ...meta,
-        content: html,
-      });
-    }
-
-    return fullList;
   }
 
   async exportFullBackupBlob(): Promise<Blob> {

@@ -1193,38 +1193,17 @@ const HomePage: React.FC = () => {
           className="fixed top-0 left-0 right-0 z-50 p-2 pointer-events-none"
           style={{ top: 0 }}
         >
-          <div className="w-full max-w-7xl mx-auto relative flex items-center justify-between pointer-events-none px-4 sm:px-6 lg:px-8">
-            {/* Standard Header Row (Brand Title & Action Buttons) */}
-            <div
-              className={`w-full flex items-center justify-between transition-all duration-500 ease-out ${
-                isSearchOpen
-                  ? "opacity-0 -translate-y-3 scale-95 pointer-events-none"
-                  : "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-              }`}
-            >
-              {/* Right Capsule: Brand Title (Clean typography only) */}
+          <div className="w-full max-w-7xl mx-auto relative pointer-events-none px-4 sm:px-6 lg:px-8">
+            <div className="w-full relative h-11">
+              {/* Standard Header Row (Brand Title & Action Buttons) */}
               <div
-                className="h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300"
-                style={{
-                  backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                  boxShadow: currentTheme.mode === "apple_dark"
-                    ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                    : currentTheme.shadow,
-                }}
+                className={`w-full h-full flex items-center justify-between apple-header-row ${
+                  isSearchOpen ? "apple-header-row-hidden" : "apple-header-row-visible"
+                }`}
               >
-                <span
-                  className="font-zain-xbold text-lg leading-none pt-0.5 tracking-wide select-none"
-                  style={{ color: currentTheme.accent }}
-                >
-                  دَارُ الحِكَايَاتِ
-                </span>
-              </div>
-
-              {/* Left Capsule: Search Trigger + Three-lines Menu ("الثلاث شرط") */}
-              <div className="relative header-menu-container">
+                {/* Right Capsule: Brand Title (Clean typography only) */}
                 <div
-                  className="h-11 px-2 rounded-full border-[0.5px] flex items-center gap-1 backdrop-blur-xl transition-all duration-300"
+                  className="h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300"
                   style={{
                     backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
                     borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
@@ -1233,255 +1212,278 @@ const HomePage: React.FC = () => {
                       : currentTheme.shadow,
                   }}
                 >
-                  {/* Search Icon Button */}
-                  <button
-                    onClick={() => {
-                      setIsSearchOpen(true);
-                      setShowMenu(false);
-                    }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
-                    style={{ color: currentTheme.text }}
-                    title="بحث"
+                  <span
+                    className="font-zain-xbold text-lg leading-none pt-0.5 tracking-wide select-none"
+                    style={{ color: currentTheme.accent }}
                   >
-                    <Search
-                      className="w-4 h-4"
-                      style={{ color: currentTheme.accent }}
-                      strokeWidth={2.2}
-                    />
-                  </button>
-
-                  {/* Divider */}
-                  <div
-                    className="w-px h-4 mx-0.5 opacity-60"
-                    style={{ backgroundColor: currentTheme.border }}
-                  />
-
-                  {/* More Menu Button (Three Vertical Dots) */}
-                  <button
-                    onClick={() => setShowMenu(!showMenu)}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer"
-                    style={{ color: currentTheme.text }}
-                    title="خيارات إضافية"
-                  >
-                    <MoreVertical
-                      className="w-4 h-4"
-                      style={{ color: currentTheme.text }}
-                      strokeWidth={2.2}
-                    />
-                  </button>
+                    دَارُ الحِكَايَاتِ
+                  </span>
                 </div>
 
-                {/* Redesigned Menu Dropdown Card (Editor Smooth 500ms Animation Pattern) */}
-                <div
-                  className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border-[0.5px] shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
-                    showMenu
-                      ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-                      : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
-                  }`}
-                  style={{
-                    backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : currentTheme.bg,
-                    borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
-                    borderRadius: "20px",
-                    boxShadow: currentTheme.mode === "apple_dark"
-                      ? "0 12px 36px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.6)"
-                      : `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
-                  }}
-                >
-                  <div className="flex flex-col p-1 gap-0.5">
-                    {/* 1. تفعيل وضع التحديد */}
-                    <button
-                      onClick={toggleSelectionMode}
-                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                      style={{
-                        color: currentTheme.text,
-                        borderRadius: "16px",
-                      }}
-                    >
-                      <CheckSquare
-                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                        style={{ color: currentTheme.accent }}
-                        strokeWidth={2}
-                      />
-                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                        تحديد الحكايات
-                      </span>
-                    </button>
-
-                    {/* 2. نمط العرض (شبكي / قائمة) */}
-                    <button
-                      onClick={toggleViewMode}
-                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                      style={{
-                        color: currentTheme.text,
-                        borderRadius: "16px",
-                      }}
-                    >
-                      {viewMode === "list" ? (
-                        <>
-                          <Grid
-                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                            strokeWidth={2}
-                          />
-                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                            عرض شبكي
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <List
-                            className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                            strokeWidth={2}
-                          />
-                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                            عرض قائمة
-                          </span>
-                        </>
-                      )}
-                    </button>
-
-                    {/* 3. إحصائيات الإبداع */}
+                {/* Left Capsule: Search Trigger + Three-lines Menu ("الثلاث شرط") */}
+                <div className="relative header-menu-container">
+                  <div
+                    className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl transition-all duration-300"
+                    style={{
+                      backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                      borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                      boxShadow: currentTheme.mode === "apple_dark"
+                        ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                        : currentTheme.shadow,
+                    }}
+                  >
+                    {/* Search Icon Button */}
                     <button
                       onClick={() => {
-                        setShowDashboard(true);
+                        setIsSearchOpen(true);
                         setShowMenu(false);
                       }}
-                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                      style={{
-                        color: currentTheme.text,
-                        borderRadius: "16px",
-                      }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 cursor-pointer"
+                      style={{ color: currentTheme.text }}
+                      title="بحث"
                     >
-                      <BarChart
-                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                      <Search
+                        className="w-4 h-4"
                         style={{ color: currentTheme.accent }}
-                        strokeWidth={2}
+                        strokeWidth={2.2}
                       />
-                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                        إحصائيات الإبداع
-                      </span>
                     </button>
 
+                    {/* Divider */}
                     <div
-                      className="h-px mx-1.5 my-0.5 opacity-30"
+                      className="w-px h-4 mx-0.5 opacity-60"
                       style={{ backgroundColor: currentTheme.border }}
                     />
 
-                    {/* 4. الإعدادات */}
+                    {/* More Menu Button (Three Vertical Dots) */}
                     <button
-                      onClick={() => {
-                        openSettings();
-                        setShowMenu(false);
-                      }}
-                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                      style={{
-                        color: currentTheme.text,
-                        borderRadius: "16px",
-                      }}
+                      onClick={() => setShowMenu(!showMenu)}
+                      className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-90 cursor-pointer"
+                      style={{ color: currentTheme.text }}
+                      title="خيارات إضافية"
                     >
-                      <Settings
-                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                        style={{ color: currentTheme.accent }}
-                        strokeWidth={2}
+                      <MoreVertical
+                        className="w-4 h-4"
+                        style={{ color: currentTheme.text }}
+                        strokeWidth={2.2}
                       />
-                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                        الإعدادات
-                      </span>
                     </button>
+                  </div>
 
-                    {/* 5. عن دار الحكايات */}
-                    <button
-                      onClick={() => {
-                        setShowAbout(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
-                      style={{
-                        color: currentTheme.text,
-                        borderRadius: "16px",
-                      }}
-                    >
-                      <Info
-                        className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
-                        style={{ color: currentTheme.accent }}
-                        strokeWidth={2}
+                  {/* Redesigned Menu Dropdown Card (Editor Smooth 500ms Animation Pattern) */}
+                  <div
+                    className={`absolute top-full left-0 mt-2 min-w-[178px] w-max border-[0.5px] shadow-xl z-[60] overflow-hidden origin-top-left transition-all duration-500 ease-out ${
+                      showMenu
+                        ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                        : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
+                    }`}
+                    style={{
+                      backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : currentTheme.bg,
+                      borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
+                      borderRadius: "20px",
+                      boxShadow: currentTheme.mode === "apple_dark"
+                        ? "0 12px 36px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.6)"
+                        : `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
+                    }}
+                  >
+                    <div className="flex flex-col p-1 gap-0.5">
+                      {/* 1. تفعيل وضع التحديد */}
+                      <button
+                        onClick={toggleSelectionMode}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                        style={{
+                          color: currentTheme.text,
+                          borderRadius: "16px",
+                        }}
+                      >
+                        <CheckSquare
+                          className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                          style={{ color: currentTheme.accent }}
+                          strokeWidth={2}
+                        />
+                        <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                          تحديد الحكايات
+                        </span>
+                      </button>
+
+                      {/* 2. نمط العرض (شبكي / قائمة) */}
+                      <button
+                        onClick={toggleViewMode}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                        style={{
+                          color: currentTheme.text,
+                          borderRadius: "16px",
+                        }}
+                      >
+                        {viewMode === "list" ? (
+                          <>
+                            <Grid
+                              className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                              style={{ color: currentTheme.accent }}
+                              strokeWidth={2}
+                            />
+                            <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                              عرض شبكي
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <List
+                              className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                              style={{ color: currentTheme.accent }}
+                              strokeWidth={2}
+                            />
+                            <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                              عرض قائمة
+                            </span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* 3. إحصائيات الإبداع */}
+                      <button
+                        onClick={() => {
+                          setShowDashboard(true);
+                          setShowMenu(false);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                        style={{
+                          color: currentTheme.text,
+                          borderRadius: "16px",
+                        }}
+                      >
+                        <BarChart
+                          className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                          style={{ color: currentTheme.accent }}
+                          strokeWidth={2}
+                        />
+                        <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                          إحصائيات الإبداع
+                        </span>
+                      </button>
+
+                      <div
+                        className="h-px mx-1.5 my-0.5 opacity-30"
+                        style={{ backgroundColor: currentTheme.border }}
                       />
-                      <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
-                        عن دَارِ الحِكَايَاتِ
-                      </span>
-                    </button>
+
+                      {/* 4. الإعدادات */}
+                      <button
+                        onClick={() => {
+                          openSettings();
+                          setShowMenu(false);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                        style={{
+                          color: currentTheme.text,
+                          borderRadius: "16px",
+                        }}
+                      >
+                        <Settings
+                          className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                          style={{ color: currentTheme.accent }}
+                          strokeWidth={2}
+                        />
+                        <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                          الإعدادات
+                        </span>
+                      </button>
+
+                      {/* 5. عن دار الحكايات */}
+                      <button
+                        onClick={() => {
+                          setShowAbout(true);
+                          setShowMenu(false);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                        style={{
+                          color: currentTheme.text,
+                          borderRadius: "16px",
+                        }}
+                      >
+                        <Info
+                          className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                          style={{ color: currentTheme.accent }}
+                          strokeWidth={2}
+                        />
+                        <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                          عن دَارِ الحِكَايَاتِ
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Full-Width Search Floating Capsule (Smooth 500ms Animated Transition) */}
-            <div
-              className={`absolute inset-x-4 sm:inset-x-6 lg:inset-x-8 top-0 h-11 px-3.5 rounded-full border-[0.5px] flex items-center gap-2.5 backdrop-blur-xl transition-all duration-500 ease-out origin-top apple-focus-glow ${
-                currentTheme.mode === "royal_classic"
-                  ? "apple-focus-glow-classic"
-                  : currentTheme.mode === "night_whisper"
-                  ? "apple-focus-glow-night"
-                  : "apple-focus-glow-dark"
-              } ${searchShake ? "apple-shake" : ""} ${
-                isSearchOpen
-                  ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
-                  : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
-              }`}
-              style={{
-                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                boxShadow: currentTheme.mode === "apple_dark"
-                  ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                  : currentTheme.shadow,
-              }}
-            >
-              <Search
-                onClick={() => {
-                  if (!searchTerm.trim()) triggerSearchShake();
+              {/* Full-Width Search Floating Capsule (Apple Ultra-Fluid Spring Transition) */}
+              <div
+                className={`absolute inset-0 w-full h-11 px-3.5 rounded-full border-[0.5px] flex items-center gap-2.5 backdrop-blur-xl apple-search-capsule apple-focus-glow ${
+                  currentTheme.mode === "royal_classic"
+                    ? "apple-focus-glow-classic"
+                    : currentTheme.mode === "night_whisper"
+                    ? "apple-focus-glow-night"
+                    : "apple-focus-glow-dark"
+                } ${searchShake ? "apple-shake" : ""} ${
+                  isSearchOpen ? "apple-search-capsule-open" : "apple-search-capsule-closed"
+                }`}
+                style={{
+                  width: "100%",
+                  left: 0,
+                  right: 0,
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                  boxShadow: currentTheme.mode === "apple_dark"
+                    ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                    : currentTheme.shadow,
                 }}
-                className="w-4 h-4 flex-shrink-0 cursor-pointer"
-                style={{ color: currentTheme.accent }}
-                strokeWidth={2.2}
-              />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="ابحث في حكاياتك..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !searchTerm.trim()) {
-                    triggerSearchShake();
-                  }
-                }}
-                className="flex-1 bg-transparent border-none outline-none font-zain-reg text-sm pt-0.5"
-                style={{ color: currentTheme.text }}
-              />
-              {searchTerm && (
+              >
+                <Search
+                  onClick={() => {
+                    if (!searchTerm.trim()) triggerSearchShake();
+                  }}
+                  className="w-4 h-4 flex-shrink-0 cursor-pointer transition-transform duration-200 hover:scale-110 active:scale-90"
+                  style={{ color: currentTheme.accent }}
+                  strokeWidth={2.2}
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="ابحث في حكاياتك..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !searchTerm.trim()) {
+                      triggerSearchShake();
+                    }
+                  }}
+                  className="flex-1 bg-transparent border-none outline-none font-zain-reg text-sm md:text-base pt-0.5 transition-colors"
+                  style={{ color: currentTheme.text }}
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm("");
+                      searchInputRef.current?.focus();
+                    }}
+                    className="w-5 h-5 rounded-full flex items-center justify-center opacity-60 hover:opacity-100 transition-all cursor-pointer apple-elastic-pinch active:scale-90"
+                    style={{ color: currentTheme.text }}
+                    title="مسح النص"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
                 <button
                   onClick={() => {
+                    setIsSearchOpen(false);
                     setSearchTerm("");
-                    searchInputRef.current?.focus();
                   }}
-                  className="w-5 h-5 rounded-full flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity cursor-pointer apple-elastic-pinch"
-                  style={{ color: currentTheme.text }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-black/5 active:scale-90 cursor-pointer apple-elastic-pinch"
+                  style={{ color: currentTheme.secondary }}
+                  title="إغلاق البحث"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" />
                 </button>
-              )}
-              <button
-                onClick={() => {
-                  setIsSearchOpen(false);
-                  setSearchTerm("");
-                }}
-                className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-black/5 active:scale-95 cursor-pointer apple-elastic-pinch"
-                style={{ color: currentTheme.secondary }}
-                title="إغلاق البحث"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              </div>
             </div>
           </div>
         </header>
@@ -1517,7 +1519,7 @@ const HomePage: React.FC = () => {
                         contain: "layout paint",
                         backgroundColor: isSelected
                           ? `${currentTheme.accent}20`
-                          : currentTheme.mode === "apple_dark" ? "#1C1C1E" : "rgba(255, 255, 255, 0.95)",
+                          : currentTheme.glass,
                         borderColor: isSelected
                           ? currentTheme.accent
                           : currentTheme.border,
@@ -1546,28 +1548,49 @@ const HomePage: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="relative z-10 flex flex-col h-full justify-between flex-1">
-                        <div>
-                          <div
-                            className={`flex justify-between items-start ${viewMode === "grid" ? "mb-2 flex-col gap-1" : "mb-1.5"}`}
-                          >
-                            <h2
-                              className={`${viewMode === "grid" ? "text-base line-clamp-2" : "text-lg"} font-zain-bold leading-relaxed`}
-                              style={{ color: currentTheme.accent }}
-                            >
-                              {note.title}
-                            </h2>
-                            <span
-                              className={`text-[10px] px-2.5 py-0.5 rounded-full border font-zain-bold pt-0.5 backdrop-blur-md transition-all ${viewMode === "grid" ? "self-start" : ""}`}
-                              style={{
-                                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}35`,
-                                color: currentTheme.mode === "apple_dark" ? "#8E8E93" : currentTheme.accent,
-                                backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}12`,
-                              }}
-                            >
-                              {note.category}
-                            </span>
-                          </div>
+                      <div className="relative z-10 flex flex-col h-full justify-between flex-1 w-full min-w-0">
+                        <div className="w-full min-w-0">
+                          {viewMode === "grid" ? (
+                            <div className="flex items-start justify-between gap-2 w-full min-w-0 mb-2">
+                              <h2
+                                className="text-base font-zain-bold line-clamp-2 min-h-[2.5rem] leading-snug break-words flex-1 min-w-0 overflow-hidden text-ellipsis"
+                                style={{ color: currentTheme.accent }}
+                                title={note.title}
+                              >
+                                {note.title}
+                              </h2>
+                              <span
+                                className="text-[10px] px-3.5 py-0.5 rounded-full border font-zain-bold pt-0.5 backdrop-blur-md transition-all shrink-0 flex-shrink-0 whitespace-nowrap self-start mt-0.5 tracking-wide text-center"
+                                style={{
+                                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}35`,
+                                  color: currentTheme.mode === "apple_dark" ? "#8E8E93" : currentTheme.accent,
+                                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}12`,
+                                }}
+                              >
+                                {note.category}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between gap-3 w-full min-w-0 mb-1.5">
+                              <h2
+                                className="text-lg font-zain-bold truncate flex-1 min-w-0 leading-normal block overflow-hidden text-ellipsis whitespace-nowrap"
+                                style={{ color: currentTheme.accent }}
+                                title={note.title}
+                              >
+                                {note.title}
+                              </h2>
+                              <span
+                                className="text-[10px] px-3.5 py-0.5 rounded-full border font-zain-bold pt-0.5 backdrop-blur-md transition-all shrink-0 flex-shrink-0 whitespace-nowrap self-center tracking-wide text-center"
+                                style={{
+                                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}35`,
+                                  color: currentTheme.mode === "apple_dark" ? "#8E8E93" : currentTheme.accent,
+                                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}12`,
+                                }}
+                              >
+                                {note.category}
+                              </span>
+                            </div>
+                          )}
 
                           {/* Lock Content Mask */}
                           {note.isLocked ? (
@@ -1585,7 +1608,7 @@ const HomePage: React.FC = () => {
                             </div>
                           ) : (
                             <p
-                              className={`text-sm leading-relaxed font-zain-reg mb-3 ${viewMode === "grid" ? "line-clamp-3" : "line-clamp-2"}`}
+                              className={`text-sm leading-relaxed font-zain-reg mb-3 break-words overflow-hidden text-ellipsis ${viewMode === "grid" ? "line-clamp-3" : "line-clamp-2"}`}
                               style={{ color: currentTheme.text, opacity: 0.8 }}
                             >
                               {note.preview}
@@ -1660,7 +1683,7 @@ const HomePage: React.FC = () => {
             <div
               className="w-full max-w-sm rounded-[28px] p-6 text-center border shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200"
               style={{
-                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : "#FFFFFF",
+                backgroundColor: currentTheme.isDark ? currentTheme.glass : "#FFFFFF",
                 borderColor: currentTheme.border,
                 color: currentTheme.text,
               }}

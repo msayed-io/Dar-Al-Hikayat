@@ -188,4 +188,73 @@ describe("Storage Safety & Golden Rule Verification Tests", () => {
     const fakeIds = Array.from({ length: 1000 }, (_, i) => 9000000 + i);
     await expect(StorageService.deleteStories(fakeIds)).resolves.not.toThrow();
   });
+
+  // Test F: FTS Deletion Isolation Test
+  test("(F) FTS Deletion Isolation: Even if FTS deletion throws an error, stories and bodies are safely deleted", async () => {
+    const calls: { statement: string; values?: any[] }[] = [];
+    const mockDb: any = {
+      executeSet: async (set: any[]) => {
+        calls.push(...set);
+        return { changes: { changes: 1 } };
+      },
+      run: async (statement: string, values: any[]) => {
+        if (statement.includes("DELETE FROM stories_fts")) {
+          throw new Error("Simulated FTS table corruption or lock error");
+        }
+        calls.push({ statement, values });
+        return { changes: { changes: 1 } };
+      },
+      query: async () => ({ values: [] }),
+    };
+
+    const originalDb = (StorageService as any).db;
+    const originalIsNative = (StorageService as any).isNativeSQLite;
+    const originalIsInitialized = (StorageService as any).isInitialized;
+
+    try {
+      (StorageService as any).isInitialized = true;
+      (StorageService as any).db = mockDb;
+      (StorageService as any).isNativeSQLite = true;
+
+      // Deleting should succeed without throwing despite FTS failure
+      await expect(StorageService.deleteStories([123456])).resolves.not.toThrow();
+
+      // Verify stories and story_bodies deletion was executed
+      const storiesDelete = calls.find((c) => c.statement.includes("DELETE FROM stories WHERE id IN"));
+      const bodiesDelete = calls.find((c) => c.statement.includes("DELETE FROM story_bodies WHERE story_id IN"));
+
+      expect(storiesDelete).toBeDefined();
+      expect(bodiesDelete).toBeDefined();
+    } finally {
+      (StorageService as any).db = originalDb;
+      (StorageService as any).isNativeSQLite = originalIsNative;
+      (StorageService as any).isInitialized = originalIsInitialized;
+    }
+  });
+
+  // Test G: Arabic Infix and Substring Search Test
+  test("(G) Arabic Search Completeness: Substrings, infixes, and prefixes find matching stories without omission", async () => {
+    const s1 = await StorageService.saveStory({
+      title: "الحكاية الكبرى عن الجمال والكمال",
+      content: "محتوى يحوي تفاصيل عن المال والأعمال",
+    });
+
+    const s2 = await StorageService.saveStory({
+      title: "حكاية أخرى بسيطة",
+      content: "عن النجوم والكواكب",
+    });
+
+    try {
+      // Search for "حكاية" should find both "الحكاية" and "حكاية"
+      const res1 = await StorageService.searchStories("حكاية");
+      expect(res1.some((n) => n.id === s1.id)).toBe(true);
+      expect(res1.some((n) => n.id === s2.id)).toBe(true);
+
+      // Search for "مال" should find "الجمال" or "المال"
+      const res2 = await StorageService.searchStories("مال");
+      expect(res2.some((n) => n.id === s1.id)).toBe(true);
+    } finally {
+      await StorageService.deleteStories([s1.id, s2.id]);
+    }
+  });
 });

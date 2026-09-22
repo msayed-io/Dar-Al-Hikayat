@@ -1,26 +1,6 @@
 const DPR = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 const TAU = Math.PI * 2;
 
-export interface Particle {
-  ox: number;
-  oy: number;
-  screenX: number;
-  screenY: number;
-  vx: number;
-  vy: number;
-  a: number;
-  r: number;
-  d: number; // delay ms
-  l: number; // lifetime ms
-  s: number; // noise scale
-  c: number; // curl amplitude
-  p: number; // phase
-  r0: number;
-  g0: number;
-  b0: number;
-  colorKey: string;
-}
-
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeIn = (t: number) => t * t * t;
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -71,8 +51,7 @@ function wrapText(
 }
 
 /**
- * Snapshots a card DOM element into an offscreen canvas downscaled by 0.5 (1/4 area).
- * Ultra-fast capture (< 3ms per card).
+ * Snapshots a card DOM element into an offscreen canvas at native DPR resolution.
  */
 export function takeCardSnapshot(cardEl: HTMLElement): {
   cv: HTMLCanvasElement;
@@ -84,13 +63,11 @@ export function takeCardSnapshot(cardEl: HTMLElement): {
   const W = Math.max(1, rect.width);
   const H = Math.max(1, rect.height);
 
-  // Downscale by 0.5 for fast 1/4 area canvas sampling
-  const scaleRatio = 0.5;
   const cv = document.createElement("canvas");
-  cv.width = Math.max(1, Math.round(W * scaleRatio * DPR));
-  cv.height = Math.max(1, Math.round(H * scaleRatio * DPR));
+  cv.width = Math.max(1, Math.round(W * DPR));
+  cv.height = Math.max(1, Math.round(H * DPR));
   const c = cv.getContext("2d")!;
-  c.scale(cv.width / W, cv.height / H);
+  c.scale(DPR, DPR);
 
   const cs = getComputedStyle(cardEl);
   const radius = parseFloat(cs.borderTopLeftRadius) || 32;
@@ -165,28 +142,83 @@ export function takeCardSnapshot(cardEl: HTMLElement): {
   return { cv, W, H, rect };
 }
 
-/**
- * Samples particle matrix for a card with target particle budget cap.
- */
-export function sampleParticlesForCard(
-  cardEl: HTMLElement,
-  targetParticleCap: number
-): Particle[] {
-  const { cv: src, W, H, rect } = takeCardSnapshot(cardEl);
-  const w = src.width;
-  const h = src.height;
+export interface Particle {
+  ox: number;
+  oy: number;
+  screenX: number;
+  screenY: number;
+  vx: number;
+  vy: number;
+  a: number;
+  r: number;
+  d: number; // delay ms
+  l: number; // lifetime ms
+  s: number; // noise scale
+  c: number; // curl amplitude
+  p: number; // phase
+  r0: number;
+  g0: number;
+  b0: number;
+  colorKey: string;
+}
 
-  const bc = src.getContext("2d")!;
+export interface DissolveParticle {
+  ox: number;
+  oy: number;
+  vx: number;
+  vy: number;
+  a: number;
+  r: number;
+  d: number;
+  l: number;
+  s: number;
+  c: number;
+  p: number;
+  b: number; // sprite bucket index
+  erased: boolean;
+}
+
+export interface CardDissolveUnit {
+  el: HTMLElement;
+  src: HTMLCanvasElement;
+  base: HTMLCanvasElement;
+  bctx: CanvasRenderingContext2D;
+  W: number;
+  H: number;
+  rect: DOMRect;
+  parts: DissolveParticle[];
+  sprites: HTMLCanvasElement[];
+  erasedCount: number;
+  allStarted: boolean;
+}
+
+/**
+ * Samples particles for a card with authentic blur pre-filtering and bucketing.
+ */
+function sampleCardDissolve(srcCanvas: HTMLCanvasElement, W: number, H: number): {
+  parts: DissolveParticle[];
+  buckets: Map<number, { r: number; g: number; b: number; idx: number }>;
+} {
+  const w = srcCanvas.width;
+  const h = srcCanvas.height;
+
+  const blur = document.createElement("canvas");
+  blur.width = w;
+  blur.height = h;
+  const bc = blur.getContext("2d")!;
+  bc.filter = `blur(${DPR * 0.9}px)`;
+  bc.drawImage(srcCanvas, 0, 0);
+
   const data = bc.getImageData(0, 0, w, h).data;
 
-  const totalPixels = (w * h) / 4;
-  // Calculate dynamic step to match targetParticleCap (up to targetParticleCap)
-  const idealStep = Math.max(2, Math.floor(Math.sqrt((w * h) / Math.max(1, targetParticleCap))));
-  const step = idealStep;
-  const baseR = 2.5;
-  const A_MIN = 30;
+  const step = Math.max(2, Math.round(3 * DPR));
+  const stepCss = step / DPR;
+  const baseR = stepCss * 0.75;
+  const A_MIN = 45;
 
-  const parts: Particle[] = [];
+  const parts: DissolveParticle[] = [];
+  const buckets = new Map<number, { r: number; g: number; b: number; idx: number }>();
+
   const cx = W * 0.5;
   const cy = H * 0.5;
   const maxR = Math.hypot(cx, cy) || 1;
@@ -197,122 +229,106 @@ export function sampleParticlesForCard(
       const a = data[i + 3];
       if (a < A_MIN) continue;
 
-      const px = (x / w) * W;
-      const py = (y / h) * H;
+      const px = (x + step * 0.5) / DPR;
+      const py = (y + step * 0.5) / DPR;
 
       const dx = px - cx;
       const dy = py - cy;
       const dN = Math.hypot(dx, dy) / maxR;
       const n = noise(px, py);
+
       const front = noise(px * 2.7 + 100, py * 2.7 + 100) > 0;
 
       const r0 = data[i];
       const g0 = data[i + 1];
       const b0 = data[i + 2];
-      const m = front ? 1 : 0.82;
-      const finalR = Math.round(r0 * m);
-      const finalG = Math.round(g0 * m);
-      const finalB = Math.round(b0 * m);
+      const key = ((r0 >> 4) << 8) | ((g0 >> 4) << 4) | (b0 >> 4);
+      let bk = buckets.get(key);
+      if (!bk) {
+        const m = front ? 1 : 0.82;
+        bk = { r: (r0 * m) | 0, g: (g0 * m) | 0, b: (b0 * m) | 0, idx: buckets.size };
+        buckets.set(key, bk);
+      }
 
-      // Quantize colors for efficient batching
-      const qR = Math.round(finalR / 16) * 16;
-      const qG = Math.round(finalG / 16) * 16;
-      const qB = Math.round(finalB / 16) * 16;
-      const colorKey = `rgb(${qR},${qG},${qB})`;
-
-      const ang = Math.atan2(dy, dx) + n * 0.75 + (Math.random() - 0.5) * 0.22;
+      const ang = Math.atan2(dy, dx) + n * 0.75 + (Math.random() - 0.5) * 0.25;
       const spd =
-        (25 + n * 11) *
-        (0.6 + dN * 0.75) *
-        (0.92 + Math.random() * 0.2) *
-        (front ? 1.05 : 0.88);
+        (32 + n * 14) *
+        (0.55 + dN * 0.85) *
+        (0.9 + Math.random() * 0.22) *
+        (front ? 1.05 : 0.85);
 
-      // Progressive wave delay across card: ~450ms spread
-      const delay = (1 - px / W) * 260 + (n * 0.5 + 0.5) * 160 + (front ? 0 : 55);
+      const delay =
+        (1 - px / W) * 160 +
+        (n * 0.5 + 0.5) * 110 +
+        (front ? 0 : 45);
+
       const edgeFade = 1 - Math.pow(dN, 2.4) * 0.22;
 
       parts.push({
         ox: px,
         oy: py,
-        screenX: rect.left + px,
-        screenY: rect.top + py,
         vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd - 18,
+        vy: Math.sin(ang) * spd - 22,
         a: (a / 255) * edgeFade,
         r: baseR * (front ? 1.05 : 0.85),
         d: delay,
-        l: 1050 + Math.random() * 320,
+        l: 750 + Math.random() * 260,
         s: n,
-        c: (Math.random() - 0.5) * 20,
+        c: (Math.random() - 0.5) * 22,
         p: Math.random() * TAU,
-        r0: qR,
-        g0: qG,
-        b0: qB,
-        colorKey,
+        b: bk.idx,
+        erased: false,
       });
-
-      if (parts.length >= targetParticleCap) break;
     }
-    if (parts.length >= targetParticleCap) break;
   }
 
-  return parts;
+  return { parts, buckets };
 }
 
 /**
- * Unified Batch Particle Dissolve Engine.
- * Single viewport canvas + single rAF loop + batched color rendering path.
+ * Builds offscreen circle sprite textures for each quantized color bucket.
+ */
+function buildSprites(buckets: Map<number, { r: number; g: number; b: number; idx: number }>): HTMLCanvasElement[] {
+  const R = 8;
+  const S = R * 2 + 2;
+  const out: HTMLCanvasElement[] = [];
+  for (const { r, g, b } of buckets.values()) {
+    const c = document.createElement("canvas");
+    c.width = c.height = S;
+    const x = c.getContext("2d")!;
+    x.fillStyle = `rgb(${r},${g},${b})`;
+    x.beginPath();
+    x.arc(S * 0.5, S * 0.5, R, 0, TAU);
+    x.fill();
+    out.push(c);
+  }
+  return out;
+}
+
+/**
+ * Unified Authentic Telegram Dissolve Engine for Single & Batch Cards.
  */
 export function playStoryDissolveBatch(
   cards: { id: number; el?: HTMLElement | null }[],
   onDone?: () => void
 ): { canvas: HTMLCanvasElement; cleanup: () => void } {
-  const validCards = cards.filter((c) => c.el && c.el.getBoundingClientRect().width > 0);
+  const vh = typeof window !== "undefined" ? window.innerHeight : 1000;
+  const validCards = cards.filter(({ el }) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.bottom > 0 && r.top < vh;
+  });
 
-  // If no card elements passed in, invoke onDone immediately
   if (validCards.length === 0) {
     if (onDone) onDone();
     const emptyCanvas = document.createElement("canvas");
     return { canvas: emptyCanvas, cleanup: () => {} };
   }
 
-  // Immediately hide all card elements visually
-  validCards.forEach(({ el }) => {
-    if (el) {
-      el.style.opacity = "0";
-      el.style.pointerEvents = "none";
-      el.style.transition = "none";
-    }
-  });
-
-  // Calculate particle budget per card (max 12,000 total across all cards)
-  const MAX_TOTAL_PARTICLES = 12000;
-  const perCardCap = Math.max(80, Math.floor(MAX_TOTAL_PARTICLES / validCards.length));
-
-  // Collect all particles
-  const allParticles: Particle[] = [];
-  for (const { el } of validCards) {
-    if (el) {
-      const pList = sampleParticlesForCard(el, perCardCap);
-      allParticles.push(...pList);
-    }
-  }
-
-  // Group particles by colorKey for batched path rendering
-  const colorGroups = new Map<string, Particle[]>();
-  for (const p of allParticles) {
-    let grp = colorGroups.get(p.colorKey);
-    if (!grp) {
-      grp = [];
-      colorGroups.get(p.colorKey) || colorGroups.set(p.colorKey, grp);
-    }
-    grp.push(p);
-  }
-
-  // Create single overlay canvas over whole viewport
   const viewW = typeof window !== "undefined" ? window.innerWidth : 1000;
   const viewH = typeof window !== "undefined" ? window.innerHeight : 1000;
 
+  // Create unified overlay canvas
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewW * DPR);
   canvas.height = Math.round(viewH * DPR);
@@ -321,6 +337,43 @@ export function playStoryDissolveBatch(
 
   const ctx = canvas.getContext("2d")!;
   ctx.scale(DPR, DPR);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "low";
+
+  // Build dissolve units for all visible cards
+  const units: CardDissolveUnit[] = [];
+  for (const { el } of validCards) {
+    if (!el) continue;
+    const { cv: src, W, H, rect } = takeCardSnapshot(el);
+
+    // Create Base Canvas
+    const base = document.createElement("canvas");
+    base.width = Math.round(W * DPR);
+    base.height = Math.round(H * DPR);
+    const bctx = base.getContext("2d")!;
+    bctx.scale(DPR, DPR);
+    bctx.drawImage(src, 0, 0, W, H);
+
+    const { parts, buckets } = sampleCardDissolve(src, W, H);
+    const sprites = buildSprites(buckets);
+
+    units.push({
+      el,
+      src,
+      base,
+      bctx,
+      W,
+      H,
+      rect,
+      parts,
+      sprites,
+      erasedCount: 0,
+      allStarted: false,
+    });
+
+    // Hide original DOM element
+    el.style.visibility = "hidden";
+  }
 
   const t0 = performance.now();
   let rafId = 0;
@@ -336,58 +389,99 @@ export function playStoryDissolveBatch(
     elapsed += dt;
 
     const t = elapsed;
-    const wt = t * 0.00125;
+    const wt = t * 0.0016;
 
+    /* ==========================================================
+       PASS 1 — In-place base erosion via destination-out in single fill()
+       ========================================================== */
+    for (let u = 0; u < units.length; u++) {
+      const unit = units[u];
+      if (!unit.allStarted) {
+        let first = true;
+        const N = unit.parts.length;
+        for (let i = 0; i < N; i++) {
+          const p = unit.parts[i];
+          if (p.erased || t < p.d) continue;
+          p.erased = true;
+          unit.erasedCount++;
+          if (first) {
+            unit.bctx.globalCompositeOperation = "destination-out";
+            unit.bctx.beginPath();
+            first = false;
+          }
+          unit.bctx.moveTo(p.ox + p.r, p.oy);
+          unit.bctx.arc(p.ox, p.oy, p.r, 0, TAU);
+        }
+        if (!first) {
+          unit.bctx.fill();
+          unit.bctx.globalCompositeOperation = "source-over";
+        }
+        if (unit.erasedCount === N) unit.allStarted = true;
+      }
+    }
+
+    /* ==========================================================
+       PASS 2 — Render active base canvases and flying particles
+       ========================================================== */
     ctx.clearRect(0, 0, viewW, viewH);
 
-    let activeCount = 0;
+    // Draw base card canvas while it still has unerased pixels
+    for (let u = 0; u < units.length; u++) {
+      const unit = units[u];
+      if (!unit.allStarted) {
+        ctx.globalAlpha = 1;
+        ctx.drawImage(unit.base, unit.rect.left, unit.rect.top, unit.W, unit.H);
+      }
+    }
 
-    // Batched Path Rendering per Color Group
-    colorGroups.forEach((pList, colorKey) => {
-      ctx.fillStyle = colorKey;
-      ctx.beginPath();
-      let groupHasActive = false;
+    let pending = 0;
 
-      for (let i = 0; i < pList.length; i++) {
-        const p = pList[i];
+    // Draw flying particles with authentic physics and stardust fading
+    for (let u = 0; u < units.length; u++) {
+      const unit = units[u];
+      const N = unit.parts.length;
+      for (let i = 0; i < N; i++) {
+        const p = unit.parts[i];
         const lt = (t - p.d) / p.l;
-        if (lt <= 0 || lt >= 1) continue;
+        if (lt >= 1) continue;
+        pending++;
 
-        activeCount++;
-        groupHasActive = true;
+        if (lt <= 0) continue; // Not started yet — base canvas shows it
 
         const e = easeOut(lt);
-        const curlX = Math.sin(wt * 1.3 + p.p) * p.c * e;
-        const curlY = Math.cos(wt * 1.15 + p.p * 1.3) * p.c * 0.55 * e;
+        const curlX = Math.sin(wt * 1.5 + p.p) * p.c * e;
+        const curlY = Math.cos(wt * 1.3 + p.p * 1.37) * p.c * 0.6 * e;
 
         const x =
-          p.screenX +
+          p.ox +
           p.vx * e +
-          Math.sin(p.oy * 0.022 + wt) * 6 * e +
-          Math.sin(lt * 4.5 + p.s * 2.8) * 2.5 * e +
+          Math.sin(p.oy * 0.024 + wt) * 7 * e +
+          Math.sin(lt * 5.5 + p.s * 3.1) * 3 * e +
           curlX;
 
         const y =
-          p.screenY +
+          p.oy +
           p.vy * e +
-          Math.cos(p.ox * 0.022 + wt * 1.2) * 6 * e +
-          Math.cos(lt * 3.8 + p.s * 2.5) * 2.5 * e +
-          28 * lt * lt +
+          Math.cos(p.ox * 0.024 + wt * 1.35) * 7 * e +
+          Math.cos(lt * 4.2 + p.s * 2.7) * 3 * e +
+          34 * lt * lt +
           curlY;
 
-        const rad = p.r * (0.16 + 0.84 * Math.pow(1 - lt, 1.3));
+        const al = p.a * (1 - easeIn(clamp((lt - 0.06) / 0.94, 0, 1)));
+        const rad = p.r * (0.14 + 0.86 * Math.pow(1 - lt, 1.6));
 
-        ctx.moveTo(x + rad, y);
-        ctx.arc(x, y, rad, 0, TAU);
+        ctx.globalAlpha = al;
+        ctx.drawImage(
+          unit.sprites[p.b],
+          unit.rect.left + x - rad,
+          unit.rect.top + y - rad,
+          rad * 2,
+          rad * 2
+        );
       }
+    }
 
-      if (groupHasActive) {
-        ctx.fill();
-      }
-    });
-
-    // Check if animation finished or if max duration (1.5 seconds) reached
-    if (activeCount > 0 && elapsed < 1500) {
+    if (pending > 0) {
       rafId = requestAnimationFrame(frame);
     } else {
       cancelAnimationFrame(rafId);

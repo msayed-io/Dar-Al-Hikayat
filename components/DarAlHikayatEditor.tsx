@@ -45,6 +45,7 @@ import {
   Highlighter,
   Eraser,
   Save,
+  PenTool,
 } from "lucide-react";
 import {
   Document,
@@ -59,6 +60,7 @@ import { useApp, NoteStyles } from "../contexts/AppContext";
 import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
 import { exportStoryToDocx } from "../lib/docx-export";
 import DarAlHikayatAIAssistant from "./DarAlHikayatAIAssistant";
+import DarAlHikayatHandwriting, { Stroke, HandwritingHandle } from "./DarAlHikayatHandwriting";
 import type { StoryContext } from "../lib/ai-assistant-service";
 import {
   ensureBlockIdsInElement,
@@ -652,6 +654,16 @@ const DarAlHikayatMaster: React.FC = () => {
   const [exportFileName, setExportFileName] = useState("");
   const [exportFormat, setExportFormat] = useState<"pdf" | "docx">("pdf");
   const [isExporting, setIsExporting] = useState(false);
+  const [emptyWarningToast, setEmptyWarningToast] = useState<string | null>(null);
+  const emptyToastTimeoutRef = useRef<any>(null);
+
+  const showEmptyWarningToast = (message: string) => {
+    setEmptyWarningToast(message);
+    if (emptyToastTimeoutRef.current) clearTimeout(emptyToastTimeoutRef.current);
+    emptyToastTimeoutRef.current = setTimeout(() => {
+      setEmptyWarningToast(null);
+    }, 3000);
+  };
 
   // --- Device & Screen Classification for Literary Assistant ---
   // A device is eligible for the split-screen Literary Assistant ONLY if:
@@ -771,6 +783,15 @@ const DarAlHikayatMaster: React.FC = () => {
   );
   const [newPassword, setNewPassword] = useState("");
 
+  // Live typing detector so lock button appears instantly upon typing the very first word
+  const [hasLiveTyped, setHasLiveTyped] = useState<boolean>(() => {
+    if (selectedNote?.isLocked) return true;
+    if (selectedNote?.title && selectedNote.title.trim().length > 0 && selectedNote.title.trim() !== "بدون عنوان") return true;
+    if (selectedNote?.content && getCleanWordCount(selectedNote.content) > 0) return true;
+    if (selectedNote?.preview && getCleanWordCount(selectedNote.preview) > 0) return true;
+    return false;
+  });
+
   const editorRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarVisible, setToolbarVisible] = useState(false);
@@ -781,6 +802,92 @@ const DarAlHikayatMaster: React.FC = () => {
     text: "#000000",
   });
   const [attachedMentions, setAttachedMentions] = useState<AttachedMention[]>([]);
+
+  // --- Handwriting & Inking Mode (Huawei Notes Inspired) ---
+  const [isHandwritingMode, setIsHandwritingMode] = useState<boolean>(false);
+  const [handwritingStrokes, setHandwritingStrokes] = useState<Stroke[]>(() => {
+    if (selectedNote?.styles?.handwriting?.strokes && Array.isArray(selectedNote.styles.handwriting.strokes)) {
+      return selectedNote.styles.handwriting.strokes;
+    }
+    if (selectedNote?.id) {
+      try {
+        const cached = localStorage.getItem(`dar_hw_${selectedNote.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.strokes)) return parsed.strokes;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [isPageRuled, setIsPageRuled] = useState<boolean>(() => {
+    if (typeof selectedNote?.styles?.handwriting?.isPageRuled === "boolean") {
+      return selectedNote.styles.handwriting.isPageRuled;
+    }
+    if (selectedNote?.id) {
+      try {
+        const cached = localStorage.getItem(`dar_hw_${selectedNote.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (typeof parsed?.isPageRuled === "boolean") return parsed.isPageRuled;
+        }
+      } catch {}
+    }
+    return false;
+  });
+  const [handwritingDataUrl, setHandwritingDataUrl] = useState<string>(() => {
+    return selectedNote?.styles?.handwriting?.dataUrl || "";
+  });
+  const handwritingRef = useRef<HandwritingHandle>(null);
+
+  const [handwritingCanUndo, setHandwritingCanUndo] = useState<boolean>(false);
+  const [handwritingCanRedo, setHandwritingCanRedo] = useState<boolean>(false);
+
+  // Sync handwriting state when switching notes
+  useEffect(() => {
+    if (selectedNote?.styles?.handwriting) {
+      setHandwritingStrokes(selectedNote.styles.handwriting.strokes || []);
+      setIsPageRuled(Boolean(selectedNote.styles.handwriting.isPageRuled));
+      setHandwritingDataUrl(selectedNote.styles.handwriting.dataUrl || "");
+    } else if (selectedNote?.id) {
+      try {
+        const cached = localStorage.getItem(`dar_hw_${selectedNote.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setHandwritingStrokes(parsed?.strokes || []);
+          setIsPageRuled(Boolean(parsed?.isPageRuled));
+          setHandwritingDataUrl(parsed?.dataUrl || "");
+        } else {
+          setHandwritingStrokes([]);
+          setIsPageRuled(false);
+          setHandwritingDataUrl("");
+        }
+      } catch {
+        setHandwritingStrokes([]);
+        setIsPageRuled(false);
+        setHandwritingDataUrl("");
+      }
+    } else {
+      setHandwritingStrokes([]);
+      setIsPageRuled(false);
+      setHandwritingDataUrl("");
+    }
+  }, [selectedNote?.id]);
+
+  const handleHandwritingChange = (newStrokes: Stroke[], ruled: boolean, dataUrl: string) => {
+    setHandwritingStrokes(newStrokes);
+    setIsPageRuled(ruled);
+    setHandwritingDataUrl(dataUrl);
+    setIsDirty(true);
+    if (noteId) {
+      try {
+        localStorage.setItem(
+          `dar_hw_${noteId}`,
+          JSON.stringify({ strokes: newStrokes, isPageRuled: ruled, dataUrl })
+        );
+      } catch {}
+    }
+  };
 
   // Sync content state to standard editor div (for Undo/Redo/external updates)
   useEffect(() => {
@@ -1074,6 +1181,15 @@ const DarAlHikayatMaster: React.FC = () => {
       setNoteIsLocked(selectedNote?.isLocked || false);
       setNotePassword(selectedNote?.password || "");
 
+      const hasInitialContent = Boolean(
+        selectedNote?.isLocked ||
+        (selectedNote?.title && selectedNote.title.trim().length > 0 && selectedNote.title.trim() !== "بدون عنوان") ||
+        (resolvedNovelMode
+          ? resolvedChapters.some((c) => getCleanWordCount(c.content) > 0 || (c.title.trim().length > 0 && c.title.trim() !== "الفصل الأول"))
+          : getCleanWordCount(resolvedContent) > 0)
+      );
+      setHasLiveTyped(hasInitialContent);
+
       setIsDirty(false);
       setIsSavedMode(initialMode === "read");
       setHistory([
@@ -1135,6 +1251,11 @@ const DarAlHikayatMaster: React.FC = () => {
   };
 
   const handleUndo = () => {
+    if (isHandwritingMode) {
+      handwritingRef.current?.undo();
+      setIsDirty(true);
+      return;
+    }
     if (historyIndex > 0) {
       const prev = history[historyIndex - 1];
       setHistoryIndex(historyIndex - 1);
@@ -1149,6 +1270,11 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
   const handleRedo = () => {
+    if (isHandwritingMode) {
+      handwritingRef.current?.redo();
+      setIsDirty(true);
+      return;
+    }
     if (historyIndex < history.length - 1) {
       const next = history[historyIndex + 1];
       setHistoryIndex(historyIndex + 1);
@@ -1259,6 +1385,11 @@ const DarAlHikayatMaster: React.FC = () => {
     );
     setChapters(newChapters);
     setIsDirty(true);
+    const hasAnyContent = newChapters.some(
+      (c) => getCleanWordCount(c.content) > 0 || (c.title.trim().length > 0 && c.title.trim() !== "الفصل الأول")
+    );
+    const hasCustomTitle = title.trim().length > 0 && title.trim() !== "بدون عنوان";
+    setHasLiveTyped(hasAnyContent || hasCustomTitle || noteIsLocked);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       pushHistory(content, newChapters, true);
@@ -1292,7 +1423,47 @@ const DarAlHikayatMaster: React.FC = () => {
     setShowTOC(false);
   };
 
+  const isEditorCompletelyEmpty = (): boolean => {
+    // 1. Check handwriting strokes
+    if (Array.isArray(handwritingStrokes) && handwritingStrokes.length > 0) {
+      return false;
+    }
+    if (handwritingDataUrl && handwritingDataUrl.length > 50) {
+      return false;
+    }
+
+    // 2. Check title
+    const trimmedTitle = (title || "").trim();
+    if (trimmedTitle.length > 0 && trimmedTitle !== "بدون عنوان") {
+      return false;
+    }
+
+    // 3. Check text content
+    if (isNovelMode) {
+      const hasNovelContent = chapters.some((c) => {
+        const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+        const rawHtml = el instanceof HTMLElement ? el.innerHTML : c.content;
+        const textLen = getCleanCharCount(rawHtml);
+        const titleTrimmed = (c.title || "").trim();
+        return textLen > 0 || (titleTrimmed.length > 0 && titleTrimmed !== "الفصل الأول");
+      });
+      if (hasNovelContent) return false;
+    } else {
+      const rawHtml = editorRef.current ? editorRef.current.innerHTML : content;
+      if (getCleanCharCount(rawHtml) > 0) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const handleSave = async () => {
+    if (isEditorCompletelyEmpty()) {
+      showEmptyWarningToast("لا يمكن حفظ حكاية فارغة! اكتب نصاً أو ارسم بيدك أولاً.");
+      return;
+    }
+
     const endTime = new Date();
     setSessionEndTime(endTime);
     setSessionDuration(calculateDuration(sessionStartTime, endTime));
@@ -1330,6 +1501,11 @@ const DarAlHikayatMaster: React.FC = () => {
             textAlign,
             textColor,
             paperStyleIndex: activePaperStyleIndex,
+            handwriting: {
+              strokes: handwritingStrokes,
+              isPageRuled,
+              dataUrl: handwritingDataUrl,
+            },
           },
           isLocked: noteIsLocked,
           password: notePassword,
@@ -1380,9 +1556,14 @@ const DarAlHikayatMaster: React.FC = () => {
             .join("<div style='text-align: center; margin: 30px 0; color: #A7AA63; font-size: 20px;'>❦</div>")
         : currentContent;
 
+      let finalPdfHtml = pdfContent;
+      if (handwritingDataUrl && handwritingDataUrl.length > 50) {
+        finalPdfHtml += `<div style="margin-top: 30px; text-align: center;"><img src="${handwritingDataUrl}" style="max-width: 100%; height: auto; border-radius: 8px;" /></div>`;
+      }
+
       const blob = await exportStoryToPdf(
         displayTitle,
-        pdfContent,
+        finalPdfHtml,
         {
           fontSize,
           fontWeight: activeFontWeight,
@@ -1497,6 +1678,9 @@ const DarAlHikayatMaster: React.FC = () => {
     }
 
     if (editorRef.current) {
+      if (text.trim().length > 0 && !hasLiveTyped) {
+        setHasLiveTyped(true);
+      }
       handleContentChange(editorRef.current.innerHTML);
     }
   };
@@ -1543,15 +1727,32 @@ const DarAlHikayatMaster: React.FC = () => {
   const updateTitle = (v: string) => {
     setTitle(v);
     setIsDirty(true);
+    const hasCustomTitle = v.trim().length > 0 && v.trim() !== "بدون عنوان";
+    const rawText = (editorRef.current?.innerText || "").replace(/[\r\n\t\s]+/g, " ").trim();
+    const hasNovelText = isNovelMode && chapters.some(
+      (c) => getCleanWordCount(c.content) > 0 || (c.title.trim().length > 0 && c.title.trim() !== "الفصل الأول")
+    );
+    setHasLiveTyped(hasCustomTitle || rawText.length > 0 || hasNovelText || noteIsLocked);
   };
 
   const handleBackNavigation = () => {
-    if (!isSavedMode && isDirty) setShowConfirmDialog(true);
-    else if (onBack) onBack();
+    if (!isSavedMode && isDirty) {
+      if (isEditorCompletelyEmpty()) {
+        if (onBack) onBack();
+        return;
+      }
+      setShowConfirmDialog(true);
+    } else if (onBack) onBack();
   };
   const handleConfirmSave = () => {
     setIsDialogClosing(true);
     setTimeout(() => {
+      if (isEditorCompletelyEmpty()) {
+        setShowConfirmDialog(false);
+        setIsDialogClosing(false);
+        if (onBack) onBack();
+        return;
+      }
       handleSave();
       setShowConfirmDialog(false);
       setIsDialogClosing(false);
@@ -1570,6 +1771,9 @@ const DarAlHikayatMaster: React.FC = () => {
     if (isSavedMode) {
       setIsSavedMode(false);
       setShowSessionReport(false);
+      if (handwritingStrokes && handwritingStrokes.length > 0 && (!content || content === "<br>")) {
+        setIsHandwritingMode(true);
+      }
     }
   };
 
@@ -2180,6 +2384,17 @@ const DarAlHikayatMaster: React.FC = () => {
   const speakingTime = Math.ceil(wordCount / 130); // Average speaking speed
   const estimatedPages = Math.max(1, Math.ceil(wordCount / 500)); // Approx 500 words per single-spaced A4 page
 
+  // Condition for showing the Lock Button in the editor header:
+  // Strictly hidden when there is no text/words, no title, and the story is not locked.
+  // Appears as soon as the first word is written or a title is provided.
+  const hasCustomTitle = title.trim().length > 0 && title.trim() !== "بدون عنوان";
+  const showLockButton = Boolean(
+    noteIsLocked ||
+    wordCount > 0 ||
+    hasCustomTitle ||
+    hasLiveTyped
+  );
+
   return (
     <div
       className="min-h-screen w-full relative font-sans transition-all duration-500 ease-in-out"
@@ -2192,7 +2407,7 @@ const DarAlHikayatMaster: React.FC = () => {
           return;
         }
         if (isSavedMode) {
-          if (!e.target.closest("header, .session-card, .toc-card, .export-dialog, .confirm-dialog, .lock-dialog")) {
+          if (!e.target.closest("header, .session-card, .toc-card, .export-dialog, .confirm-dialog, .lock-dialog, #handwriting-btn-scroll-top")) {
             handleReturnToEdit();
           }
         } else {
@@ -2234,6 +2449,34 @@ const DarAlHikayatMaster: React.FC = () => {
           content: "";
         }
       `}</style>
+
+      {/* Empty Story Warning Toast */}
+      <div
+        className={`fixed top-20 z-[80] transition-all duration-300 pointer-events-none ${
+          emptyWarningToast ? "opacity-100 translate-y-0 scale-100" : "opacity-0 -translate-y-4 scale-95"
+        }`}
+        style={{
+          left: showAIAssistant && isWideScreen ? `calc((100vw - ${paneWidthCss}) / 2)` : "50%",
+          transform: "translateX(-50%)",
+        }}
+      >
+        <div
+          className="backdrop-blur-xl rounded-full px-5 py-2.5 border shadow-2xl flex items-center gap-2.5"
+          style={{
+            backgroundColor: currentTheme.isDark ? "rgba(25, 26, 35, 0.95)" : "rgba(255, 255, 255, 0.95)",
+            borderColor: `${currentTheme.accent}60`,
+            boxShadow: `0 12px 30px -4px ${currentTheme.shadow || "rgba(0,0,0,0.35)"}`,
+          }}
+        >
+          <span className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse" style={{ backgroundColor: currentTheme.accent }} />
+          <p
+            className="font-zain-bold text-sm whitespace-nowrap leading-none pt-0.5"
+            style={{ color: currentTheme.text }}
+          >
+            {emptyWarningToast}
+          </p>
+        </div>
+      </div>
 
       {/* Zikr Toast */}
       <div
@@ -2589,7 +2832,7 @@ const DarAlHikayatMaster: React.FC = () => {
         }}
       >
         <div
-          className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-1.5 transition-all duration-300"
+          className="pointer-events-auto relative w-full max-w-sm sm:max-w-md md:max-w-lg h-12 p-1.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-1.5 transition-all duration-300"
           style={{
             backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
             borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
@@ -2599,7 +2842,7 @@ const DarAlHikayatMaster: React.FC = () => {
             borderRadius: "9999px",
           }}
         >
-          <div className="flex items-center gap-1 flex-1 min-w-0 pr-1">
+          <div className="flex items-center gap-1 flex-1 min-w-0 pr-1 overflow-hidden">
             <button
               onClick={handleBackNavigation}
               className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer flex-shrink-0 apple-elastic-pinch"
@@ -2608,14 +2851,14 @@ const DarAlHikayatMaster: React.FC = () => {
             >
               <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
             </button>
-            <div className="flex flex-col items-start min-w-0 h-9 justify-center flex-1">
+            <div className="flex flex-col justify-center min-w-0 h-9 flex-1">
               {isEditingTitle && !isSavedMode ? (
                 <input
                   value={title}
                   placeholder="بدون عنوان"
                   onChange={(e) => updateTitle(e.target.value)}
                   onBlur={() => setIsEditingTitle(false)}
-                  className={`bg-transparent text-sm font-zain-xbold text-right outline-none w-full border-b leading-tight px-1 rounded-sm apple-focus-glow ${
+                  className={`bg-transparent text-sm font-zain-bold text-right outline-none w-full min-w-0 border-b leading-tight px-1 rounded-sm truncate apple-focus-glow ${
                     currentTheme.mode === "royal_classic"
                       ? "apple-focus-glow-classic"
                       : currentTheme.mode === "night_whisper"
@@ -2629,10 +2872,10 @@ const DarAlHikayatMaster: React.FC = () => {
                   autoFocus
                 />
               ) : (
-                <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                <div className="flex items-center gap-1.5 min-w-0 max-w-full overflow-hidden w-full">
                   <h1
                     onClick={() => !isSavedMode && setIsEditingTitle(true)}
-                    className={`text-sm font-zain-xbold truncate text-right leading-tight ${!isSavedMode ? "cursor-pointer" : ""}`}
+                    className={`text-sm font-zain-bold truncate text-right leading-none min-w-0 flex-1 overflow-hidden whitespace-nowrap block select-none ${!isSavedMode ? "cursor-pointer" : ""}`}
                     style={{ color: currentTheme.text }}
                     title={title || "بدون عنوان"}
                   >
@@ -2646,81 +2889,61 @@ const DarAlHikayatMaster: React.FC = () => {
                   )}
                 </div>
               )}
-              <div
-                className={`overflow-hidden transition-all duration-300 ${isDirty && !isSavedMode ? "max-h-4" : "max-h-0 opacity-0"}`}
-              >
-                <span
-                  className="text-[8px] font-zain-bold block leading-none pt-0.5"
-                  style={{ color: currentTheme.secondary }}
-                >
-                  توجد تغييرات غير محفوظة
-                </span>
-              </div>
+
+              {/* Sub-indicator positioned cleanly under the title with increased size and slight downward spacing */}
+              {isDirty && !isSavedMode && (
+                <div className="flex items-center justify-start pointer-events-none select-none mt-1 overflow-visible">
+                  <span
+                    className="font-zain-light font-normal text-right whitespace-nowrap opacity-75 inline-block select-none"
+                    style={{
+                      fontSize: "9.5px",
+                      transform: "scale(0.82)",
+                      transformOrigin: "right center",
+                      lineHeight: "1",
+                      color: currentTheme.secondary,
+                    }}
+                  >
+                    توجد تغييرات غير محفوظة
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-0.5 flex-shrink-0">
             {!isSavedMode ? (
               <>
-                <div className="relative">
-                  <button
-                    onClick={() => setShowNovelMenu(!showNovelMenu)}
-                    className="novel-menu-trigger w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer relative"
-                    style={{
-                      color: isNovelMode
-                        ? currentTheme.accent
-                        : currentTheme.secondary,
-                    }}
-                    title="إعدادات الرواية"
-                  >
-                    <BookOpenText className="w-4 h-4" />
-                    {isNovelMode && (
-                      <span
-                        className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-                        style={{ backgroundColor: currentTheme.accent }}
-                      ></span>
-                    )}
-                  </button>
-                  {showNovelMenu && (
-                    <div
-                      className="novel-menu absolute top-full left-0 mt-2 min-w-[195px] border rounded-2xl shadow-2xl z-[70] animate-in fade-in zoom-in-95 p-1.5 transition-all"
+                {!isHandwritingMode && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowNovelMenu(!showNovelMenu)}
+                      className="novel-menu-trigger w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer relative"
                       style={{
-                        backgroundColor: currentTheme.bg,
-                        borderColor: currentTheme.border,
-                        boxShadow: `0 16px 36px -6px ${currentTheme.shadow || "rgba(0,0,0,0.25)"}`,
+                        color: isNovelMode
+                          ? currentTheme.accent
+                          : currentTheme.secondary,
                       }}
+                      title="إعدادات الرواية"
                     >
-                      <button
-                        onClick={toggleNovelMode}
-                        className="w-full text-right px-3 py-2 rounded-xl active:scale-95 flex items-center justify-between gap-3 mb-1 cursor-pointer transition-all"
+                      <BookOpenText className="w-4 h-4" />
+                      {isNovelMode && (
+                        <span
+                          className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: currentTheme.accent }}
+                        ></span>
+                      )}
+                    </button>
+                    {showNovelMenu && (
+                      <div
+                        className="novel-menu absolute top-full left-0 mt-2 min-w-[195px] border rounded-2xl shadow-2xl z-[70] animate-in fade-in zoom-in-95 p-1.5 transition-all"
                         style={{
-                          backgroundColor: "transparent",
-                          color: currentTheme.text,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = `${currentTheme.accent}14`;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = "transparent";
+                          backgroundColor: currentTheme.bg,
+                          borderColor: currentTheme.border,
+                          boxShadow: `0 16px 36px -6px ${currentTheme.shadow || "rgba(0,0,0,0.25)"}`,
                         }}
                       >
-                        <span
-                          className="font-zain-bold text-xs whitespace-nowrap leading-none pt-0.5"
-                          style={{ color: currentTheme.text }}
-                        >
-                          {isNovelMode ? "تعطيل الرواية" : "تفعيل الرواية"}
-                        </span>
-                        <Book
-                          className="w-4 h-4 flex-shrink-0"
-                          style={{ color: currentTheme.accent }}
-                        />
-                      </button>
-                      {isNovelMode && (
                         <button
-                          onClick={() => {
-                            setShowTOC(true);
-                            setShowNovelMenu(false);
-                          }}
-                          className="toc-toggle w-full text-right px-3 py-2 rounded-xl active:scale-95 flex items-center justify-between gap-3 cursor-pointer transition-all"
+                          onClick={toggleNovelMode}
+                          className="w-full text-right px-3 py-2 rounded-xl active:scale-95 flex items-center justify-between gap-3 mb-1 cursor-pointer transition-all"
                           style={{
                             backgroundColor: "transparent",
                             color: currentTheme.text,
@@ -2736,35 +2959,67 @@ const DarAlHikayatMaster: React.FC = () => {
                             className="font-zain-bold text-xs whitespace-nowrap leading-none pt-0.5"
                             style={{ color: currentTheme.text }}
                           >
-                            فهرس الفصول
+                            {isNovelMode ? "تعطيل الرواية" : "تفعيل الرواية"}
                           </span>
-                          <List
+                          <Book
                             className="w-4 h-4 flex-shrink-0"
                             style={{ color: currentTheme.accent }}
                           />
                         </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                        {isNovelMode && (
+                          <button
+                            onClick={() => {
+                              setShowTOC(true);
+                              setShowNovelMenu(false);
+                            }}
+                            className="toc-toggle w-full text-right px-3 py-2 rounded-xl active:scale-95 flex items-center justify-between gap-3 cursor-pointer transition-all"
+                            style={{
+                              backgroundColor: "transparent",
+                              color: currentTheme.text,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = `${currentTheme.accent}14`;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = "transparent";
+                            }}
+                          >
+                            <span
+                              className="font-zain-bold text-xs whitespace-nowrap leading-none pt-0.5"
+                              style={{ color: currentTheme.text }}
+                            >
+                              فهرس الفصول
+                            </span>
+                            <List
+                              className="w-4 h-4 flex-shrink-0"
+                              style={{ color: currentTheme.accent }}
+                            />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* LOCK BUTTON */}
-                <button
-                  onClick={() => setShowLockDialog(true)}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer ${noteIsLocked ? "text-green-600" : ""}`}
-                  style={{
-                    color: noteIsLocked
-                      ? currentTheme.accent
-                      : currentTheme.secondary,
-                  }}
-                  title={noteIsLocked ? "الحكاية مؤمنة" : "تأمين الحكاية"}
-                >
-                  {noteIsLocked ? (
-                    <Lock className="w-4 h-4" />
-                  ) : (
-                    <Unlock className="w-4 h-4" />
-                  )}
-                </button>
+                {showLockButton && (
+                  <button
+                    onClick={() => setShowLockDialog(true)}
+                    className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer ${noteIsLocked ? "text-green-600" : ""}`}
+                    style={{
+                      color: noteIsLocked
+                        ? currentTheme.accent
+                        : currentTheme.secondary,
+                    }}
+                    title={noteIsLocked ? "الحكاية مؤمنة" : "تأمين الحكاية"}
+                  >
+                    {noteIsLocked ? (
+                      <Lock className="w-4 h-4" />
+                    ) : (
+                      <Unlock className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
 
                 <div
                   className="w-px h-5 mx-0.5"
@@ -2773,11 +3028,15 @@ const DarAlHikayatMaster: React.FC = () => {
 
                 <button
                   onClick={handleUndo}
-                  disabled={historyIndex <= 0}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${historyIndex > 0 ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
+                  disabled={isHandwritingMode ? !handwritingCanUndo : historyIndex <= 0}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
+                    (isHandwritingMode ? handwritingCanUndo : historyIndex > 0)
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed opacity-40"
+                  }`}
                   style={{
                     color:
-                      historyIndex > 0
+                      (isHandwritingMode ? handwritingCanUndo : historyIndex > 0)
                         ? currentTheme.text
                         : currentTheme.secondary,
                   }}
@@ -2788,11 +3047,15 @@ const DarAlHikayatMaster: React.FC = () => {
 
                 <button
                   onClick={handleRedo}
-                  disabled={historyIndex >= history.length - 1}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${historyIndex < history.length - 1 ? "cursor-pointer" : "cursor-not-allowed opacity-40"}`}
+                  disabled={isHandwritingMode ? !handwritingCanRedo : historyIndex >= history.length - 1}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
+                    (isHandwritingMode ? handwritingCanRedo : historyIndex < history.length - 1)
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed opacity-40"
+                  }`}
                   style={{
                     color:
-                      historyIndex < history.length - 1
+                      (isHandwritingMode ? handwritingCanRedo : historyIndex < history.length - 1)
                         ? currentTheme.text
                         : currentTheme.secondary,
                   }}
@@ -3100,16 +3363,61 @@ const DarAlHikayatMaster: React.FC = () => {
             minWidth: 0,
           }}
         >
-          <main id="story-content" className="w-full relative z-0 pb-36">
+          {/* Handwriting & Inking Canvas Layer */}
+          <DarAlHikayatHandwriting
+            ref={handwritingRef}
+            isActive={isHandwritingMode && !isSavedMode}
+            isReadingMode={isSavedMode}
+            onClose={() => setIsHandwritingMode(false)}
+            onDiscard={() => {
+              setHandwritingStrokes([]);
+              setHandwritingDataUrl("");
+              setIsPageRuled(false);
+              setIsHandwritingMode(false);
+              setIsDirty(true);
+              if (noteId) {
+                try {
+                  localStorage.removeItem(`dar_hw_${noteId}`);
+                } catch {}
+              }
+            }}
+            theme={currentTheme}
+            initialStrokes={handwritingStrokes}
+            initialPageRuled={isPageRuled}
+            onStrokesChange={handleHandwritingChange}
+            onUndoChange={(canUndo, canRedo) => {
+              setHandwritingCanUndo(canUndo);
+              setHandwritingCanRedo(canRedo);
+            }}
+          />
+
+          <main
+            id="story-content"
+            className={`w-full relative z-0 pb-36 transition-opacity duration-200 ${
+              (isHandwritingMode && !isSavedMode) ||
+              (isSavedMode && handwritingStrokes.length > 0 && (!content || content === "<br>"))
+                ? "opacity-0 pointer-events-none select-none hidden"
+                : "opacity-100"
+            }`}
+          >
             {!isNovelMode ? (
               <div
                 ref={editorRef}
-                contentEditable={!isSavedMode}
-                onInput={(e) => handleContentChange(e.currentTarget.innerHTML)}
+                contentEditable={!isSavedMode && !isHandwritingMode}
+                onInput={(e) => {
+                  const rawText = (e.currentTarget.innerText || "").replace(/[\r\n\t\s]+/g, " ").trim();
+                  const customTitleActive = title.trim().length > 0 && title.trim() !== "بدون عنوان";
+                  if (rawText.length > 0) {
+                    setHasLiveTyped(true);
+                  } else {
+                    setHasLiveTyped(customTitleActive || noteIsLocked);
+                  }
+                  handleContentChange(e.currentTarget.innerHTML);
+                }}
                 onPaste={handlePaste}
-                data-placeholder="اكتب حكايتك هنا..."
+                data-placeholder={isHandwritingMode ? "" : "اكتب حكايتك هنا..."}
                 className={`w-full bg-transparent border-none outline-none px-6 md:px-10 leading-loose pt-28 min-h-[60vh] editor-container ${
-                  !content || content === "<br>" ? "is-empty" : ""
+                  (!content || content === "<br>") && !isHandwritingMode ? "is-empty" : ""
                 }`}
                 style={{
                   fontSize: `${fontSize}px`,
@@ -3169,7 +3477,7 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Editor Bottom Bar */}
-      {!isSavedMode && (
+      {!isSavedMode && !isHandwritingMode && (
         <footer
           className={`fixed bottom-4 z-40 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out ${
             showUI ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"
@@ -3208,22 +3516,16 @@ const DarAlHikayatMaster: React.FC = () => {
                   <button
                     id="dar-alhikayat-ai-toggle-btn"
                     onClick={handleToggleAIAssistant}
-                    className={`h-9 px-3 rounded-full flex items-center gap-1.5 transition-all duration-300 active:scale-95 cursor-pointer border ${
-                      showAIAssistant ? "shadow-inner" : "hover:scale-105"
+                    className={`w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer shrink-0 ${
+                      showAIAssistant ? "shadow-inner" : ""
                     }`}
                     style={{
-                      backgroundColor: showAIAssistant
-                        ? `${currentTheme.accent}25`
-                        : `${currentTheme.accent}12`,
-                      borderColor: `${currentTheme.accent}45`,
                       color: currentTheme.accent,
+                      backgroundColor: showAIAssistant ? `${currentTheme.accent}25` : undefined,
                     }}
                     title="المساعد الأدبي"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span className="font-zain-bold text-xs pt-0.5 whitespace-nowrap">
-                      المساعد الأدبي
-                    </span>
+                    <Sparkles className="w-4 h-4" />
                   </button>
 
                   {/* Popover / Tooltip when tapped on unqualified screens or tablet in Portrait mode */}
@@ -3438,7 +3740,7 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Settings Panel */}
-      {!isSavedMode && (
+      {!isSavedMode && !isHandwritingMode && (
         <div
           className={`fixed bottom-28 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
           style={{
@@ -3669,7 +3971,35 @@ const DarAlHikayatMaster: React.FC = () => {
                 >
                   {paperStyles[activePaperStyleIndex].name}
                 </span>
-                <div className="flex gap-1.5 items-center">
+                <div className="flex gap-2 items-center">
+                  <button
+                    id="handwriting-mode-trigger-btn"
+                    onClick={() => {
+                      setShowControls(false);
+                      setShowColorGrid(false);
+                      setShowStatsPanel(false);
+                      (document.activeElement as HTMLElement)?.blur?.();
+                      setIsHandwritingMode(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm"
+                    style={{
+                      backgroundColor: currentTheme.isDark
+                        ? "rgba(255, 255, 255, 0.08)"
+                        : "rgba(0, 0, 0, 0.05)",
+                      borderColor: currentTheme.accent,
+                      color: currentTheme.accent,
+                    }}
+                    title="الكتابة اليدوية والرسم"
+                  >
+                    <PenTool className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-zain-bold whitespace-nowrap">
+                      كتابة يدوية
+                    </span>
+                  </button>
+                  <div
+                    className="w-px h-4 mx-0.5"
+                    style={{ backgroundColor: currentTheme.border }}
+                  />
                   <button
                     onClick={() => toggleTheme("royal_classic")}
                     className={`w-6 h-6 rounded-full border transition-transform cursor-pointer ${currentTheme.mode === "royal_classic" ? "ring-2 ring-offset-1 ring-[#A7AA63] scale-110" : "opacity-75 hover:opacity-100"}`}

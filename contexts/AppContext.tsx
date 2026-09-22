@@ -26,6 +26,11 @@ export interface NoteStyles {
   textAlign: "right" | "center" | "left" | "justify";
   textColor: string;
   paperStyleIndex: number;
+  handwriting?: {
+    strokes?: any[];
+    isPageRuled?: boolean;
+    dataUrl?: string;
+  };
 }
 
 export interface Note {
@@ -77,9 +82,9 @@ const themes: Record<ThemeMode, ThemeColors> = {
     text: "#121A1B",
     accent: "#A7AA63",
     secondary: "#4A5556",
-    glass: "rgba(234, 230, 210, 0.94)",
-    border: "rgba(18, 26, 27, 0.1)",
-    shadow: "0 4px 24px rgba(18, 26, 27, 0.08), 0 1px 3px rgba(18, 26, 27, 0.06)",
+    glass: "rgba(244, 241, 228, 0.96)",
+    border: "rgba(18, 26, 27, 0.12)",
+    shadow: "0 10px 30px -4px rgba(18, 26, 27, 0.12), 0 2px 8px rgba(18, 26, 27, 0.06)",
     isDark: false,
   },
   night_whisper: {
@@ -204,6 +209,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const saveNote = async (noteData: NoteSaveData): Promise<boolean> => {
     try {
+      const rawContent = (noteData.content || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+      const hasHandwriting = Array.isArray(noteData.styles?.handwriting?.strokes) && noteData.styles.handwriting.strokes.length > 0;
+      const hasHandwritingUrl = Boolean(noteData.styles?.handwriting?.dataUrl && noteData.styles.handwriting.dataUrl.length > 50);
+      const trimmedTitle = (noteData.title || "").trim();
+      const hasTitle = trimmedTitle.length > 0 && trimmedTitle !== "بدون عنوان";
+
+      if (!rawContent && !hasHandwriting && !hasHandwritingUrl && !hasTitle) {
+        console.warn("Attempted to save an empty story, operation cancelled.");
+        return false;
+      }
+
       const savedMeta = await StorageService.saveStory({
         id: noteData.id,
         title: noteData.title,

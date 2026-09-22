@@ -114,14 +114,14 @@ const AppContent = () => {
           >
             {/* Floating Navigation Capsule */}
             <div
-              className="pointer-events-auto h-12 p-1.5 rounded-full border-[0.5px] flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-500 ease-out"
+              className="pointer-events-auto h-12 p-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-500 ease-out"
               style={{
                 borderRadius: "9999px",
                 backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
                 borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
                 boxShadow: currentTheme.mode === "apple_dark"
                   ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                  : `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+                  : currentTheme.shadow,
               }}
             >
               {/* Tab 1: الحكايات */}
@@ -240,7 +240,7 @@ const AppContent = () => {
                   exit={{ opacity: 0, scale: 0.8, x: 8 }}
                   transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => openEditor(null)}
-                  className="pointer-events-auto w-12 h-12 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer apple-elastic-pinch"
+                  className="pointer-events-auto w-12 h-12 rounded-full border flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer apple-elastic-pinch"
                   style={{
                     borderRadius: "9999px",
                     backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : (currentTheme.isDark ? "#1C2526" : currentTheme.accent),
@@ -248,7 +248,7 @@ const AppContent = () => {
                     borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : (currentTheme.isDark ? "rgba(226, 223, 210, 0.15)" : currentTheme.border),
                     boxShadow: currentTheme.mode === "apple_dark"
                       ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                      : `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+                      : currentTheme.shadow,
                   }}
                   title="حكاية جديدة"
                 >

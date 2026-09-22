@@ -702,6 +702,86 @@
   transition: transform 0.38s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.38s cubic-bezier(0.25, 1, 0.5, 1), border-radius 0.38s cubic-bezier(0.25, 1, 0.5, 1) !important;
 }
 
+/* ============================================================
+   5. انسيابية فتح وإغلاق كبسولة البحث (Apple Ultra-Fluid Search Transition)
+   ============================================================ */
+.apple-search-capsule {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease !important;
+  will-change: transform, opacity, filter;
+  transform-origin: center center;
+}
+
+.apple-search-capsule-open {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
+  filter: blur(0px) !important;
+  pointer-events: auto !important;
+}
+
+.apple-search-capsule-closed {
+  opacity: 0 !important;
+  transform: translateY(-5px) scale(0.985) !important;
+  filter: blur(4px) !important;
+  pointer-events: none !important;
+}
+
+.apple-header-row {
+  transition: transform 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.34s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  will-change: transform, opacity, filter;
+  transform-origin: center center;
+}
+
+.apple-header-row-visible {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
+  filter: blur(0px) !important;
+  pointer-events: auto !important;
+}
+
+.apple-header-row-hidden {
+  opacity: 0 !important;
+  transform: translateY(-5px) scale(0.985) !important;
+  filter: blur(3px) !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================
+   6. أدوات التحكم بالسطور وقطع النصوص (Strict Multi-line Clamping & Bounds)
+   ============================================================ */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+
 
 
 
