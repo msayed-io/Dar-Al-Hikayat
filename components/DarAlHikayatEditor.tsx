@@ -877,13 +877,19 @@ const DarAlHikayatMaster: React.FC = () => {
   const handleHandwritingChange = (newStrokes: Stroke[], ruled: boolean, dataUrl: string) => {
     setHandwritingStrokes(newStrokes);
     setIsPageRuled(ruled);
-    setHandwritingDataUrl(dataUrl);
+    if (dataUrl) {
+      setHandwritingDataUrl(dataUrl);
+    }
     setIsDirty(true);
     if (noteId) {
       try {
         localStorage.setItem(
           `dar_hw_${noteId}`,
-          JSON.stringify({ strokes: newStrokes, isPageRuled: ruled, dataUrl })
+          JSON.stringify({
+            strokes: newStrokes,
+            isPageRuled: ruled,
+            dataUrl: dataUrl || handwritingDataUrl || "",
+          })
         );
       } catch {}
     }

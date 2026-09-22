@@ -195,7 +195,6 @@ export const LocationPickerPage: React.FC = () => {
     map.on("moveend", () => {
       // إذا كان التحرك نتيجة نقر محدد أو اختيار من البحث، نحافظ على الإحداثيات الدقيقة
       if (isProgrammaticMoveRef.current) {
-        isProgrammaticMoveRef.current = false;
         return;
       }
 

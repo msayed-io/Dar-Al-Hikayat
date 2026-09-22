@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import { ChevronDown, ChevronUp, MoreHorizontal, Eraser as EraserIcon, Trash2, XCircle } from "lucide-react";
 import { ThemeColors } from "../contexts/AppContext";
 
@@ -90,6 +90,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const isTwoFingerPanningRef = useRef<boolean>(false);
     const lastTwoFingerYRef = useRef<number>(0);
     const twoFingerCooldownRef = useRef<number>(0);
+    const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
 
     // Reading Mode Navigation Refs
     const isMousePanningRef = useRef<boolean>(false);
@@ -102,6 +103,44 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const lastPointRef = useRef<StrokePoint | null>(null);
     const didEraseDuringDragRef = useRef<boolean>(false);
     const lastInternalStrokesRef = useRef<Stroke[]>(initialStrokes);
+
+    const activeToolRef = useRef<"pen" | "eraser">("pen");
+    const selectedThicknessRef = useRef<number>(3.5);
+    const selectedColorRef = useRef<string>(theme.isDark ? "#FFFFFF" : "#121A1B");
+    const strokesRef = useRef<Stroke[]>(initialStrokes);
+
+    // Spatial index of stroke bounding boxes for 100x faster O(1) eraser culling
+    const strokeBoundsRef = useRef<Map<string, { minX: number; maxX: number; minY: number; maxY: number }>>(new Map());
+
+    const getStrokeBounds = (stroke: Stroke) => {
+      let bounds = strokeBoundsRef.current.get(stroke.id);
+      if (!bounds) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (let i = 0; i < stroke.points.length; i++) {
+          const p = stroke.points[i];
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        }
+        bounds = { minX, maxX, minY, maxY };
+        strokeBoundsRef.current.set(stroke.id, bounds);
+      }
+      return bounds;
+    };
+
+    useEffect(() => {
+      activeToolRef.current = activeTool;
+    }, [activeTool]);
+    useEffect(() => {
+      selectedThicknessRef.current = selectedThickness;
+    }, [selectedThickness]);
+    useEffect(() => {
+      selectedColorRef.current = selectedColor;
+    }, [selectedColor]);
+    useEffect(() => {
+      strokesRef.current = strokes;
+    }, [strokes]);
 
     // Redraw whenever strokes change or canvas resizes, with panY translation
     const redrawAll = useCallback(
@@ -188,6 +227,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         setStrokes(initialStrokes);
         setHistory([initialStrokes]);
         setHistoryIndex(0);
+        strokeBoundsRef.current.clear();
         redrawAll(initialStrokes, panYRef.current);
       }
     }, [initialStrokes, redrawAll]);
@@ -267,7 +307,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       }
     }, [strokes, redrawAll, drawRuledLines]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       resizeCanvases();
       window.addEventListener("resize", resizeCanvases);
       return () => {
@@ -393,6 +433,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const handleClearAll = useCallback(() => {
       recordHistory([]);
       redrawAll([], panYRef.current);
+      strokeBoundsRef.current.clear();
       setActivePopup("none");
     }, [history, historyIndex, redrawAll, isPageRuled]);
 
@@ -402,6 +443,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       setHistory([[]]);
       setHistoryIndex(0);
       lastInternalStrokesRef.current = [];
+      strokeBoundsRef.current.clear();
       redrawAll([], panYRef.current);
       setActivePopup("none");
       setIsCollapsed(false);
@@ -429,14 +471,28 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       return (px - projX) * (px - projX) + (py - projY) * (py - projY);
     };
 
-    // Realistic Segment Eraser (Takes world coordinates)
+    // Realistic Segment Eraser (Takes world coordinates) - Optimized with double-layer spatial culling
     const eraseAtPoint = (worldX: number, worldY: number, radius = 24) => {
       const r2 = radius * radius;
       let didModify = false;
       const nextStrokes: Stroke[] = [];
 
-      for (const stroke of strokes) {
-        // Quick bounding check in world coordinates
+      for (const stroke of strokesRef.current) {
+        // Layer 1: Stroke-level bounding box culling
+        const bounds = getStrokeBounds(stroke);
+        const intersectsStroke = (
+          worldX + radius >= bounds.minX &&
+          worldX - radius <= bounds.maxX &&
+          worldY + radius >= bounds.minY &&
+          worldY - radius <= bounds.maxY
+        );
+
+        if (!intersectsStroke) {
+          nextStrokes.push(stroke);
+          continue;
+        }
+
+        // Layer 2: Fast point-level distance and segment bounding-box checking
         let touches = false;
         for (let i = 0; i < stroke.points.length; i++) {
           const pt = stroke.points[i];
@@ -448,9 +504,17 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           }
           if (i > 0) {
             const prev = stroke.points[i - 1];
-            if (distToSegmentSquared(worldX, worldY, prev.x, prev.y, pt.x, pt.y) <= r2) {
-              touches = true;
-              break;
+            // Segment bounding-box pre-check to avoid expensive distance math
+            const minSegX = Math.min(prev.x, pt.x) - radius;
+            const maxSegX = Math.max(prev.x, pt.x) + radius;
+            const minSegY = Math.min(prev.y, pt.y) - radius;
+            const maxSegY = Math.max(prev.y, pt.y) + radius;
+
+            if (worldX >= minSegX && worldX <= maxSegX && worldY >= minSegY && worldY <= maxSegY) {
+              if (distToSegmentSquared(worldX, worldY, prev.x, prev.y, pt.x, pt.y) <= r2) {
+                touches = true;
+                break;
+              }
             }
           }
         }
@@ -499,6 +563,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
       if (didModify) {
         didEraseDuringDragRef.current = true;
+        strokesRef.current = nextStrokes;
         setStrokes(nextStrokes);
         redrawAll(nextStrokes, panYRef.current);
       }
@@ -506,6 +571,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     // Core Drawing Helpers (Operating in World Coordinates)
     const startDrawing = (clientX: number, clientY: number, pressure = 0.5) => {
+      // Synchronously guarantee correct canvas size before any pixel is drawn!
+      resizeCanvases();
+
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -520,7 +588,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       currentPointsRef.current = [startPoint];
       lastPointRef.current = startPoint;
 
-      if (activeTool === "eraser") {
+      if (activeToolRef.current === "eraser") {
         eraseAtPoint(worldX, worldY);
       } else {
         const ctx = canvas.getContext("2d", { desynchronized: true, alpha: true });
@@ -530,9 +598,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.scale(dpr, dpr);
           ctx.translate(0, -panYRef.current);
-          ctx.fillStyle = selectedColor;
+          ctx.fillStyle = selectedColorRef.current;
           ctx.beginPath();
-          ctx.arc(worldX, worldY, (selectedThickness * (0.65 + pressure * 0.7)) / 2, 0, Math.PI * 2);
+          ctx.arc(worldX, worldY, (selectedThicknessRef.current * (0.65 + pressure * 0.7)) / 2, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
@@ -549,14 +617,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       const worldY = clientY - rect.top + panYRef.current;
       const point: StrokePoint = { x: worldX, y: worldY, pressure, time: performance.now() };
 
-      if (activeTool === "eraser") {
+      if (activeToolRef.current === "eraser") {
         eraseAtPoint(worldX, worldY);
       } else {
         const prevPoint = lastPointRef.current;
         if (prevPoint) {
           const midX = (prevPoint.x + worldX) / 2;
           const midY = (prevPoint.y + worldY) / 2;
-          const width = selectedThickness * (0.65 + pressure * 0.7);
+          const width = selectedThicknessRef.current * (0.65 + pressure * 0.7);
 
           const ctx = canvas.getContext("2d", { desynchronized: true, alpha: true });
           if (ctx) {
@@ -566,7 +634,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             ctx.scale(dpr, dpr);
             ctx.translate(0, -panYRef.current);
 
-            ctx.strokeStyle = selectedColor;
+            ctx.strokeStyle = selectedColorRef.current;
             ctx.lineWidth = width;
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
@@ -596,193 +664,198 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
 
-      if (activeTool === "pen" && currentPointsRef.current.length > 0) {
+      if (activeToolRef.current === "pen" && currentPointsRef.current.length > 0) {
         const newStroke: Stroke = {
           id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          color: selectedColor,
-          width: selectedThickness,
+          color: selectedColorRef.current,
+          width: selectedThicknessRef.current,
           points: [...currentPointsRef.current],
         };
-        const updated = [...strokes, newStroke];
+        const updated = [...strokesRef.current, newStroke];
+        strokesRef.current = updated;
         recordHistory(updated);
-      } else if (activeTool === "eraser" && didEraseDuringDragRef.current) {
-        recordHistory(strokes);
+      } else if (activeToolRef.current === "eraser" && didEraseDuringDragRef.current) {
+        recordHistory(strokesRef.current);
       }
 
       currentPointsRef.current = [];
       lastPointRef.current = null;
     };
 
-    // High Precision Touch Event Handlers:
-    // In Reading Mode: 1 or 2 fingers smoothly scroll the handwritten infinite document
-    // In Active Inking Mode: 2 fingers = Infinite Panning Up/Down (Zero drawing or marks), 1 finger = Writing/Erasing
-    const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (isReadingMode) {
-        if (e.touches.length >= 1) {
-          readingTouchStartYRef.current = e.touches[0].clientY;
-          lastTwoFingerYRef.current = e.touches[0].clientY;
-        }
-        return;
-      }
+    // High-Precision Native Pointer Event Listeners (Zero React Event Overhead & Coalesced Sub-Pixel Tracking)
+    useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-      if (!isActive) return;
+      const onPointerDown = (e: PointerEvent) => {
+        e.preventDefault();
 
-      if (e.touches.length >= 2) {
-        // Two fingers detected: activate smooth panning mode
-        isTwoFingerPanningRef.current = true;
-        // If drawing was started by the first finger landing a few ms earlier, cancel & clean it up immediately
-        if (isDrawingRef.current) {
-          isDrawingRef.current = false;
-          currentPointsRef.current = [];
-          lastPointRef.current = null;
-          redrawAll(strokes, panYRef.current);
-        }
-        lastTwoFingerYRef.current = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        return;
-      }
+        activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
-      if (e.touches.length === 1) {
-        // Prevent accidental touch start if still in cooldown from two-finger pan
-        if (performance.now() - twoFingerCooldownRef.current < 130 || isTwoFingerPanningRef.current) {
-          return;
-        }
-        const touch = e.touches[0];
-        const rawForce = (touch as any).force;
-        const force = typeof rawForce === "number" && rawForce > 0 ? rawForce : 0.5;
-        startDrawing(touch.clientX, touch.clientY, force);
-      }
-    };
-
-    const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (isReadingMode) {
-        if (e.touches.length >= 1) {
-          const currentY = e.touches[0].clientY;
-          const deltaY = currentY - lastTwoFingerYRef.current;
-          lastTwoFingerYRef.current = currentY;
-
-          const nextPanY = Math.max(0, panYRef.current - deltaY);
-          if (Math.abs(nextPanY - panYRef.current) > 0.3) {
-            panYRef.current = nextPanY;
-            setPanY(nextPanY);
-            redrawAll(strokes, nextPanY);
-            drawRuledLines(nextPanY);
-          }
-        }
-        return;
-      }
-
-      if (!isActive) return;
-
-      if (e.touches.length >= 2) {
-        // Two-finger smooth infinite scroll
-        const currentAvgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const deltaY = currentAvgY - lastTwoFingerYRef.current;
-        lastTwoFingerYRef.current = currentAvgY;
-
-        // Upward swipe drags the canvas up, revealing infinite bottom area (panY increases)
-        // Downward swipe scrolls back up towards page top (panY reaches 0)
-        const nextPanY = Math.max(0, panYRef.current - deltaY);
-        if (Math.abs(nextPanY - panYRef.current) > 0.3) {
-          panYRef.current = nextPanY;
-          setPanY(nextPanY);
-          redrawAll(strokes, nextPanY);
-          drawRuledLines(nextPanY);
-        }
-        return;
-      }
-
-      if (e.touches.length === 1 && !isTwoFingerPanningRef.current) {
-        if (performance.now() - twoFingerCooldownRef.current < 130) {
-          return;
-        }
-        const touch = e.touches[0];
-        const rawForce = (touch as any).force;
-        const force = typeof rawForce === "number" && rawForce > 0 ? rawForce : 0.5;
-        moveDrawing(touch.clientX, touch.clientY, force);
-      }
-    };
-
-    const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
-      if (isReadingMode) {
-        return;
-      }
-
-      if (!isActive) return;
-
-      if (e.touches.length === 0) {
-        if (isTwoFingerPanningRef.current) {
-          isTwoFingerPanningRef.current = false;
-          twoFingerCooldownRef.current = performance.now();
-        }
-        if (isDrawingRef.current) {
-          finishDrawing();
-        }
-      } else if (e.touches.length === 1 && isTwoFingerPanningRef.current) {
-        // One finger released before the other during two-finger pan:
-        // Set cooldown so the remaining finger does not start an accidental stroke!
-        twoFingerCooldownRef.current = performance.now();
-      }
-    };
-
-    // High performance pointer events for mouse/stylus
-    const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (isReadingMode) {
-        if (e.pointerType !== "touch") {
+        if (isReadingMode) {
           isMousePanningRef.current = true;
-          lastMouseYRef.current = e.clientY;
+          let sumY = 0;
+          activePointersRef.current.forEach((p) => (sumY += p.clientY));
+          lastMouseYRef.current = sumY / activePointersRef.current.size;
+
           try {
-            canvasRef.current?.setPointerCapture(e.pointerId);
+            canvas.setPointerCapture(e.pointerId);
           } catch {}
+          return;
         }
-        return;
-      }
 
-      if (!isActive || e.pointerType === "touch") return; // Touch handled by handleTouchStart
-      e.preventDefault();
-      try {
-        canvasRef.current?.setPointerCapture(e.pointerId);
-      } catch {}
-      const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-      startDrawing(e.clientX, e.clientY, pressure);
-    };
+        if (!isActive) return;
 
-    const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (isReadingMode) {
-        if (isMousePanningRef.current && e.pointerType !== "touch") {
-          const deltaY = e.clientY - lastMouseYRef.current;
-          lastMouseYRef.current = e.clientY;
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch {}
+
+        if (activePointersRef.current.size >= 2) {
+          isTwoFingerPanningRef.current = true;
+          if (isDrawingRef.current) {
+            isDrawingRef.current = false;
+            currentPointsRef.current = [];
+            lastPointRef.current = null;
+            redrawAll(strokesRef.current, panYRef.current);
+          }
+
+          let sumY = 0;
+          activePointersRef.current.forEach((p) => (sumY += p.clientY));
+          lastTwoFingerYRef.current = sumY / activePointersRef.current.size;
+          return;
+        }
+
+        if (activePointersRef.current.size === 1) {
+          if (isTwoFingerPanningRef.current || performance.now() - twoFingerCooldownRef.current < 130) {
+            return;
+          }
+          const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+          startDrawing(e.clientX, e.clientY, pressure);
+        }
+      };
+
+      const onPointerMove = (e: PointerEvent) => {
+        if (activePointersRef.current.has(e.pointerId)) {
+          activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+        }
+
+        if (isReadingMode) {
+          if (isMousePanningRef.current && activePointersRef.current.size > 0) {
+            let sumY = 0;
+            activePointersRef.current.forEach((p) => (sumY += p.clientY));
+            const currentAvgY = sumY / activePointersRef.current.size;
+            
+            const deltaY = currentAvgY - lastMouseYRef.current;
+            lastMouseYRef.current = currentAvgY;
+
+            const nextPanY = Math.max(0, panYRef.current - deltaY);
+            if (Math.abs(nextPanY - panYRef.current) > 0.3) {
+              panYRef.current = nextPanY;
+              setPanY(nextPanY);
+              redrawAll(strokesRef.current, nextPanY);
+              drawRuledLines(nextPanY);
+            }
+          }
+          return;
+        }
+
+        if (!isActive) return;
+        e.preventDefault();
+
+        if (isTwoFingerPanningRef.current || activePointersRef.current.size >= 2) {
+          let sumY = 0;
+          activePointersRef.current.forEach((p) => (sumY += p.clientY));
+          const currentAvgY = sumY / activePointersRef.current.size;
+
+          const deltaY = currentAvgY - lastTwoFingerYRef.current;
+          lastTwoFingerYRef.current = currentAvgY;
+
           const nextPanY = Math.max(0, panYRef.current - deltaY);
           if (Math.abs(nextPanY - panYRef.current) > 0.3) {
             panYRef.current = nextPanY;
             setPanY(nextPanY);
-            redrawAll(strokes, nextPanY);
+            redrawAll(strokesRef.current, nextPanY);
             drawRuledLines(nextPanY);
           }
+          return;
         }
-        return;
-      }
 
-      if (!isActive || e.pointerType === "touch") return;
-      e.preventDefault();
-      const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-      moveDrawing(e.clientX, e.clientY, pressure);
-    };
+        if (isDrawingRef.current && activePointersRef.current.size === 1) {
+          if (performance.now() - twoFingerCooldownRef.current < 130) {
+            return;
+          }
 
-    const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (isReadingMode) {
-        isMousePanningRef.current = false;
+          // Utilize high-frequency sub-frame coalesced points if available
+          if (typeof (e as any).getCoalescedEvents === "function") {
+            const coalesced = (e as any).getCoalescedEvents();
+            if (coalesced && coalesced.length > 0) {
+              for (let i = 0; i < coalesced.length; i++) {
+                const cEvent = coalesced[i];
+                const pressure = cEvent.pressure && cEvent.pressure > 0 ? cEvent.pressure : 0.5;
+                moveDrawing(cEvent.clientX, cEvent.clientY, pressure);
+              }
+              return;
+            }
+          }
+
+          const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+          moveDrawing(e.clientX, e.clientY, pressure);
+        }
+      };
+
+      const onPointerUp = (e: PointerEvent) => {
+        activePointersRef.current.delete(e.pointerId);
+
         try {
-          canvasRef.current?.releasePointerCapture(e.pointerId);
+          canvas.releasePointerCapture(e.pointerId);
         } catch {}
-        return;
-      }
 
-      if (!isActive || e.pointerType === "touch") return;
-      try {
-        canvasRef.current?.releasePointerCapture(e.pointerId);
-      } catch {}
-      finishDrawing();
-    };
+        if (isReadingMode) {
+          if (activePointersRef.current.size === 0) {
+            isMousePanningRef.current = false;
+          } else {
+            let sumY = 0;
+            activePointersRef.current.forEach((p) => (sumY += p.clientY));
+            lastMouseYRef.current = sumY / activePointersRef.current.size;
+          }
+          return;
+        }
+
+        if (!isActive) return;
+
+        if (activePointersRef.current.size === 0) {
+          if (isTwoFingerPanningRef.current) {
+            isTwoFingerPanningRef.current = false;
+            twoFingerCooldownRef.current = performance.now();
+          }
+          if (isDrawingRef.current) {
+            finishDrawing();
+          }
+        } else if (activePointersRef.current.size === 1) {
+          twoFingerCooldownRef.current = performance.now();
+          
+          let sumY = 0;
+          activePointersRef.current.forEach((p) => (sumY += p.clientY));
+          lastTwoFingerYRef.current = sumY / activePointersRef.current.size;
+        }
+      };
+
+      const onPointerCancel = (e: PointerEvent) => {
+        onPointerUp(e);
+      };
+
+      canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
+      canvas.addEventListener("pointermove", onPointerMove, { passive: false });
+      canvas.addEventListener("pointerup", onPointerUp, { passive: false });
+      canvas.addEventListener("pointercancel", onPointerCancel, { passive: false });
+
+      return () => {
+        canvas.removeEventListener("pointerdown", onPointerDown);
+        canvas.removeEventListener("pointermove", onPointerMove);
+        canvas.removeEventListener("pointerup", onPointerUp);
+        canvas.removeEventListener("pointercancel", onPointerCancel);
+      };
+    }, [isActive, isReadingMode, redrawAll, drawRuledLines]);
 
     // Desktop Mouse Wheel & Trackpad Vertical Scroll
     const handleWheel = (e: React.WheelEvent) => {
@@ -861,14 +934,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
               ? "cursor-grab active:cursor-grabbing"
               : "pointer-events-none"
           }`}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onTouchCancel={handleTouchEnd}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
           style={{
             touchAction: "none",

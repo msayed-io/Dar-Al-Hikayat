@@ -645,7 +645,7 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
                         className="mt-3 text-xs font-zain-bold opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                         style={{ color: currentTheme.text }}
                       >
-                        الاستمرار بالموقع الافتراضي ({prayerState.location?.cityNameAr || "القاهرة"})
+                        الاستمرار بالموقع المعتمد ({prayerState.location?.cityNameAr || "بلبيس، الشرقية"})
                       </button>
                     </motion.div>
                   )}

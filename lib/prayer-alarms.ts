@@ -420,6 +420,8 @@ export {
   guessTimezone,
   findNearestCity,
   clearAllLocationCache,
+  getDistanceKm,
+  findNearestArabPlace,
 } from "./gps-location";
 
 /* ─────────────── التخزين ─────────────── */

@@ -26,6 +26,11 @@ const AppContent = () => {
       className="App relative min-h-screen w-full transition-colors duration-500"
       style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
     >
+      {/* ── Liquid Glass Luxury Dynamic Wallpaper Layer ── */}
+      {currentTheme.isLiquidGlass && (
+        <div className="theme-liquid-glass-bg" />
+      )}
+
       {/* ── Main Tab Screens (Persistent to preserve scroll & state) ── */}
       {/* Critical: No CSS transforms (translate-y) allowed here to ensure position:fixed headers stay firmly fixed to the viewport */}
       <div
@@ -114,14 +119,14 @@ const AppContent = () => {
           >
             {/* Floating Navigation Capsule */}
             <div
-              className="pointer-events-auto h-12 p-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-500 ease-out"
+              className="pointer-events-auto h-12 p-1.5 rounded-full border flex items-center gap-1.5 backdrop-blur-2xl transition-all duration-500 ease-out apple-nav-capsule"
               style={{
                 borderRadius: "9999px",
-                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                boxShadow: currentTheme.mode === "apple_dark"
+                backgroundColor: currentTheme.isLiquidGlass ? currentTheme.glass : (currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass),
+                borderColor: currentTheme.isLiquidGlass ? currentTheme.border : (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border),
+                boxShadow: currentTheme.isLiquidGlass ? currentTheme.shadow : (currentTheme.mode === "apple_dark"
                   ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                  : currentTheme.shadow,
+                  : currentTheme.shadow),
               }}
             >
               {/* Tab 1: الحكايات */}
@@ -240,15 +245,15 @@ const AppContent = () => {
                   exit={{ opacity: 0, scale: 0.8, x: 8 }}
                   transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => openEditor(null)}
-                  className="pointer-events-auto w-12 h-12 rounded-full border flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer apple-elastic-pinch"
+                  className="pointer-events-auto w-12 h-12 rounded-full border flex items-center justify-center backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer apple-elastic-pinch apple-fab-capsule"
                   style={{
                     borderRadius: "9999px",
-                    backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : (currentTheme.isDark ? "#1C2526" : currentTheme.accent),
+                    backgroundColor: currentTheme.isLiquidGlass ? currentTheme.glass : (currentTheme.mode === "apple_dark" ? "#1C1C1E" : (currentTheme.isDark ? "#1C2526" : currentTheme.accent)),
                     color: currentTheme.mode === "apple_dark" ? "#F5F5F5" : (currentTheme.isDark ? currentTheme.accent : currentTheme.bg),
-                    borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : (currentTheme.isDark ? "rgba(226, 223, 210, 0.15)" : currentTheme.border),
-                    boxShadow: currentTheme.mode === "apple_dark"
+                    borderColor: currentTheme.isLiquidGlass ? currentTheme.border : (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : (currentTheme.isDark ? "rgba(226, 223, 210, 0.15)" : currentTheme.border)),
+                    boxShadow: currentTheme.isLiquidGlass ? currentTheme.shadow : (currentTheme.mode === "apple_dark"
                       ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                      : currentTheme.shadow,
+                      : currentTheme.shadow),
                   }}
                   title="حكاية جديدة"
                 >

@@ -788,11 +788,11 @@ const PrayerPage: React.FC = () => {
           >
           {/* Section Header */}
           <div 
-            className="flex items-center justify-between"
+            className="flex items-center justify-between gap-3 w-full"
             style={{ marginBottom: "16px" }}
           >
             <h3
-              className="text-xl sm:text-2xl font-zain-xbold"
+              className="text-xl sm:text-2xl font-zain-xbold shrink-0 whitespace-nowrap"
               style={{ color: currentTheme.text }}
             >
               مواقيت اليوم
@@ -800,24 +800,35 @@ const PrayerPage: React.FC = () => {
             <button
               type="button"
               onClick={openLocationSheet}
-              className="rounded-full border shadow-xs cursor-pointer transition-all active:scale-95 text-xs sm:text-sm font-zain-bold"
+              className="rounded-full border shadow-xs cursor-pointer transition-all active:scale-95 text-xs sm:text-sm font-zain-bold min-w-0"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "6px",
                 padding: "4px 12px",
-                whiteSpace: "nowrap",
                 backgroundColor: `${currentTheme.accent}15`,
                 borderColor: `${currentTheme.accent}30`,
                 color: currentTheme.accent,
                 backdropFilter: "blur(12px)",
                 WebkitBackdropFilter: "blur(12px)",
               }}
-              title="تحديد موقع الصلاة"
+              title={`موقع الصلاة الحالي: ${cityName}`}
             >
-              <MapPin style={{ width: "16px", height: "16px", flexShrink: 0, marginTop: "-2px" }} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "200px", lineHeight: 1 }}>{cityName}</span>
+              <MapPin style={{ width: "14px", height: "14px", flexShrink: 0, marginTop: "-2px" }} />
+              <span 
+                style={{ 
+                  overflow: "hidden", 
+                  textOverflow: "ellipsis", 
+                  whiteSpace: "nowrap", 
+                  maxWidth: "130px", 
+                  lineHeight: 1.2,
+                  display: "inline-block",
+                  verticalAlign: "middle"
+                }}
+              >
+                {cityName.split(/[،,]/)[0].trim() || cityName}
+              </span>
             </button>
           </div>
 

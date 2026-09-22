@@ -300,6 +300,18 @@ export async function fetchRawCoordinates(options: FetchCoordsOptions): Promise<
   throw new Error("GEOLOCATION_UNAVAILABLE");
 }
 
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 /**
  * إثراء الإحداثيات الخام باسم المكان والدولة والمنطقة الزمنية وحفظها محلياً
  */
@@ -329,7 +341,7 @@ export async function enrichCoordinatesToLocation(
     } else if (
       existing &&
       existing.cityNameAr &&
-      Math.hypot(existing.latitude - latitude, existing.longitude - longitude) < 0.05
+      getDistanceKm(existing.latitude, existing.longitude, latitude, longitude) < 15
     ) {
       // الاحتفاظ باسم المكان السابق إذا كان قريباً جداً وصالحاً
       cityName = existing.cityName;
@@ -338,38 +350,52 @@ export async function enrichCoordinatesToLocation(
       displayAddress = existing.displayAddress;
     } else {
       const nearestArab = findNearestArabPlace(latitude, longitude);
-      if (nearestArab) {
+      const distArab = nearestArab ? getDistanceKm(latitude, longitude, nearestArab.lat, nearestArab.lng) : Infinity;
+
+      if (nearestArab && distArab <= 15) {
         cityName = nearestArab.name;
         cityNameAr = `${nearestArab.name} (${nearestArab.parent})`;
         countryNameAr = nearestArab.country || "مصر";
       } else {
         const nearest = findNearestCity(latitude, longitude);
-        if (nearest) {
+        const distCity = nearest ? getDistanceKm(latitude, longitude, nearest.latitude, nearest.longitude) : Infinity;
+
+        if (nearest && distCity <= 15) {
           cityName = nearest.nameAr;
           cityNameAr = nearest.nameAr;
           countryNameAr = nearest.countryAr || "مصر";
+        } else {
+          // كاشف المسافة الصارم: أبعد من 15 كم، نمنع فرض أي مدينة بعيدة
+          cityName = "موقعي الحالي";
+          cityNameAr = "موقعي الحالي";
+          countryNameAr = undefined;
         }
       }
     }
   } catch (err) {
     console.warn("Reverse geocoding error, falling back safely:", err);
-    if (existing && existing.cityNameAr) {
+    if (existing && existing.cityNameAr && getDistanceKm(existing.latitude, existing.longitude, latitude, longitude) < 15) {
       cityName = existing.cityName;
       cityNameAr = existing.cityNameAr;
       countryNameAr = existing.countryNameAr;
     } else {
       const nearestArab = findNearestArabPlace(latitude, longitude);
-      if (nearestArab) {
+      const distArab = nearestArab ? getDistanceKm(latitude, longitude, nearestArab.lat, nearestArab.lng) : Infinity;
+      if (nearestArab && distArab <= 15) {
         cityName = nearestArab.name;
         cityNameAr = `${nearestArab.name} (${nearestArab.parent})`;
         countryNameAr = nearestArab.country || "مصر";
+      } else {
+        cityName = "موقعي الحالي";
+        cityNameAr = "موقعي الحالي";
+        countryNameAr = undefined;
       }
     }
   }
 
   const location: PrayerLocation = {
-    latitude,
-    longitude,
+    latitude: Number(latitude.toFixed(6)),
+    longitude: Number(longitude.toFixed(6)),
     cityName,
     cityNameAr,
     countryNameAr,

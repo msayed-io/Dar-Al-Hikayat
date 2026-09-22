@@ -37,8 +37,20 @@ export interface ImportBatchResult {
 
 // Helpers
 export function computeTextStats(htmlContent: string): { wordCount: number; charCount: number; preview: string } {
-  const clean = (htmlContent || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  const wordCount = clean === "" ? 0 : clean.split(/\s+/).length;
+  if (!htmlContent) {
+    return { wordCount: 0, charCount: 0, preview: "" };
+  }
+  const clean = (htmlContent || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#160;/gi, " ")
+    .replace(/&zwnj;/gi, "")
+    .replace(/&rlm;/gi, "")
+    .replace(/&lrm;/gi, "")
+    .replace(/&[a-z0-9#]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const wordCount = clean === "" ? 0 : clean.split(/\s+/).filter(Boolean).length;
   const charCount = clean.length;
   const preview = clean.substring(0, 100) + (clean.length > 100 ? "..." : "");
   return { wordCount, charCount, preview };
@@ -288,26 +300,26 @@ class StorageServiceManager {
     if (this.isNativeSQLite) {
       const res = await this.db.query("SELECT id, title, preview, date, category, styles, is_locked, password, word_count, char_count, updated_at, created_at FROM stories ORDER BY id DESC;");
       if (!res.values) return [];
-      return res.values.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        preview: row.preview || "",
-        date: row.date || "",
-        category: row.category || "حكاية",
-        styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
-        isLocked: !!row.is_locked,
-        password: row.password || "",
-        word_count: row.word_count || 0,
-        char_count: row.char_count || 0,
-        updated_at: row.updated_at || Date.now(),
-        created_at: row.created_at || Date.now(),
-      }));
+      return res.values.map((row: any) => this.mapRowToMetadata(row));
     } else {
       const keys = await metaStore.keys();
       const metadataList: NoteMetadata[] = [];
       for (const key of keys) {
         const item = await metaStore.getItem<NoteMetadata>(key);
-        if (item) metadataList.push(item);
+        if (item) {
+          let wCount = typeof item.word_count === "number" && item.word_count > 0 ? item.word_count : 0;
+          let cCount = typeof item.char_count === "number" && item.char_count > 0 ? item.char_count : 0;
+          if (wCount === 0 && item.preview) {
+            const s = computeTextStats(item.preview);
+            wCount = s.wordCount;
+            cCount = s.charCount;
+          }
+          metadataList.push({
+            ...item,
+            word_count: wCount,
+            char_count: cCount,
+          });
+        }
       }
       metadataList.sort((a, b) => b.id - a.id);
       return metadataList;
@@ -315,17 +327,26 @@ class StorageServiceManager {
   }
 
   private mapRowToMetadata(row: any): NoteMetadata {
+    let wCount = typeof row.word_count === "number" && row.word_count > 0 ? row.word_count : 0;
+    let cCount = typeof row.char_count === "number" && row.char_count > 0 ? row.char_count : 0;
+    const previewText = row.preview || "";
+    if (wCount === 0 && previewText) {
+      const s = computeTextStats(previewText);
+      wCount = s.wordCount;
+      cCount = s.charCount;
+    }
+
     return {
       id: row.id,
-      title: row.title,
-      preview: row.preview || "",
+      title: row.title || "بدون عنوان",
+      preview: previewText,
       date: row.date || "",
       category: row.category || "حكاية",
       styles: typeof row.styles === "string" ? JSON.parse(row.styles) : row.styles,
       isLocked: !!row.is_locked,
       password: row.password || "",
-      word_count: row.word_count || 0,
-      char_count: row.char_count || 0,
+      word_count: wCount,
+      char_count: cCount,
       updated_at: row.updated_at || Date.now(),
       created_at: row.created_at || Date.now(),
     };

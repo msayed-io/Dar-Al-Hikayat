@@ -46,10 +46,8 @@ export const LocationBottomSheet: React.FC = () => {
     try {
       const loc = await autoDetectLocation();
       updatePrayerState({ location: loc });
-      const scheduled = await schedulePrayerAlarms(loc, prayerState.method);
-      if (!scheduled) {
-        throw new Error("تم تحديد الموقع، لكن صلاحيات إشعارات الصلاة غير مكتملة.");
-      }
+      // جدولة منبهات الصلاة في الخلفية بشكل صامت دون تعليق نجاح الموقع عليها
+      void schedulePrayerAlarms(loc, prayerState.method);
       setDetectSuccess(true);
       setTimeout(() => {
         setDetectSuccess(false);
