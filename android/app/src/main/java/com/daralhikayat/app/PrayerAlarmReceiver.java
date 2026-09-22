@@ -137,7 +137,7 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             }
             PendingIntent pendingIntent = PendingIntent.getActivity(context, id, openIntent, pendingFlags);
 
-            int smallIconRes = R.drawable.ic_stat_prayer;
+            int smallIconRes = LogoManagerPlugin.notificationIcon(context);
             Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
             if (soundUri == null) {
                 soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);

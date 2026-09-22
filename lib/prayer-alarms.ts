@@ -379,16 +379,12 @@ export async function testPrayerNotification(): Promise<TestNotificationResult> 
         permission = await Notification.requestPermission();
       }
       if (permission === "granted") {
-        const isDarkMode =
-          typeof window.matchMedia === "function" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches;
-        // تباين عكسي لضمان الوضوح التام فوق بطاقة الإشعار
-        const iconUrl = isDarkMode ? "/logo-light-bg.png" : "/logo-dark-bg.png";
+        const iconUrl = "/dar-al-hikayat-logo-royal_classic.png";
 
         new Notification(title, {
           body,
           icon: iconUrl,
-          badge: "/icon-192.png",
+          badge: iconUrl,
         });
         return {
           success: true,

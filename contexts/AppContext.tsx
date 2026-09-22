@@ -19,6 +19,7 @@ import {
   saveSavedLocation,
 } from "../lib/prayer-alarms";
 import { StorageService, NoteMetadata } from "../lib/storage-service";
+import { syncNativeLogoTheme } from "../lib/logo-manager";
 
 export interface NoteStyles {
   fontSize: number;
@@ -338,6 +339,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   // Persist Theme to LocalStorage & synchronize html/body/root background colors dynamically
   useEffect(() => {
+    void syncNativeLogoTheme(themeMode);
     localStorage.setItem("dar_theme", themeMode);
     localStorage.setItem("dar_apple_variant", appleVariant);
     if (typeof document !== "undefined") {
@@ -507,6 +509,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const toggleTheme = (mode: ThemeMode) => {
     setThemeMode(mode);
+    void syncNativeLogoTheme(mode);
   };
 
   const value = {

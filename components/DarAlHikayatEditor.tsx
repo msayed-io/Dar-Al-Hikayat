@@ -60,6 +60,7 @@ import {
   PageBreak,
 } from "docx";
 import { useApp, NoteStyles } from "../contexts/AppContext";
+import { logoAsset } from "../lib/logo-assets";
 import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
 import { exportStoryToDocx } from "../lib/docx-export";
 import DarAlHikayatAIAssistant from "./DarAlHikayatAIAssistant";
@@ -3722,9 +3723,7 @@ const DarAlHikayatMaster: React.FC = () => {
               >
                 <img
                   src={
-                    currentTheme.isDark
-                      ? "/logo-dark-bg.png"
-                      : "/logo-light-bg.png"
+                    logoAsset(currentTheme.mode)
                   }
                   alt="أدوات"
                   className="w-5 h-5 object-contain transition-transform duration-300"

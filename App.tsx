@@ -16,6 +16,7 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { PermissionsGuard } from "./components/PermissionsGuard";
 import { requestNotificationPermission } from "./lib/prayer-alarms";
+import { logoAsset } from "./lib/logo-assets";
 import RemoteKeyboardMobilePage from "./components/RemoteKeyboardMobilePage";
 
 // The main component that manages views and persistent navigation
@@ -434,7 +435,7 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
           >
             <img
               src={
-                currentTheme.isDark ? "/logo-dark-bg.png" : "/logo-light-bg.png"
+                logoAsset(currentTheme.mode)
               }
               alt="Logo"
               className="w-16 h-16 object-contain"

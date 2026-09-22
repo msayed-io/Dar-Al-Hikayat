@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Feather } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
+import { logoAsset } from "../lib/logo-assets";
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -36,7 +37,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
   // Determine theme-aligned color values
   const isDark = currentTheme.isDark;
-  const logoSrc = isDark ? "/logo-dark-bg.png" : "/logo-light-bg.png";
+  const logoSrc = logoAsset(currentTheme.mode);
   const titleColor = currentTheme.mode === "apple_dark" ? "#F5F5F5" : currentTheme.accent;
   const subtitleColor = currentTheme.mode === "apple_dark"
     ? "#A1A1A6"
