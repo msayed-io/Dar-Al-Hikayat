@@ -604,7 +604,7 @@ const DarAlHikayatMaster: React.FC = () => {
   const [isNovelMode, setIsNovelMode] = useState(false);
   const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false);
   const [isRemoteConnected, setIsRemoteConnected] = useState(false);
-  const [remoteSessionPin] = useState<string>(() =>
+  const [remoteSessionPin, setRemoteSessionPin] = useState<string>(() =>
     Math.floor(100000 + Math.random() * 900000).toString()
   );
   const [chapters, setChapters] = useState<Chapter[]>([
@@ -4318,7 +4318,10 @@ const DarAlHikayatMaster: React.FC = () => {
         isOpen={isRemoteModalOpen}
         onClose={() => setIsRemoteModalOpen(false)}
         isConnected={isRemoteConnected}
-        onDisconnect={() => setIsRemoteConnected(false)}
+        onDisconnect={() => {
+          setIsRemoteConnected(false);
+          setRemoteSessionPin(Math.floor(100000 + Math.random() * 900000).toString());
+        }}
         sessionPin={remoteSessionPin}
         currentTheme={currentTheme}
       />

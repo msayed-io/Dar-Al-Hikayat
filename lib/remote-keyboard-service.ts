@@ -228,6 +228,11 @@ export function listenForRemoteKeystrokes(
           timestamp: Date.now(),
         };
 
+        if (action === "disconnect") {
+          onStatusChange?.(false, "تم قطع الاتصال");
+          return;
+        }
+
         if (action === "ping") {
           payload.type = "COMMAND";
           payload.action = "PING";
