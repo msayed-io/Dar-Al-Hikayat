@@ -5,59 +5,42 @@ import {
   Copy,
   Check,
   X,
+  Wifi,
+  WifiOff,
+  CheckCircle2,
 } from "lucide-react";
 import {
   getDeviceLocalIp,
-  listenForRemoteKeystrokes,
-  RemoteKeystrokePayload,
   NetworkIpResult
 } from "../lib/remote-keyboard-service";
 
 interface RemoteKeyboardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onKeystrokeReceived: (payload: RemoteKeystrokePayload) => void;
+  isConnected: boolean;
+  onDisconnect?: () => void;
+  sessionPin: string;
   currentTheme: any;
 }
 
 export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
   isOpen,
   onClose,
-  onKeystrokeReceived,
+  isConnected,
+  onDisconnect,
+  sessionPin,
   currentTheme,
 }) => {
-  const [sessionPin] = useState<string>(() =>
-    Math.floor(100000 + Math.random() * 900000).toString()
-  );
   const [networkInfo, setNetworkInfo] = useState<NetworkIpResult | null>(null);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    // Reset connection state strictly on modal open
-    setIsConnected(false);
-
     getDeviceLocalIp().then((info) => {
       setNetworkInfo(info);
     });
-
-    const cleanup = listenForRemoteKeystrokes(
-      sessionPin,
-      (payload) => {
-        setIsConnected(true);
-        onKeystrokeReceived(payload);
-      },
-      (connected) => {
-        setIsConnected(connected);
-      }
-    );
-
-    return () => {
-      cleanup();
-    };
-  }, [isOpen, sessionPin, onKeystrokeReceived]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -102,8 +85,10 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
             <div
               className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
               style={{
-                backgroundColor: `${themeAccent}18`,
-                color: themeAccent,
+                backgroundColor: isConnected
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : `${themeAccent}18`,
+                color: isConnected ? "#10B981" : themeAccent,
               }}
             >
               <Smartphone className="w-3.5 h-3.5" />
@@ -131,7 +116,7 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
                     : "bg-amber-500 animate-pulse"
                 }`}
               />
-              <span>{isConnected ? "متصل" : "في انتظار الهاتف"}</span>
+              <span>{isConnected ? "متصل بنجاح 🟢" : "في انتظار الهاتف"}</span>
             </div>
 
             <button
@@ -144,118 +129,186 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
           </div>
         </div>
 
-        {/* Content Body - Side by Side */}
-        <div className="flex items-center gap-3.5 py-0.5">
-          {/* QR Code Container - Silky smooth rounded card */}
-          <div
-            className="shrink-0 p-2 bg-white rounded-2xl shadow-sm border flex items-center justify-center overflow-hidden bg-clip-padding transition-all"
-            style={{
-              borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)",
-            }}
-          >
-            <QRCodeSVG
-              value={targetUrl}
-              size={102}
-              level="M"
-              includeMargin={true}
-              fgColor="#0F172A"
-              bgColor="#FFFFFF"
-            />
-          </div>
-
-          {/* Details Column */}
-          <div className="flex-1 flex flex-col justify-center gap-2 min-w-0">
-            {/* Direct URL Box */}
-            <div className="flex flex-col gap-1">
-              <span
-                className="text-[10px] font-zain-reg leading-none"
-                style={{ color: themeSecondary }}
-              >
-                افتح الرابط في الهاتف:
-              </span>
-              <div
-                className="flex items-center justify-between px-3 py-1.5 rounded-full border min-w-0 bg-clip-padding"
-                style={{
-                  backgroundColor: isDark
-                    ? "rgba(0, 0, 0, 0.25)"
-                    : "rgba(0, 0, 0, 0.04)",
-                  borderColor: themeBorder,
-                }}
-              >
-                <span
-                  className="truncate text-[10px] font-mono dir-ltr min-w-0 pl-1"
-                  style={{ color: themeAccent }}
-                >
-                  {targetUrl}
+        {/* Content Body - Conditional on Connection State */}
+        {isConnected ? (
+          /* CONNECTED STATE VIEW */
+          <div className="flex flex-col gap-3 py-1">
+            <div
+              className="flex items-center gap-3 p-3 rounded-2xl border bg-emerald-500/10 border-emerald-500/20"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-zain-bold text-xs text-emerald-600 dark:text-emerald-400">
+                  لوحة المفاتيح متصلة بنجاح!
                 </span>
-                <button
-                  onClick={copyUrl}
-                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-zain-bold transition cursor-pointer shrink-0 mr-1 active:scale-95 whitespace-nowrap"
-                  style={{
-                    backgroundColor: `${themeAccent}25`,
-                    color: themeAccent,
-                  }}
-                  title="نسخ الرابط"
-                >
-                  {copied ? (
-                    <Check className="w-2.5 h-2.5 text-emerald-500" />
-                  ) : (
-                    <Copy className="w-2.5 h-2.5" />
-                  )}
-                  <span>{copied ? "تم" : "نسخ"}</span>
-                </button>
+                <span className="font-zain-reg text-[11px] opacity-80 leading-tight">
+                  الكيبورد اللاسلكي شغال حالياً وتُنقل جميع النصوص والخواطر مباشرة للتابلت.
+                </span>
               </div>
             </div>
 
-            {/* PIN Code Box */}
+            {/* Active connection details */}
             <div
-              className="flex items-center justify-between px-3 py-1.5 rounded-full border text-xs bg-clip-padding"
+              className="flex flex-col gap-2 p-3 rounded-2xl border text-xs"
               style={{
-                backgroundColor: isDark
-                  ? "rgba(255, 255, 255, 0.02)"
-                  : "rgba(0, 0, 0, 0.02)",
+                backgroundColor: isDark ? "rgba(0, 0, 0, 0.2)" : "rgba(0, 0, 0, 0.03)",
                 borderColor: themeBorder,
               }}
             >
-              <span
-                className="font-zain-reg text-[10px]"
-                style={{ color: themeSecondary }}
+              <div className="flex items-center justify-between text-[11px]">
+                <span style={{ color: themeSecondary }}>عنوان الرابط النشط:</span>
+                <span className="font-mono text-emerald-500 text-[10px] dir-ltr truncate max-w-[170px]">
+                  {targetUrl}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px]">
+                <span style={{ color: themeSecondary }}>رمز الأمان (PIN):</span>
+                <span className="font-mono font-bold text-emerald-500">{sessionPin}</span>
+              </div>
+            </div>
+
+            {/* Disconnect Option */}
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                onClick={() => {
+                  onDisconnect?.();
+                }}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full font-zain-bold text-xs border transition cursor-pointer active:scale-95 text-rose-500 border-rose-500/30 hover:bg-rose-500/10"
               >
-                رمز الأمان (PIN):
-              </span>
-              <span
-                className="font-mono font-bold tracking-widest text-xs"
-                style={{ color: themeAccent }}
+                <WifiOff className="w-3.5 h-3.5" />
+                <span>قطع الاتصال</span>
+              </button>
+
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-full font-zain-bold text-xs shadow-sm transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
+                style={{
+                  backgroundColor: themeAccent,
+                  color: isDark ? "#121A1B" : "#FFFFFF",
+                }}
               >
-                {sessionPin}
-              </span>
+                الانتقال للمحرر
+              </button>
             </div>
           </div>
-        </div>
+        ) : (
+          /* PAIRING / QR CODE VIEW */
+          <>
+            <div className="flex items-center gap-3.5 py-0.5">
+              {/* QR Code Container */}
+              <div
+                className="shrink-0 p-2 bg-white rounded-2xl shadow-sm border flex items-center justify-center overflow-hidden bg-clip-padding transition-all"
+                style={{
+                  borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)",
+                }}
+              >
+                <QRCodeSVG
+                  value={targetUrl}
+                  size={102}
+                  level="M"
+                  includeMargin={true}
+                  fgColor="#0F172A"
+                  bgColor="#FFFFFF"
+                />
+              </div>
 
-        {/* Footer Action Bar */}
-        <div
-          className="flex items-center justify-between pt-2.5 border-t"
-          style={{ borderColor: themeBorder }}
-        >
-          <span
-            className="text-[10px] font-zain-reg opacity-80 leading-none"
-            style={{ color: themeSecondary }}
-          >
-            سيعمل الاتصال في الخلفية
-          </span>
+              {/* Details Column */}
+              <div className="flex-1 flex flex-col justify-center gap-2 min-w-0">
+                {/* Direct URL Box */}
+                <div className="flex flex-col gap-1">
+                  <span
+                    className="text-[10px] font-zain-reg leading-none"
+                    style={{ color: themeSecondary }}
+                  >
+                    افتح الرابط في الهاتف:
+                  </span>
+                  <div
+                    className="flex items-center justify-between px-3 py-1.5 rounded-full border min-w-0 bg-clip-padding"
+                    style={{
+                      backgroundColor: isDark
+                        ? "rgba(0, 0, 0, 0.25)"
+                        : "rgba(0, 0, 0, 0.04)",
+                      borderColor: themeBorder,
+                    }}
+                  >
+                    <span
+                      className="truncate text-[10px] font-mono dir-ltr min-w-0 pl-1"
+                      style={{ color: themeAccent }}
+                    >
+                      {targetUrl}
+                    </span>
+                    <button
+                      onClick={copyUrl}
+                      className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-zain-bold transition cursor-pointer shrink-0 mr-1 active:scale-95 whitespace-nowrap"
+                      style={{
+                        backgroundColor: `${themeAccent}25`,
+                        color: themeAccent,
+                      }}
+                      title="نسخ الرابط"
+                    >
+                      {copied ? (
+                        <Check className="w-2.5 h-2.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-2.5 h-2.5" />
+                      )}
+                      <span>{copied ? "تم" : "نسخ"}</span>
+                    </button>
+                  </div>
+                </div>
 
-          <button
-            onClick={onClose}
-            className="px-3.5 py-1.5 rounded-full font-zain-bold text-[11px] shadow-sm transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
-            style={{
-              backgroundColor: themeAccent,
-              color: isDark ? "#121A1B" : "#FFFFFF",
-            }}
-          >
-            الانتقال للمحرر
-          </button>
-        </div>
+                {/* PIN Code Box */}
+                <div
+                  className="flex items-center justify-between px-3 py-1.5 rounded-full border text-xs bg-clip-padding"
+                  style={{
+                    backgroundColor: isDark
+                      ? "rgba(255, 255, 255, 0.02)"
+                      : "rgba(0, 0, 0, 0.02)",
+                    borderColor: themeBorder,
+                  }}
+                >
+                  <span
+                    className="font-zain-reg text-[10px]"
+                    style={{ color: themeSecondary }}
+                  >
+                    رمز الأمان (PIN):
+                  </span>
+                  <span
+                    className="font-mono font-bold tracking-widest text-xs"
+                    style={{ color: themeAccent }}
+                  >
+                    {sessionPin}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Action Bar */}
+            <div
+              className="flex items-center justify-between pt-2.5 border-t"
+              style={{ borderColor: themeBorder }}
+            >
+              <span
+                className="text-[10px] font-zain-reg opacity-80 leading-none"
+                style={{ color: themeSecondary }}
+              >
+                سيعمل الاتصال في الخلفية بدون انقطاع
+              </span>
+
+              <button
+                onClick={onClose}
+                className="px-3.5 py-1.5 rounded-full font-zain-bold text-[11px] shadow-sm transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
+                style={{
+                  backgroundColor: themeAccent,
+                  color: isDark ? "#121A1B" : "#FFFFFF",
+                }}
+              >
+                الانتقال للمحرر
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

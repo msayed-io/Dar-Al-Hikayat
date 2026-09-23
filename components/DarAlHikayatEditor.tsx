@@ -604,6 +604,9 @@ const DarAlHikayatMaster: React.FC = () => {
   const [isNovelMode, setIsNovelMode] = useState(false);
   const [isRemoteModalOpen, setIsRemoteModalOpen] = useState(false);
   const [isRemoteConnected, setIsRemoteConnected] = useState(false);
+  const [remoteSessionPin] = useState<string>(() =>
+    Math.floor(100000 + Math.random() * 900000).toString()
+  );
   const [chapters, setChapters] = useState<Chapter[]>([
     { id: "1", title: "", content: "" },
   ]);
@@ -1299,6 +1302,10 @@ const DarAlHikayatMaster: React.FC = () => {
     (payload: RemoteKeystrokePayload) => {
       setIsRemoteConnected(true);
 
+      if (payload.action === "PING") {
+        return;
+      }
+
       let activeEl = document.activeElement as HTMLElement | null;
       const editorEl = isNovelMode
         ? (document.querySelector(".chapter-item-editable[contenteditable='true']") as HTMLElement) ||
@@ -1403,6 +1410,34 @@ const DarAlHikayatMaster: React.FC = () => {
     },
     [isNovelMode, handleUndo, handleRedo]
   );
+
+  // --- Decoupled Application-Level Remote Keyboard Server Listener ---
+  useEffect(() => {
+    const cleanup = listenForRemoteKeystrokes(
+      remoteSessionPin,
+      (payload) => {
+        setIsRemoteConnected(true);
+        // Requirement #2: Auto-close modal when phone pairs or sends input
+        setIsRemoteModalOpen(false);
+
+        if (payload.action === "PING") {
+          return;
+        }
+
+        handleRemoteKeystroke(payload);
+      },
+      (connected) => {
+        setIsRemoteConnected(connected);
+        if (connected) {
+          setIsRemoteModalOpen(false);
+        }
+      }
+    );
+
+    return () => {
+      cleanup();
+    };
+  }, [remoteSessionPin, handleRemoteKeystroke]);
 
   const commitAgentMutationsToState = React.useCallback(() => {
     if (isNovelMode) {
@@ -4282,7 +4317,9 @@ const DarAlHikayatMaster: React.FC = () => {
       <RemoteKeyboardModal
         isOpen={isRemoteModalOpen}
         onClose={() => setIsRemoteModalOpen(false)}
-        onKeystrokeReceived={handleRemoteKeystroke}
+        isConnected={isRemoteConnected}
+        onDisconnect={() => setIsRemoteConnected(false)}
+        sessionPin={remoteSessionPin}
         currentTheme={currentTheme}
       />
     </div>

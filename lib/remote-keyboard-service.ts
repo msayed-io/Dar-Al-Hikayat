@@ -4,7 +4,7 @@ export interface RemoteKeystrokePayload {
   sessionPin: string;
   type: "KEY" | "TASHKEEL" | "COMMAND" | "PASTE_TEXT";
   char?: string;
-  action?: "NEWLINE" | "BACKSPACE" | "DELETE_WORD" | "UNDO" | "REDO" | "SELECT_ALL" | "NAVIGATE_LEFT" | "NAVIGATE_RIGHT";
+  action?: "NEWLINE" | "BACKSPACE" | "DELETE_WORD" | "UNDO" | "REDO" | "SELECT_ALL" | "NAVIGATE_LEFT" | "NAVIGATE_RIGHT" | "PING";
   text?: string;
   senderId?: string;
   timestamp: number;
@@ -204,7 +204,10 @@ export function listenForRemoteKeystrokes(
           timestamp: Date.now(),
         };
 
-        if (action === "tashkeel") {
+        if (action === "ping") {
+          payload.type = "COMMAND";
+          payload.action = "PING";
+        } else if (action === "tashkeel") {
           payload.type = "TASHKEEL";
           payload.char = char;
         } else if (action === "paste") {
