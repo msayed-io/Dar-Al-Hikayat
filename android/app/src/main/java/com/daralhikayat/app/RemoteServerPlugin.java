@@ -109,4 +109,21 @@ public class RemoteServerPlugin extends Plugin {
             call.reject("Failed to stop native LocalHttpServer", e);
         }
     }
+
+    @PluginMethod
+    public void updateSession(PluginCall call) {
+        try {
+            String pin = call.getString("pin", "");
+            boolean connected = Boolean.TRUE.equals(call.getBoolean("connected", false));
+            if (httpServer != null) {
+                httpServer.setActiveSessionPin(pin);
+                httpServer.setSessionConnected(connected);
+            }
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to update session pin", e);
+        }
+    }
 }

@@ -49,7 +49,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import RemoteKeyboardModal from "./RemoteKeyboardModal";
-import { listenForRemoteKeystrokes, type RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
+import { listenForRemoteKeystrokes, updateRemoteSession, type RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
 import {
   Document,
   Packer,
@@ -1410,6 +1410,11 @@ const DarAlHikayatMaster: React.FC = () => {
     },
     [isNovelMode, handleUndo, handleRedo]
   );
+
+  // Synchronize active session PIN and connection state with native LocalHttpServer
+  useEffect(() => {
+    updateRemoteSession(remoteSessionPin, isRemoteConnected);
+  }, [remoteSessionPin, isRemoteConnected]);
 
   // --- Decoupled Application-Level Remote Keyboard Server Listener ---
   useEffect(() => {
@@ -4320,7 +4325,9 @@ const DarAlHikayatMaster: React.FC = () => {
         isConnected={isRemoteConnected}
         onDisconnect={() => {
           setIsRemoteConnected(false);
-          setRemoteSessionPin(Math.floor(100000 + Math.random() * 900000).toString());
+          const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+          setRemoteSessionPin(newPin);
+          updateRemoteSession(newPin, false);
         }}
         sessionPin={remoteSessionPin}
         currentTheme={currentTheme}

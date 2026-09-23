@@ -27,6 +27,7 @@ export interface NativeRemoteServerPlugin {
   }>;
   startServer(): Promise<{ running: boolean; port: number; ip: string }>;
   stopServer(): Promise<{ running: boolean }>;
+  updateSession(options: { pin: string; connected: boolean }): Promise<{ ok: boolean }>;
   addListener(
     eventName: "remoteCommand",
     listenerFunc: (data: any) => void
@@ -37,7 +38,20 @@ export interface NativeRemoteServerPlugin {
 const LOCAL_BROADCAST_CHANNEL = "dar_remote_keyboard_channel";
 
 // Register native plugin properly via Capacitor's plugin registry
-const NativeRemoteServer = registerPlugin<NativeRemoteServerPlugin>("RemoteServer");
+export const NativeRemoteServer = registerPlugin<NativeRemoteServerPlugin>("RemoteServer");
+
+/**
+ * Synchronize session PIN and connected state with the native LocalHttpServer
+ */
+export async function updateRemoteSession(pin: string, connected: boolean): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await NativeRemoteServer.updateSession({ pin, connected });
+    } catch (e) {
+      console.warn("Failed to update remote session on native server:", e);
+    }
+  }
+}
 
 /**
  * Get the real Wi-Fi / Hotspot IPv4 address of this device

@@ -23,6 +23,8 @@ class LocalHttpServer(private val port: Int = 8080) {
 
     private var serverSocket: ServerSocket? = null
     @Volatile private var isRunning: Boolean = false
+    @Volatile var activeSessionPin: String = ""
+    @Volatile var isSessionConnected: Boolean = false
     private val executor = Executors.newCachedThreadPool()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -207,6 +209,18 @@ class LocalHttpServer(private val port: Int = 8080) {
                     }
 
                     val action = params["action"] ?: params["type"] ?: "type"
+                    val incomingPin = params["pin"] ?: queryParams["pin"] ?: ""
+
+                    // Validate PIN if activeSessionPin is set
+                    if (activeSessionPin.isNotEmpty() && incomingPin.isNotEmpty() && incomingPin != activeSessionPin) {
+                        val responseJson = JSONObject().apply {
+                            put("ok", false)
+                            put("error", "PIN_MISMATCH")
+                            put("message", "Session PIN is no longer valid")
+                        }
+                        sendUnauthorizedResponse(writer, responseJson.toString())
+                        return
+                    }
                     
                     // Dispatch command instantly to Main Thread UI (< 2ms)
                     mainHandler.post {
@@ -313,6 +327,20 @@ class LocalHttpServer(private val port: Int = 8080) {
     private fun sendJsonResponse(writer: PrintWriter, json: String) {
         val bytes = json.toByteArray(Charsets.UTF_8)
         writer.print("HTTP/1.1 200 OK\r\n")
+        writer.print("Content-Type: application/json; charset=utf-8\r\n")
+        writer.print("Content-Length: ${bytes.size}\r\n")
+        writer.print("Access-Control-Allow-Origin: *\r\n")
+        writer.print("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
+        writer.print("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Tablet-PIN, pin\r\n")
+        writer.print("Cache-Control: no-cache\r\n")
+        writer.print("Connection: close\r\n\r\n")
+        writer.print(json)
+        writer.flush()
+    }
+
+    private fun sendUnauthorizedResponse(writer: PrintWriter, json: String) {
+        val bytes = json.toByteArray(Charsets.UTF_8)
+        writer.print("HTTP/1.1 401 Unauthorized\r\n")
         writer.print("Content-Type: application/json; charset=utf-8\r\n")
         writer.print("Content-Length: ${bytes.size}\r\n")
         writer.print("Access-Control-Allow-Origin: *\r\n")
