@@ -49,7 +49,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import RemoteKeyboardModal from "./RemoteKeyboardModal";
-import type { RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
+import { listenForRemoteKeystrokes, type RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
 import {
   Document,
   Packer,
