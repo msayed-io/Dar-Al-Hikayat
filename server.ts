@@ -19,8 +19,44 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  // PWA Manifest Endpoint for Remote Keyboard
+  app.get("/manifest.json", (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.json({
+      id: "/",
+      name: "لوحة الرواية — كيبورد الكاتبة اللاسلكي",
+      short_name: "لوحة الرواية",
+      description: "كيبورد لاسلكي مخصص للروايات والكاتبات موصول بالتابلت",
+      start_url: "/",
+      display: "standalone",
+      orientation: "landscape",
+      background_color: "#141210",
+      theme_color: "#1D1A16",
+      icons: [
+        {
+          src: "/pwa-192x192.png",
+          sizes: "192x192",
+          type: "image/png"
+        }
+      ]
+    });
+  });
+
+  // Service Worker for PWA Offline Caching
+  app.get("/sw.js", (_req, res) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.send(`
+      self.addEventListener('install', (e) => self.skipWaiting());
+      self.addEventListener('activate', (e) => self.clients.claim());
+      self.addEventListener('fetch', (e) => {
+        if (e.request.url.includes('/api/')) return;
+        e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+      });
+    `);
+  });
+
   // Remote Keyboard: Get true local network IPv4 address
-  app.get("/api/remote-keyboard/ip", (_req, res) => {
+  app.get(["/api/ip", "/api/remote-keyboard/ip"], (_req, res) => {
     const interfaces = os.networkInterfaces();
     const ips: string[] = [];
     let primaryIp = "";
@@ -45,12 +81,77 @@ async function startServer() {
       }
     }
 
+    const nativePort = 8080;
     res.json({
       ips,
       primaryIp: primaryIp || ips[0] || "127.0.0.1",
-      port: PORT,
+      port: nativePort,
+      connectionUrl: `http://${primaryIp || ips[0] || "127.0.0.1"}:${nativePort}/`,
     });
   });
+
+  // Native Lightweight Command API (/api/command)
+  const handleCommandRequest = (req: express.Request, res: express.Response) => {
+    const startTime = Date.now();
+    const query = req.query as Record<string, string>;
+    const body = (req.body || {}) as Record<string, string>;
+
+    const action = query.action || body.action || query.type || body.type || "type";
+    const char = query.char ?? body.char;
+    const text = query.text ?? body.text;
+    const delta = query.delta ?? body.delta;
+
+    let payloadType: "KEY" | "TASHKEEL" | "COMMAND" | "PASTE_TEXT" = "COMMAND";
+    let commandAction: any = undefined;
+
+    if (action === "type") {
+      payloadType = "KEY";
+    } else if (action === "tashkeel") {
+      payloadType = "TASHKEEL";
+    } else if (action === "paste") {
+      payloadType = "PASTE_TEXT";
+    } else if (action === "backspace") {
+      commandAction = "BACKSPACE";
+    } else if (action === "newline") {
+      commandAction = "NEWLINE";
+    } else if (action === "undo") {
+      commandAction = "UNDO";
+    } else if (action === "redo") {
+      commandAction = "REDO";
+    } else if (action === "delete_word") {
+      commandAction = "DELETE_WORD";
+    } else if (action === "cursor_move") {
+      commandAction = parseInt(delta as string) < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT";
+    }
+
+    const payload = {
+      sessionPin: query.pin || body.pin || "123456",
+      type: payloadType,
+      char: char,
+      action: commandAction,
+      text: text,
+      timestamp: Date.now(),
+    };
+
+    const dataString = `data: ${JSON.stringify(payload)}\n\n`;
+    for (const clientRes of remoteKeyboardClients) {
+      try {
+        clientRes.write(dataString);
+      } catch {
+        remoteKeyboardClients.delete(clientRes);
+      }
+    }
+
+    res.json({
+      ok: true,
+      action,
+      latencyMs: Date.now() - startTime,
+      timestamp: Date.now(),
+    });
+  };
+
+  app.get("/api/command", handleCommandRequest);
+  app.post("/api/command", handleCommandRequest);
 
   // Remote Keyboard: SSE endpoint for receiving instant keystroke events (< 5ms)
   app.get("/api/remote-keyboard/events", (req, res) => {

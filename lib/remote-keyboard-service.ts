@@ -27,21 +27,20 @@ const NativeRemoteServer = (Capacitor as any)?.Plugins?.RemoteServer;
  * Get the real Wi-Fi / Hotspot IPv4 address of this device
  */
 export async function getDeviceLocalIp(): Promise<NetworkIpResult> {
-  const defaultPort = 3000;
+  const nativePort = 8080;
   const currentHost = window.location.hostname || "localhost";
-  const currentPort = parseInt(window.location.port) || defaultPort;
 
   // Try Android native plugin first
   if (Capacitor.isNativePlatform() && NativeRemoteServer?.getLocalIpAddress) {
     try {
       const res = await NativeRemoteServer.getLocalIpAddress();
       if (res && res.primaryIp && res.primaryIp !== "127.0.0.1") {
-        const port = res.port || defaultPort;
+        const port = res.port || nativePort;
         return {
           primaryIp: res.primaryIp,
           ips: res.ips || [res.primaryIp],
           port,
-          connectionUrl: `http://${res.primaryIp}:${port}/#remote-keyboard`,
+          connectionUrl: `http://${res.primaryIp}:${port}/`,
         };
       }
     } catch (e) {
@@ -49,32 +48,32 @@ export async function getDeviceLocalIp(): Promise<NetworkIpResult> {
     }
   }
 
-  // Try Express server endpoint /api/remote-keyboard/ip
+  // Try Express / Native server IP endpoint
   try {
     const res = await fetch("/api/remote-keyboard/ip");
     if (res.ok) {
       const data = await res.json();
       if (data.primaryIp && data.primaryIp !== "127.0.0.1") {
-        const port = data.port || currentPort;
+        const port = data.port || nativePort;
         return {
           primaryIp: data.primaryIp,
           ips: data.ips || [data.primaryIp],
           port,
-          connectionUrl: `http://${data.primaryIp}:${port}/#remote-keyboard`,
+          connectionUrl: `http://${data.primaryIp}:${port}/`,
         };
       }
     }
   } catch (e) {
-    console.warn("Express IP endpoint fetch error:", e);
+    console.warn("IP endpoint fetch error:", e);
   }
 
-  // Fallback to current location hostname if not localhost
+  // Fallback to current location hostname
   const resolvedIp = (currentHost !== "localhost" && currentHost !== "127.0.0.1") ? currentHost : "192.168.1.15";
   return {
     primaryIp: resolvedIp,
     ips: [resolvedIp],
-    port: currentPort,
-    connectionUrl: `${window.location.protocol}//${resolvedIp}:${currentPort}/#remote-keyboard`,
+    port: nativePort,
+    connectionUrl: `http://${resolvedIp}:${nativePort}/`,
   };
 }
 
@@ -102,21 +101,39 @@ export async function sendRemoteKeystroke(payload: RemoteKeystrokePayload): Prom
     // ignore
   }
 
-  // 3. Send HTTP POST to server endpoint
+  // 3. Send HTTP GET/POST to /api/command endpoint
   try {
-    const response = await fetch("/api/remote-keyboard/type", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let actionParam = "type";
+    if (payload.type === "TASHKEEL") actionParam = "tashkeel";
+    else if (payload.type === "PASTE_TEXT") actionParam = "paste";
+    else if (payload.action === "BACKSPACE") actionParam = "backspace";
+    else if (payload.action === "NEWLINE") actionParam = "newline";
+    else if (payload.action === "UNDO") actionParam = "undo";
+    else if (payload.action === "REDO") actionParam = "redo";
+    else if (payload.action === "DELETE_WORD") actionParam = "delete_word";
+    else if (payload.action === "NAVIGATE_LEFT") actionParam = "cursor_move&delta=-1";
+    else if (payload.action === "NAVIGATE_RIGHT") actionParam = "cursor_move&delta=1";
 
+    let url = `/api/command?action=${actionParam}&pin=${encodeURIComponent(payload.sessionPin)}`;
+    if (payload.char) url += `&char=${encodeURIComponent(payload.char)}`;
+    if (payload.text) url += `&text=${encodeURIComponent(payload.text)}`;
+
+    const response = await fetch(url);
     const elapsed = Math.round(performance.now() - startTime);
     if (response.ok) {
       return { ok: true, latencyMs: elapsed };
     }
   } catch (e) {
-    // If offline/direct Wi-Fi, broadcast channel & local sync succeeded
-    console.log("Remote keystroke HTTP POST fallback to broadcast channel:", e);
+    // Fallback to POST /api/remote-keyboard/type
+    try {
+      await fetch("/api/remote-keyboard/type", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // ignore
+    }
   }
 
   const elapsed = Math.round(performance.now() - startTime);
@@ -168,7 +185,62 @@ export function listenForRemoteKeystrokes(
   };
   window.addEventListener("storage", handleStorageEvent);
 
-  // 3. Listen via Server-Sent Events (SSE)
+  // 3. Listen via Native Android LocalHttpServer plugin if running natively
+  let nativeListenerHandle: any = null;
+  if (Capacitor.isNativePlatform() && NativeRemoteServer?.addListener) {
+    try {
+      NativeRemoteServer.addListener("remoteCommand", (data: any) => {
+        if (isCleanedUp) return;
+        onStatusChange?.(true, "الهاتف متصل بالسيرفر المباشر");
+
+        const action = data.action || data.type || "type";
+        const char = data.char || "";
+        const text = data.text || "";
+
+        let payload: RemoteKeystrokePayload = {
+          sessionPin,
+          type: "KEY",
+          char,
+          timestamp: Date.now(),
+        };
+
+        if (action === "tashkeel") {
+          payload.type = "TASHKEEL";
+          payload.char = char;
+        } else if (action === "paste") {
+          payload.type = "PASTE_TEXT";
+          payload.text = text;
+        } else if (action === "backspace") {
+          payload.type = "COMMAND";
+          payload.action = "BACKSPACE";
+        } else if (action === "newline") {
+          payload.type = "COMMAND";
+          payload.action = "NEWLINE";
+        } else if (action === "undo") {
+          payload.type = "COMMAND";
+          payload.action = "UNDO";
+        } else if (action === "redo") {
+          payload.type = "COMMAND";
+          payload.action = "REDO";
+        } else if (action === "cursor_move") {
+          const delta = parseInt(data.delta || "1", 10);
+          payload.type = "COMMAND";
+          payload.action = delta < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT";
+        } else {
+          payload.type = "KEY";
+          payload.char = char;
+        }
+
+        onKeystroke(payload);
+      }).then((handle: any) => {
+        nativeListenerHandle = handle;
+      });
+    } catch (e) {
+      console.warn("Native remoteCommand listener error:", e);
+    }
+  }
+
+  // 4. Listen via Server-Sent Events (SSE)
   let eventSource: EventSource | null = null;
   try {
     eventSource = new EventSource("/api/remote-keyboard/events");
@@ -203,6 +275,9 @@ export function listenForRemoteKeystrokes(
       bc.close();
     }
     window.removeEventListener("storage", handleStorageEvent);
+    if (nativeListenerHandle && typeof nativeListenerHandle.remove === "function") {
+      nativeListenerHandle.remove();
+    }
     if (eventSource) {
       eventSource.close();
     }
