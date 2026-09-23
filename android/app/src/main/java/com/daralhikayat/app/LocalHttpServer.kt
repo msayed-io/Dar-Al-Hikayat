@@ -316,6 +316,8 @@ class LocalHttpServer(private val port: Int = 8080) {
         writer.print("Content-Type: application/json; charset=utf-8\r\n")
         writer.print("Content-Length: ${bytes.size}\r\n")
         writer.print("Access-Control-Allow-Origin: *\r\n")
+        writer.print("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
+        writer.print("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Tablet-PIN, pin\r\n")
         writer.print("Cache-Control: no-cache\r\n")
         writer.print("Connection: close\r\n\r\n")
         writer.print(json)

@@ -1,4 +1,4 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 export interface RemoteKeystrokePayload {
   sessionPin: string;
@@ -17,11 +17,27 @@ export interface NetworkIpResult {
   connectionUrl: string;
 }
 
+export interface NativeRemoteServerPlugin {
+  getLocalIpAddress(): Promise<{
+    primaryIp: string;
+    ips: string[];
+    port: number;
+    connectionUrl: string;
+    isNativeServerRunning?: boolean;
+  }>;
+  startServer(): Promise<{ running: boolean; port: number; ip: string }>;
+  stopServer(): Promise<{ running: boolean }>;
+  addListener(
+    eventName: "remoteCommand",
+    listenerFunc: (data: any) => void
+  ): Promise<any>;
+}
+
 // Custom event name for local tab sync (when tested in same browser)
 const LOCAL_BROADCAST_CHANNEL = "dar_remote_keyboard_channel";
 
-// Register native plugin if available
-const NativeRemoteServer = (Capacitor as any)?.Plugins?.RemoteServer;
+// Register native plugin properly via Capacitor's plugin registry
+const NativeRemoteServer = registerPlugin<NativeRemoteServerPlugin>("RemoteServer");
 
 /**
  * Get the real Wi-Fi / Hotspot IPv4 address of this device
@@ -31,7 +47,7 @@ export async function getDeviceLocalIp(): Promise<NetworkIpResult> {
   const currentHost = window.location.hostname || "localhost";
 
   // Try Android native plugin first
-  if (Capacitor.isNativePlatform() && NativeRemoteServer?.getLocalIpAddress) {
+  if (Capacitor.isNativePlatform()) {
     try {
       const res = await NativeRemoteServer.getLocalIpAddress();
       if (res && res.primaryIp && res.primaryIp !== "127.0.0.1") {
@@ -187,10 +203,18 @@ export function listenForRemoteKeystrokes(
 
   // 3. Listen via Native Android LocalHttpServer plugin if running natively
   let nativeListenerHandle: any = null;
-  if (Capacitor.isNativePlatform() && NativeRemoteServer?.addListener) {
+  if (Capacitor.isNativePlatform()) {
     try {
       NativeRemoteServer.addListener("remoteCommand", (data: any) => {
         if (isCleanedUp) return;
+
+        // Verify PIN if sessionPin is provided
+        const incomingPin = data.pin || data.sessionPin;
+        if (sessionPin && incomingPin && incomingPin !== sessionPin) {
+          console.warn("Remote keyboard PIN mismatch:", { incomingPin, sessionPin });
+          return;
+        }
+
         onStatusChange?.(true, "الهاتف متصل بالسيرفر المباشر");
 
         const action = data.action || data.type || "type";
@@ -229,6 +253,9 @@ export function listenForRemoteKeystrokes(
           const delta = parseInt(data.delta || "1", 10);
           payload.type = "COMMAND";
           payload.action = delta < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT";
+        } else if (action === "select_all") {
+          payload.type = "COMMAND";
+          payload.action = "SELECT_ALL";
         } else {
           payload.type = "KEY";
           payload.char = char;
@@ -237,6 +264,8 @@ export function listenForRemoteKeystrokes(
         onKeystroke(payload);
       }).then((handle: any) => {
         nativeListenerHandle = handle;
+      }).catch((e: any) => {
+        console.warn("NativeRemoteServer addListener error:", e);
       });
     } catch (e) {
       console.warn("Native remoteCommand listener error:", e);

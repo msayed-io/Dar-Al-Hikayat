@@ -45,7 +45,23 @@ public class RemoteServerPlugin extends Plugin {
     @PluginMethod
     public void getLocalIpAddress(PluginCall call) {
         try {
-            String primaryIp = httpServer != null ? httpServer.getLocalIpAddress() : "127.0.0.1";
+            if (httpServer == null) {
+                httpServer = new LocalHttpServer(8080);
+                httpServer.setOnCommandReceivedListener((action, params) -> {
+                    JSObject ret = new JSObject();
+                    ret.put("action", action);
+                    for (Map.Entry<String, String> entry : params.entrySet()) {
+                        ret.put(entry.getKey(), entry.getValue());
+                    }
+                    notifyListeners("remoteCommand", ret, true);
+                    return kotlin.Unit.INSTANCE;
+                });
+            }
+            if (!httpServer.isServerRunning()) {
+                httpServer.start();
+            }
+
+            String primaryIp = httpServer.getLocalIpAddress();
             JSArray ipsArray = new JSArray();
             ipsArray.put(primaryIp);
 
@@ -54,7 +70,7 @@ public class RemoteServerPlugin extends Plugin {
             result.put("primaryIp", primaryIp);
             result.put("port", 8080);
             result.put("connectionUrl", "http://" + primaryIp + ":8080/");
-            result.put("isNativeServerRunning", httpServer != null && httpServer.isServerRunning());
+            result.put("isNativeServerRunning", httpServer.isServerRunning());
             call.resolve(result);
         } catch (Exception e) {
             call.reject("Failed to get local IPv4 address", e);
