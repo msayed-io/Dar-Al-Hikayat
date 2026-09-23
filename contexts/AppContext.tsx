@@ -63,7 +63,6 @@ export interface NoteSaveData {
 
 // --- Theme Definitions ---
 export type ThemeMode = "royal_classic" | "night_whisper" | "apple_dark";
-export type AppleVariant = "default" | "liquid_glass";
 
 export interface ThemeColors {
   mode: ThemeMode;
@@ -75,8 +74,6 @@ export interface ThemeColors {
   border: string;
   shadow: string;
   isDark: boolean;
-  isLiquidGlass?: boolean;
-  appleVariant?: AppleVariant;
 }
 
 const themes: Record<ThemeMode, ThemeColors> = {
@@ -90,7 +87,6 @@ const themes: Record<ThemeMode, ThemeColors> = {
     border: "rgba(18, 26, 27, 0.12)",
     shadow: "0 10px 30px -4px rgba(18, 26, 27, 0.12), 0 2px 8px rgba(18, 26, 27, 0.06)",
     isDark: false,
-    isLiquidGlass: false,
   },
   night_whisper: {
     mode: "night_whisper",
@@ -102,7 +98,6 @@ const themes: Record<ThemeMode, ThemeColors> = {
     border: "rgba(226, 223, 210, 0.09)",
     shadow: "0 4px 30px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.5)",
     isDark: true,
-    isLiquidGlass: false,
   },
   apple_dark: {
     mode: "apple_dark",
@@ -114,8 +109,6 @@ const themes: Record<ThemeMode, ThemeColors> = {
     border: "rgba(255, 255, 255, 0.08)",
     shadow: "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)",
     isDark: true,
-    isLiquidGlass: false,
-    appleVariant: "default",
   },
 };
 
@@ -125,8 +118,6 @@ interface AppContextType {
   currentView: "home" | "editor" | "settings" | "prayer" | "locationPicker";
   selectedNote: Note | null;
   currentTheme: ThemeColors;
-  appleVariant: AppleVariant;
-  setAppleVariant: (variant: AppleVariant) => void;
   isSelectionMode: boolean;
   setIsSelectionMode: (active: boolean) => void;
   prayerState: import("../lib/prayer-config").PrayerState;
@@ -195,53 +186,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     return "royal_classic";
   });
 
-  const [appleVariant, setAppleVariantState] = useState<AppleVariant>(() => {
-    if (typeof window !== "undefined") {
-      const savedVariant = localStorage.getItem("dar_apple_variant") as AppleVariant;
-      if (savedVariant === "liquid_glass" || savedVariant === "default") {
-        return savedVariant;
-      }
-    }
-    return "default";
-  });
-
-  const setAppleVariant = (variant: AppleVariant) => {
-    setAppleVariantState(variant);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("dar_apple_variant", variant);
-    }
-  };
-
-  // Compute theme dynamically with support for Apple Dark Liquid Glass mode
+  // Compute theme dynamically
   const currentTheme: ThemeColors = React.useMemo(() => {
-    const baseTheme = themes[themeMode];
-    if (themeMode === "apple_dark") {
-      if (appleVariant === "liquid_glass") {
-        return {
-          mode: "apple_dark",
-          bg: "transparent",
-          text: "#FFFFFF",
-          accent: "#FFFFFF",
-          secondary: "rgba(255, 255, 255, 0.85)",
-          glass: "rgba(0, 0, 0, 0.25)",
-          border: "rgba(255, 255, 255, 0.35)",
-          shadow: "inset 0 4px 20px rgba(255, 255, 255, 0.15), 0 8px 32px rgba(0, 0, 0, 0.2)",
-          isDark: true,
-          isLiquidGlass: true,
-          appleVariant: "liquid_glass",
-        };
-      }
-      return {
-        ...baseTheme,
-        isLiquidGlass: false,
-        appleVariant: "default",
-      };
-    }
-    return {
-      ...baseTheme,
-      isLiquidGlass: false,
-    };
-  }, [themeMode, appleVariant]);
+    return themes[themeMode] || themes.royal_classic;
+  }, [themeMode]);
   const [prayerState, setPrayerState] = useState<PrayerState>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -341,7 +289,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     void syncNativeLogoTheme(themeMode);
     localStorage.setItem("dar_theme", themeMode);
-    localStorage.setItem("dar_apple_variant", appleVariant);
     if (typeof document !== "undefined") {
       document.documentElement.style.backgroundColor = currentTheme.bg;
       document.body.style.backgroundColor = currentTheme.bg;
@@ -358,20 +305,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
         document.body.classList.remove("dark");
       }
 
-      if (currentTheme.isLiquidGlass) {
-        document.documentElement.classList.add("theme-liquid-glass");
-        document.body.classList.add("theme-liquid-glass");
-      } else {
-        document.documentElement.classList.remove("theme-liquid-glass");
-        document.body.classList.remove("theme-liquid-glass");
-      }
-
       const metaThemeColor = document.querySelector('meta[name="theme-color"]');
       if (metaThemeColor) {
         metaThemeColor.setAttribute("content", currentTheme.bg);
       }
     }
-  }, [themeMode, appleVariant, currentTheme.isDark, currentTheme.isLiquidGlass, currentTheme.bg]);
+  }, [themeMode, currentTheme.isDark, currentTheme.bg]);
 
   // تحديث حالة المواقيت + التخزين المستمر وتغذية الطبقة 2
   const updatePrayerState = (
@@ -517,8 +456,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     currentView,
     selectedNote,
     currentTheme,
-    appleVariant,
-    setAppleVariant,
     isSelectionMode,
     setIsSelectionMode,
     prayerState,

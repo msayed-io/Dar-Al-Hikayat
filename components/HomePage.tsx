@@ -1181,14 +1181,12 @@ const HomePage: React.FC = () => {
               ? "apple-top-vignette-light"
               : currentTheme.mode === "night_whisper"
               ? "apple-top-vignette-night"
-              : currentTheme.isLiquidGlass
-              ? "opacity-0 pointer-events-none"
               : "apple-top-vignette"
           }`}
         />
 
         {/* --- Apple Magnetic Blur Scroll Dissolve (Effect 2) --- */}
-        <div className={`apple-magnetic-dissolve ${currentTheme.isLiquidGlass ? "opacity-0 pointer-events-none" : ""}`} />
+        <div className="apple-magnetic-dissolve" />
 
         {/* --- FLOATING HEADER CAPSULES SYSTEM (Apple Concentric Geometry) --- */}
         <header
@@ -1207,11 +1205,11 @@ const HomePage: React.FC = () => {
                 <div
                   className="h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300 pointer-events-auto"
                   style={{
-                    backgroundColor: currentTheme.isLiquidGlass ? currentTheme.glass : (currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass),
-                    borderColor: currentTheme.isLiquidGlass ? currentTheme.border : (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border),
-                    boxShadow: currentTheme.isLiquidGlass ? currentTheme.shadow : (currentTheme.mode === "apple_dark"
+                    backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                    borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                    boxShadow: currentTheme.mode === "apple_dark"
                       ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                      : currentTheme.shadow),
+                      : currentTheme.shadow,
                   }}
                 >
                   <span
@@ -1227,11 +1225,11 @@ const HomePage: React.FC = () => {
                   <div
                     className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl transition-all duration-300"
                     style={{
-                      backgroundColor: currentTheme.isLiquidGlass ? currentTheme.glass : (currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass),
-                      borderColor: currentTheme.isLiquidGlass ? currentTheme.border : (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border),
-                      boxShadow: currentTheme.isLiquidGlass ? currentTheme.shadow : (currentTheme.mode === "apple_dark"
+                      backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                      borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                      boxShadow: currentTheme.mode === "apple_dark"
                         ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                        : currentTheme.shadow),
+                        : currentTheme.shadow,
                     }}
                   >
                     {/* Search Icon Button */}
@@ -1432,11 +1430,11 @@ const HomePage: React.FC = () => {
                   width: "100%",
                   left: 0,
                   right: 0,
-                  backgroundColor: currentTheme.isLiquidGlass ? currentTheme.glass : (currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass),
-                  borderColor: currentTheme.isLiquidGlass ? currentTheme.border : (currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border),
-                  boxShadow: currentTheme.isLiquidGlass ? currentTheme.shadow : (currentTheme.mode === "apple_dark"
+                  backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
+                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
+                  boxShadow: currentTheme.mode === "apple_dark"
                     ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                    : currentTheme.shadow),
+                    : currentTheme.shadow,
                 }}
               >
                 <Search

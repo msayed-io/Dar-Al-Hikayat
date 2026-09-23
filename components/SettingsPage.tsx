@@ -61,8 +61,6 @@ import { ImportResultModal, type FailedImportItem } from "./ImportResultModal";
 const SettingsPage: React.FC = () => {
   const {
     currentTheme,
-    appleVariant,
-    setAppleVariant,
     backToHome,
     prayerState,
     updatePrayerState,
@@ -73,7 +71,6 @@ const SettingsPage: React.FC = () => {
     importNotesBulk,
   } = useApp();
 
-  const [showAppleVariantDropdown, setShowAppleVariantDropdown] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
@@ -564,9 +561,7 @@ const SettingsPage: React.FC = () => {
                   ? "كلاسيكي ملكي"
                   : currentTheme.mode === "night_whisper"
                   ? "همس الليالي"
-                  : appleVariant === "liquid_glass"
-                  ? "داكن آبل • زجاج سائل"
-                  : "داكن آبل • الافتراضي"}
+                  : "داكن آبل"}
               </span>
             </div>
 
@@ -586,22 +581,12 @@ const SettingsPage: React.FC = () => {
             >
               {themesCapsuleList.map((t) => {
                 const isActive = currentTheme.mode === t.id;
-                const isApple = t.id === "apple_dark";
 
                 return (
                   <button
                     key={t.id}
                     onClick={() => {
-                      if (isApple && isActive) {
-                        setShowAppleVariantDropdown((prev) => !prev);
-                      } else {
-                        toggleTheme(t.id);
-                        if (isApple) {
-                          setShowAppleVariantDropdown(true);
-                        } else {
-                          setShowAppleVariantDropdown(false);
-                        }
-                      }
+                      toggleTheme(t.id);
                     }}
                     className="flex-1 h-full rounded-full font-zain-bold text-sm sm:text-base transition-all duration-300 flex items-center justify-center cursor-pointer active:scale-95 whitespace-nowrap select-none px-2 gap-1"
                     style={{
@@ -624,100 +609,10 @@ const SettingsPage: React.FC = () => {
                     }}
                   >
                     <span className="leading-none pt-0.5">{t.label}</span>
-                    {isApple && isActive && (
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 text-white/80 transition-transform duration-300 ${
-                          showAppleVariantDropdown ? "rotate-180" : ""
-                        }`}
-                      />
-                    )}
                   </button>
                 );
               })}
             </div>
-
-            {/* خيارات الوضع الفرعي لداكن آبل: الافتراضي و الوضع الزجاجي Liquid Glass Mode */}
-            <AnimatePresence>
-              {currentTheme.mode === "apple_dark" && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: "auto", marginTop: 12 }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
-                  className="overflow-hidden"
-                >
-                  <div
-                    className="p-1 rounded-2xl border flex items-center gap-1.5 transition-all duration-300"
-                    style={{
-                      backgroundColor: "rgba(0, 0, 0, 0.35)",
-                      borderColor: "rgba(255, 255, 255, 0.08)",
-                    }}
-                  >
-                    {/* خيار 1: الوضع الافتراضي */}
-                    <button
-                      type="button"
-                      onClick={() => setAppleVariant("default")}
-                      className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 font-zain-bold text-xs sm:text-sm transition-all duration-300 cursor-pointer active:scale-95 ${
-                        appleVariant === "default"
-                          ? "text-white shadow-sm"
-                          : "text-white/50 hover:text-white/80"
-                      }`}
-                      style={{
-                        backgroundColor:
-                          appleVariant === "default"
-                            ? "#3A3A3C"
-                            : "transparent",
-                        border:
-                          appleVariant === "default"
-                            ? "1px solid rgba(255, 255, 255, 0.18)"
-                            : "1px solid transparent",
-                      }}
-                    >
-                      <Layers className="w-3.5 h-3.5 shrink-0 opacity-80" />
-                      <span className="pt-0.5">الافتراضي (Default)</span>
-                      {appleVariant === "default" && (
-                        <Check className="w-3 h-3 shrink-0 text-white/90" />
-                      )}
-                    </button>
-
-                    {/* خيار 2: الوضع الزجاجي Liquid Glass Mode */}
-                    <button
-                      type="button"
-                      onClick={() => setAppleVariant("liquid_glass")}
-                      className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 font-zain-bold text-xs sm:text-sm transition-all duration-300 cursor-pointer active:scale-95 ${
-                        appleVariant === "liquid_glass"
-                          ? "text-white shadow-sm"
-                          : "text-white/50 hover:text-white/80"
-                      }`}
-                      style={{
-                        backgroundColor:
-                          appleVariant === "liquid_glass"
-                            ? "rgba(255, 255, 255, 0.16)"
-                            : "transparent",
-                        border:
-                          appleVariant === "liquid_glass"
-                            ? "1px solid rgba(255, 255, 255, 0.35)"
-                            : "1px solid transparent",
-                        boxShadow:
-                          appleVariant === "liquid_glass"
-                            ? "0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.35)"
-                            : "none",
-                        backdropFilter:
-                          appleVariant === "liquid_glass"
-                            ? "blur(16px)"
-                            : "none",
-                      }}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0 text-white" />
-                      <span className="pt-0.5">الوضع الزجاجي (Liquid Glass)</span>
-                      {appleVariant === "liquid_glass" && (
-                        <Check className="w-3 h-3 shrink-0 text-white" />
-                      )}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
 
           {/* ─── 2. محراب المواقيت (الموقع) ─── */}
