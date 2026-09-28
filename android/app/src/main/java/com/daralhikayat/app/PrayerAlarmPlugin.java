@@ -8,6 +8,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -24,9 +26,9 @@ import org.json.JSONObject;
 @CapacitorPlugin(name = PrayerAlarmPlugin.TAG, permissions = {@Permission(alias = "notifications", strings = {"android.permission.POST_NOTIFICATIONS"})})
 public class PrayerAlarmPlugin extends Plugin {
     public static final String TAG = "PrayerAlarm";
-    private static final String KEY_ALARMS = "scheduled_alarms";
+    private static final String PREFS_NAME = PrayerAlarmReceiver.PREFS_NAME;
+    private static final String KEY_ALARMS = PrayerAlarmReceiver.KEY_ALARMS;
     private static final String KEY_NEEDS_RESCHEDULE = "needs_reschedule";
-    private static final String PREFS_NAME = "dar_prayer_alarms";
 
     @Override
     public void load() {
@@ -47,65 +49,41 @@ public class PrayerAlarmPlugin extends Plugin {
                 pluginCall.reject("AlarmManager not available");
                 return;
             }
-            if (Build.VERSION.SDK_INT >= 31 && !alarmManager.canScheduleExactAlarms()) {
-                pluginCall.reject("Exact alarm permission is not granted");
-                return;
+
+            // Check if exact alarms can be scheduled
+            boolean canExact = true;
+            if (Build.VERSION.SDK_INT >= 31) {
+                canExact = alarmManager.canScheduleExactAlarms();
             }
 
             cancelAllAlarmsInternal();
 
-            SharedPreferences.Editor edit = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
+            Context safeContext = PrayerAlarmReceiver.getSafeContext(getContext());
+            SharedPreferences.Editor edit = safeContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
             edit.putString(KEY_ALARMS, array.toString());
             edit.putBoolean(KEY_NEEDS_RESCHEDULE, false);
+
+            JSObject locObj = pluginCall.getObject("location");
+            if (locObj != null) {
+                edit.putFloat("latitude", (float) locObj.optDouble("latitude", 0.0));
+                edit.putFloat("longitude", (float) locObj.optDouble("longitude", 0.0));
+                edit.putString("timezoneId", locObj.optString("timezoneId", "Africa/Cairo"));
+            }
+            String method = pluginCall.getString("method");
+            if (method != null) {
+                edit.putString("calculationMethod", method);
+            }
             edit.apply();
 
-            long now = System.currentTimeMillis();
-            int scheduledCount = 0;
-
-            for (int i = 0; i < array.length(); i++) {
-                JSONObject obj = array.getJSONObject(i);
-                long timestamp = obj.getLong("timestamp");
-                int id = obj.getInt("id");
-                String title = obj.getString("title");
-                String body = obj.getString("body");
-                String prayerId = obj.getString("prayerId");
-                String type = obj.optString("type", "exact");
-
-                if (timestamp > now) {
-                    scheduleSingleAlarm(alarmManager, timestamp, id, title, body, prayerId, type);
-                    scheduledCount++;
-                }
-            }
+            // Prime and schedule next alarm via setAlarmClock + rolling window
+            PrayerAlarmReceiver.scheduleNextAlarmsFromCache(getContext());
 
             JSObject res = new JSObject();
-            res.put("scheduled", scheduledCount);
-            res.put("exact", true);
+            res.put("scheduled", array.length());
+            res.put("exact", canExact);
             pluginCall.resolve(res);
-        } catch (JSONException e) {
-            pluginCall.reject("Failed to parse alarms: " + e.getMessage());
-        }
-    }
-
-    private void scheduleSingleAlarm(AlarmManager alarmManager, long timestamp, int id, String title, String body, String prayerId, String type) {
-        Intent intent = new Intent(getContext(), PrayerAlarmReceiver.class);
-        intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
-        intent.putExtra("id", id);
-        intent.putExtra("title", title);
-        intent.putExtra("body", body);
-        intent.putExtra("prayerId", prayerId);
-        intent.putExtra("type", type);
-        intent.putExtra("timestamp", timestamp);
-
-        int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        PendingIntent broadcast = PendingIntent.getBroadcast(getContext(), id, intent, pendingFlags);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, timestamp, broadcast);
+        } catch (Exception e) {
+            pluginCall.reject("Failed to schedule alarms: " + e.getMessage());
         }
     }
 
@@ -117,7 +95,8 @@ public class PrayerAlarmPlugin extends Plugin {
             String prayerId = pluginCall.getString("prayerId", "dhuhr");
 
             Intent intent = new Intent(getContext(), PrayerAlarmReceiver.class);
-            intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
+            intent.setAction(PrayerAlarmReceiver.ACTION_PRAYER_ALARM);
+            intent.setData(Uri.parse("prayer://test/" + System.currentTimeMillis()));
             intent.putExtra("id", 88888);
             intent.putExtra("title", title);
             intent.putExtra("body", body);
@@ -137,22 +116,24 @@ public class PrayerAlarmPlugin extends Plugin {
     @PluginMethod
     public void cancelAllAlarms(PluginCall pluginCall) {
         cancelAllAlarmsInternal();
-        getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(KEY_ALARMS).apply();
+        Context safeContext = PrayerAlarmReceiver.getSafeContext(getContext());
+        safeContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().remove(KEY_ALARMS).apply();
         pluginCall.resolve();
     }
 
     private void cancelAllAlarmsInternal() {
         try {
-            SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            Context safeContext = PrayerAlarmReceiver.getSafeContext(getContext());
+            SharedPreferences prefs = safeContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             JSArray array = new JSArray(prefs.getString(KEY_ALARMS, "[]"));
             AlarmManager alarmManager = (AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
-            if (alarmManager == null) {
-                return;
-            }
+            if (alarmManager == null) return;
+
             for (int i = 0; i < array.length(); i++) {
                 int id = array.getJSONObject(i).getInt("id");
                 Intent intent = new Intent(getContext(), PrayerAlarmReceiver.class);
-                intent.setAction("com.daralhikayat.app.PRAYER_ALARM");
+                intent.setAction(PrayerAlarmReceiver.ACTION_PRAYER_ALARM);
+                intent.setData(Uri.parse("prayer://alarm/" + id));
 
                 int pendingFlags = PendingIntent.FLAG_NO_CREATE;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -164,8 +145,43 @@ public class PrayerAlarmPlugin extends Plugin {
                     broadcast.cancel();
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) {}
+    }
+
+    @PluginMethod
+    public void isIgnoringBatteryOptimizations(PluginCall call) {
+        boolean isIgnoring = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                isIgnoring = pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+            }
         }
+        JSObject ret = new JSObject();
+        ret.put("isIgnoring", isIgnoring);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestIgnoreBatteryOptimizations(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+                if (pm != null && !pm.isIgnoringBatteryOptimizations(getContext().getPackageName())) {
+                    Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(intent);
+                }
+            } catch (Exception e) {
+                try {
+                    Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(fallback);
+                } catch (Exception ignored) {}
+            }
+        }
+        call.resolve();
     }
 
     @PluginMethod
@@ -219,8 +235,7 @@ public class PrayerAlarmPlugin extends Plugin {
                 intent.setData(Uri.parse("package:" + getContext().getPackageName()));
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getContext().startActivity(intent);
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
             JSObject jSObject2 = new JSObject();
             jSObject2.put("granted", false);
             pluginCall.resolve(jSObject2);
@@ -248,8 +263,8 @@ public class PrayerAlarmPlugin extends Plugin {
         try {
             Intent intent = new Intent();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                intent.setAction(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+                intent.setAction(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
             } else {
                 intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
                 intent.putExtra("app_package", getContext().getPackageName());
@@ -266,7 +281,7 @@ public class PrayerAlarmPlugin extends Plugin {
     @PluginMethod
     public void openAppSettings(PluginCall pluginCall) {
         try {
-            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             intent.setData(Uri.parse("package:" + getContext().getPackageName()));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(intent);

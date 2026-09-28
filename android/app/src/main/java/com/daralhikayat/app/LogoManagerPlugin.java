@@ -35,7 +35,12 @@ public class LogoManagerPlugin extends Plugin {
     }
 
     public static String getStoredTheme(Context context) {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_THEME, "royal_classic");
+        try {
+            Context safeContext = PrayerAlarmReceiver.getSafeContext(context);
+            return safeContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_THEME, "royal_classic");
+        } catch (Exception e) {
+            return "royal_classic";
+        }
     }
 
     public static int notificationIcon(Context context) {

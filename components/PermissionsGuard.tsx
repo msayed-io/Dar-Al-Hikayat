@@ -21,6 +21,7 @@ import {
   requestExactAlarmPermission,
   checkExactAlarmPermission,
   openNativeNotificationSettings,
+  requestBatteryOptimizationExemption,
   autoDetectLocation,
   checkOrRequestLocationPermissionSmartly,
   schedulePrayerAlarms,
@@ -207,6 +208,8 @@ export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) 
     setIsProcessing(true);
     try {
       const granted = await requestExactAlarmPermission();
+      // طلب استثناء توفير الطاقة لمنع نظام أندرويد من قتل التنبيهات في الخلفية
+      await requestBatteryOptimizationExemption();
       if (granted) {
         setStepSuccessPulse(true);
         setTimeout(async () => {

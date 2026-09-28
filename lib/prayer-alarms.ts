@@ -20,9 +20,15 @@ interface PrayerAlarmPlugin {
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   requestExactAlarmPermission(): Promise<{ granted: boolean }>;
   canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
+  isIgnoringBatteryOptimizations?(): Promise<{ isIgnoring: boolean }>;
+  requestIgnoreBatteryOptimizations?(): Promise<void>;
   openNotificationSettings?(): Promise<void>;
   openAppSettings?(): Promise<void>;
-  scheduleAlarms(options: { alarms: AlarmEntry[] }): Promise<{ scheduled: number; exact: boolean }>;
+  scheduleAlarms(options: {
+    alarms: AlarmEntry[];
+    location?: { latitude: number; longitude: number; timezoneId?: string };
+    method?: string;
+  }): Promise<{ scheduled: number; exact: boolean }>;
   cancelAllAlarms(): Promise<void>;
   sendImmediateTestNotification(options?: {
     title?: string;
@@ -175,6 +181,27 @@ export async function openNativeAppSettings(): Promise<void> {
   }
 }
 
+/** التحقق مما إذا كان التطبيق مستثنى من قيود توفير الطاقة في أندرويد */
+export async function checkBatteryOptimizationExemption(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.isIgnoringBatteryOptimizations) return true;
+  try {
+    const res = await PrayerAlarm.isIgnoringBatteryOptimizations();
+    return res.isIgnoring;
+  } catch (e) {
+    return true;
+  }
+}
+
+/** طلب استثناء التطبيق من قيود توفير الطاقة لضمان استمرار الأذان */
+export async function requestBatteryOptimizationExemption(): Promise<void> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.requestIgnoreBatteryOptimizations) return;
+  try {
+    await PrayerAlarm.requestIgnoreBatteryOptimizations();
+  } catch (e) {
+    console.warn("Request battery optimization exemption error:", e);
+  }
+}
+
 /**
  * جدولة مواقيت الصلاة لمدة 30 يومًا متتالية بدقة تامة باستخدام AlarmManager.setExactAndAllowWhileIdle():
  * - منبه دقيق لكل صلاة في موعدها تماماً (لا يختفي إلا بمسحه يدوياً)
@@ -260,7 +287,15 @@ async function schedulePrayerAlarmsInternal(
     }
 
     if (alarms.length > 0) {
-      const result = await PrayerAlarm.scheduleAlarms({ alarms });
+      const result = await PrayerAlarm.scheduleAlarms({
+        alarms,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timezoneId: tz,
+        },
+        method,
+      });
       if (!result.exact || result.scheduled !== alarms.length) {
         throw new Error(`Exact alarm scheduling incomplete: ${result.scheduled}/${alarms.length}`);
       }

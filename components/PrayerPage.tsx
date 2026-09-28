@@ -33,6 +33,7 @@ import {
   formatPrayerTime,
   SecondaryPrayerTimes,
 } from "../lib/prayer-times";
+import { schedulePrayerAlarms } from "../lib/prayer-alarms";
 
 const PrayerPage: React.FC = () => {
   const { currentTheme, backToHome, prayerState, updatePrayerState, openLocationSheet, openSettings } = useApp();
@@ -81,6 +82,9 @@ const PrayerPage: React.FC = () => {
     setPrayerAlarms((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       localStorage.setItem("dar_prayer_alarms", JSON.stringify(next));
+      if (prayerState.location) {
+        void schedulePrayerAlarms(prayerState.location, prayerState.method);
+      }
       return next;
     });
   };

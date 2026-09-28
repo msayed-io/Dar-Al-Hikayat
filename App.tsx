@@ -15,7 +15,12 @@ import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { PermissionsGuard } from "./components/PermissionsGuard";
-import { requestNotificationPermission } from "./lib/prayer-alarms";
+import {
+  requestNotificationPermission,
+  schedulePrayerAlarms,
+  getLastSavedLocation,
+  loadPrayerSettings,
+} from "./lib/prayer-alarms";
 import { logoAsset } from "./lib/logo-assets";
 import RemoteKeyboardMobilePage from "./components/RemoteKeyboardMobilePage";
 
@@ -502,13 +507,34 @@ function App() {
         }
       };
 
+      const refreshPrayerAlarmsSilently = async () => {
+        try {
+          if (Capacitor.getPlatform() === "android") {
+            const loc = getLastSavedLocation();
+            if (loc) {
+              const settings = loadPrayerSettings();
+              await schedulePrayerAlarms(loc, settings.method || "egyptian");
+            }
+          }
+        } catch (e) {
+          console.warn("Silent prayer alarms refresh failed:", e);
+        }
+      };
+
       // Check after the first screen is ready, then re-check when the user taps
       // the Android update notification and the app becomes active again.
-      const timer = setTimeout(() => checkAndPresentUpdate(false), 1200);
+      const timer = setTimeout(() => {
+        void checkAndPresentUpdate(false);
+        void refreshPrayerAlarmsSilently();
+      }, 1200);
+
       let appStateHandle: { remove: () => Promise<void> } | null = null;
       if (Capacitor.isNativePlatform()) {
         CapApp.addListener("appStateChange", ({ isActive }) => {
-          if (isActive) void checkAndPresentUpdate(true);
+          if (isActive) {
+            void checkAndPresentUpdate(true);
+            void refreshPrayerAlarmsSilently();
+          }
         }).then((handle) => {
           appStateHandle = handle;
         }).catch(() => {});
