@@ -27,8 +27,13 @@ import java.util.List;
 public class PrayerAlarmReceiver extends BroadcastReceiver {
     public static final String TAG = "PrayerAlarmReceiver";
     public static final String ACTION_PRAYER_ALARM = "com.daralhikayat.app.PRAYER_ALARM";
-    public static final String CHANNEL_ID = "prayer_reminders_v3";
-    public static final String CHANNEL_NAME = "تنبيهات مواقيت الصلاة والأذان";
+    
+    // Dedicated channels with clean notification sound semantics (No Clock Alarm ringtone crossover)
+    public static final String CHANNEL_ID_EXACT = "prayer_exact_v4";
+    public static final String CHANNEL_NAME_EXACT = "مواقيت الصلاة والأذان";
+    public static final String CHANNEL_ID_PRE = "prayer_pre_v4";
+    public static final String CHANNEL_NAME_PRE = "تنبيهات اقتراب الصلاة (10 دقائق)";
+
     public static final String PREFS_NAME = "dar_prayer_alarms";
     public static final String KEY_ALARMS = "scheduled_alarms";
 
@@ -68,7 +73,7 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             if ("reschedule".equals(type)) {
                 scheduleNextAlarmsFromCache(context);
             } else {
-                triggerVibration(context);
+                triggerVibration(context, "pre".equals(type));
                 showNotification(context, id, title, body, prayerId, type);
 
                 // Self-sustaining perpetual chain: Immediately arm the next upcoming alarm with highest priority setAlarmClock
@@ -91,36 +96,48 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (notificationManager == null) return;
 
-            // Delete obsolete channels to ensure sound and alarm attributes are applied cleanly
+            // Delete obsolete channels to wipe out previous alarm ringtone associations
             try {
                 notificationManager.deleteNotificationChannel("prayer_reminders");
                 notificationManager.deleteNotificationChannel("prayer_reminders_v2");
+                notificationManager.deleteNotificationChannel("prayer_reminders_v3");
             } catch (Exception ignored) {}
 
-            NotificationChannel channel = notificationManager.getNotificationChannel(CHANNEL_ID);
-            if (channel == null) {
-                channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
-                channel.setDescription("تنبيهات مواقيت الصلاة والأذان بدقة تامة وبدون تأخير");
-                channel.enableVibration(true);
-                channel.setVibrationPattern(new long[]{0, 500, 250, 750});
-                channel.enableLights(true);
-                channel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
-                channel.setBypassDnd(true);
+            Uri notificationSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
 
-                Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-                if (soundUri == null) {
-                    soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                    .build();
+
+            // 1. Exact Prayer Notification Channel (حلول وقت الصلاة الفعلي)
+            NotificationChannel exactChannel = notificationManager.getNotificationChannel(CHANNEL_ID_EXACT);
+            if (exactChannel == null) {
+                exactChannel = new NotificationChannel(CHANNEL_ID_EXACT, CHANNEL_NAME_EXACT, NotificationManager.IMPORTANCE_HIGH);
+                exactChannel.setDescription("تنبيهات مواقيت الصلاة والأذان بدقة تامة");
+                exactChannel.enableVibration(true);
+                exactChannel.setVibrationPattern(new long[]{0, 500, 250, 750});
+                exactChannel.enableLights(true);
+                exactChannel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+                if (notificationSoundUri != null) {
+                    exactChannel.setSound(notificationSoundUri, audioAttributes);
                 }
+                notificationManager.createNotificationChannel(exactChannel);
+            }
 
-                if (soundUri != null) {
-                    AudioAttributes audioAttributes = new AudioAttributes.Builder()
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .setUsage(AudioAttributes.USAGE_ALARM)
-                            .build();
-                    channel.setSound(soundUri, audioAttributes);
+            // 2. Pre-Prayer (10 Minutes) Friendly Reminder Channel (تنبيه لطيف قبل الصلاة بـ 10 دقائق)
+            NotificationChannel preChannel = notificationManager.getNotificationChannel(CHANNEL_ID_PRE);
+            if (preChannel == null) {
+                preChannel = new NotificationChannel(CHANNEL_ID_PRE, CHANNEL_NAME_PRE, NotificationManager.IMPORTANCE_DEFAULT);
+                preChannel.setDescription("تنبيه هادئ قبل موعد الصلاة بـ 10 دقائق للاستعداد");
+                preChannel.enableVibration(true);
+                preChannel.setVibrationPattern(new long[]{0, 300, 200, 300});
+                preChannel.enableLights(true);
+                preChannel.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+                if (notificationSoundUri != null) {
+                    preChannel.setSound(notificationSoundUri, audioAttributes);
                 }
-
-                notificationManager.createNotificationChannel(channel);
+                notificationManager.createNotificationChannel(preChannel);
             }
         }
     }
@@ -133,6 +150,7 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             ensureNotificationChannel(context);
 
             boolean isPreAlarm = "pre".equals(type);
+            String channelId = isPreAlarm ? CHANNEL_ID_PRE : CHANNEL_ID_EXACT;
 
             // If this is an exact prayer notification (الأذان الفعلي), cancel the 10-minute pre-reminder immediately
             if (!isPreAlarm) {
@@ -154,23 +172,20 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             PendingIntent pendingIntent = PendingIntent.getActivity(context, id, openIntent, pendingFlags);
 
             int smallIconRes = LogoManagerPlugin.notificationIcon(context);
-            Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-            if (soundUri == null) {
-                soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-            }
+            Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
 
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
                     .setSmallIcon(smallIconRes)
                     .setContentTitle(title != null ? title : (isPreAlarm ? "اقترب موعد الصلاة" : "حان الآن وقت الصلاة"))
                     .setContentText(body != null ? body : "")
                     .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
-                    .setPriority(NotificationCompat.PRIORITY_MAX)
-                    .setCategory(NotificationCompat.CATEGORY_ALARM)
+                    .setPriority(isPreAlarm ? NotificationCompat.PRIORITY_DEFAULT : NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_REMINDER)
                     .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .setAutoCancel(true)
                     .setContentIntent(pendingIntent)
                     .setSound(soundUri)
-                    .setVibrate(new long[]{0, 500, 250, 750});
+                    .setVibrate(isPreAlarm ? new long[]{0, 300, 200, 300} : new long[]{0, 500, 250, 750});
 
             // Pre-alarm dismisses after 10 minutes if not clicked
             if (isPreAlarm && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -183,11 +198,11 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
         }
     }
 
-    private void triggerVibration(Context context) {
+    private void triggerVibration(Context context, boolean isPreAlarm) {
         try {
             Vibrator vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
             if (vibrator != null && vibrator.hasVibrator()) {
-                long[] pattern = {0, 500, 250, 750};
+                long[] pattern = isPreAlarm ? new long[]{0, 300, 200, 300} : new long[]{0, 500, 250, 750};
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1));
                 } else {
