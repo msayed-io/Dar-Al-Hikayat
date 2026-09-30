@@ -7,7 +7,6 @@
     <meta name="description" content="محرابٌ مقدس لفنانة السرد، صُمم بعناية فائقة ليحمي الإبداع من ضجيج العالم. يوفر 'دَارُ الحِكَايَاتِ' تجربة كتابة غامرة لا مثيل لها، مع مظاهر طباعية فاخرة. وتتجلى أثمن ميزاته في نظام الأذكار الهادئ، الذي يهدف إلى غرس السكينة الروحية في قلب العملية الإبداعية، ليصبح كل حرفٍ يُكتب ذكرًا." />
     <meta property="og:title" content="دَارُ الحِكَايَاتِ" />
     <meta property="og:description" content="محرابٌ مقدس لفنانة السرد، صُمم بعناية فائقة ليحمي الإبداع من ضجيج العالم. يوفر 'دَارُ الحِكَايَاتِ' تجربة كتابة غامرة لا مثيل لها، مع مظاهر طباعية فاخرة. وتتجلى أثمن ميزاته في نظام الأذكار الهادئ، الذي يهدف إلى غرس السكينة الروحية في قلب العملية الإبداعية، ليصبح كل حرفٍ يُكتب ذكرًا." />
-    <!-- v1.2.4: منع سلوك التحديد والنسخ على مستوى HTML -->
     <meta name="format-detection" content="telephone=no" />
     <!-- خطوط ثمانية الرسمية لتطبيق دَارُ الحِكَايَاتِ (Thmanyah Official Fonts) -->
     <link rel="preload" href="/fonts/thmanyahsans-Regular.woff2" as="font" type="font/woff2" crossorigin />
@@ -17,12 +16,23 @@
     <link rel="preload" href="/fonts/thmanyahseriftext-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/thmanyahseriftext-Medium.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/fonts/fonts.css" />
-    <!-- ورقة الأنماط الرئيسية — CSS الإنتاج المُجمَّع + رقعة v3.0.1 (vite يعالجها ويصدرها مُجزَّئة) -->
     <link rel="stylesheet" href="/index.css" />
+    <!-- المزامنة اللحظية الفورية للثيم قبل رسم أول بكسل على الشاشة لمنع أي وميض -->
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem("dar_theme") || "royal_classic";
+          var bg = "#EAE6D2";
+          if (t === "night_whisper") bg = "#111718";
+          else if (t === "apple_dark") bg = "#000000";
+          document.documentElement.style.backgroundColor = bg;
+        } catch(e) {}
+      })();
+    </script>
     <style>
       html, body, #root {
         font-family: 'Thmanyah Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-        background-color: #EAE6D2;
+        background-color: #0F1617;
         min-height: 100%;
         min-height: 100dvh;
         margin: 0;
@@ -38,7 +48,50 @@
     <script type="module" src="/index.tsx"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- الشاشة الترحيبية اللحظية الفورية (Zero-JS Frame-0 Splash Screen) -->
+      <div id="dar-initial-splash" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;background-color:#0F1617;font-family:'Zain','Thmanyah Sans',sans-serif;" dir="rtl">
+        <div style="position:relative;margin-bottom:2rem;padding:0.25rem;">
+          <div id="dar-initial-box" style="position:relative;width:7rem;height:7rem;border-radius:1.5rem;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(167,170,99,0.3);box-shadow:0 20px 50px -12px rgba(0,0,0,0.5);">
+            <img id="dar-initial-logo" src="/dar-al-hikayat-logo-royal_classic.png" alt="شعار دَارُ الحِكَايَاتِ" style="width:6rem;height:6rem;object-fit:contain;position:relative;z-index:20;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));" />
+          </div>
+        </div>
+        <div style="text-align:center;display:flex;flex-direction:column;align-items:center;">
+          <h1 id="dar-initial-title" style="font-size:3rem;font-weight:900;letter-spacing:0.025em;margin:0 0 0.75rem 0;color:#A7AA63;line-height:1.2;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3));">دَارُ الحِكَايَاتِ</h1>
+          <div id="dar-initial-divider" style="height:1px;width:4rem;background-color:rgba(167,170,99,0.4);margin-bottom:0.75rem;"></div>
+          <p id="dar-initial-subtitle" style="font-size:1.125rem;font-weight:400;letter-spacing:0.1em;margin:0;color:#7F8C8E;">للكاتبة رحمه السيد موافي</p>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem("dar_theme") || "royal_classic";
+          var bg = "#EAE6D2", titleCol = "#A7AA63", subCol = "#2C3E30", boxBg = "rgba(255,255,255,0.65)", boxBorder = "rgba(167,170,99,0.25)", divBg = "rgba(167,170,99,0.4)";
+          if (t === "night_whisper") {
+            bg = "#111718"; titleCol = "#9FA365"; subCol = "#E2DFD2"; boxBg = "rgba(23,31,33,0.85)"; boxBorder = "rgba(159,163,101,0.25)"; divBg = "rgba(159,163,101,0.4)";
+          } else if (t === "apple_dark") {
+            bg = "#000000"; titleCol = "#F5F5F5"; subCol = "#A1A1A6"; boxBg = "rgba(28,28,30,0.85)"; boxBorder = "rgba(255,255,255,0.12)"; divBg = "rgba(255,255,255,0.2)";
+          }
+          document.documentElement.style.backgroundColor = bg;
+          document.body.style.backgroundColor = bg;
+          var root = document.getElementById("root");
+          if (root) root.style.backgroundColor = bg;
+          var splash = document.getElementById("dar-initial-splash");
+          if (splash) splash.style.backgroundColor = bg;
+          var logo = document.getElementById("dar-initial-logo");
+          if (logo) logo.src = "/dar-al-hikayat-logo-" + t + ".png";
+          var box = document.getElementById("dar-initial-box");
+          if (box) { box.style.background = boxBg; box.style.borderColor = boxBorder; }
+          var title = document.getElementById("dar-initial-title");
+          if (title) title.style.color = titleCol;
+          var divider = document.getElementById("dar-initial-divider");
+          if (divider) divider.style.backgroundColor = divBg;
+          var sub = document.getElementById("dar-initial-subtitle");
+          if (sub) sub.style.color = subCol;
+        } catch (e) {}
+      })();
+    </script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
