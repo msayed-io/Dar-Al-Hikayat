@@ -2,5 +2,6 @@
   "appId": "com.daralhikayat.app",
   "appName": "دَارُ الحِكَايَاتِ",
   "webDir": "dist",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "backgroundColor": "#0F1617"
 }

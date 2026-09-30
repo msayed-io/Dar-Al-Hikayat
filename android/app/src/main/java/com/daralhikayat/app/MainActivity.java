@@ -21,23 +21,15 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdatePlugin.class);
         registerPlugin(RemoteServerPlugin.class);
         super.onCreate(savedInstanceState);
-        applyWindowThemeColor();
-        hideSystemBars();
-    }
-
-    private void applyWindowThemeColor() {
+        
+        // Eliminate the default white WebView surface completely at root
         try {
-            String theme = LogoManagerPlugin.getStoredTheme(this);
-            int color;
-            if ("apple_dark".equals(theme)) {
-                color = 0xFF000000;
-            } else if ("night_whisper".equals(theme)) {
-                color = 0xFF111718;
-            } else {
-                color = 0xFFEAE6D2;
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setBackgroundColor(0xFF0F1617);
             }
-            getWindow().getDecorView().setBackgroundColor(color);
         } catch (Exception ignored) {}
+
+        hideSystemBars();
     }
 
     @Override
