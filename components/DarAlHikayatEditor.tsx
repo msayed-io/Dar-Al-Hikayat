@@ -60,7 +60,7 @@ import {
   PageBreak,
 } from "docx";
 import { useApp, NoteStyles } from "../contexts/AppContext";
-import { logoAsset } from "../lib/logo-assets";
+import { logoAsset, logoTransparentAsset } from "../lib/logo-assets";
 import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
 import { exportStoryToDocx } from "../lib/docx-export";
 import DarAlHikayatAIAssistant from "./DarAlHikayatAIAssistant";
@@ -3763,10 +3763,10 @@ const DarAlHikayatMaster: React.FC = () => {
               >
                 <img
                   src={
-                    logoAsset(currentTheme.mode)
+                    logoTransparentAsset(currentTheme.mode)
                   }
                   alt="أدوات"
-                  className="w-5 h-5 object-contain transition-transform duration-300"
+                  className="w-6 h-6 object-contain transition-transform duration-300"
                   style={{
                     transform: showControls ? "rotate(-10deg)" : "rotate(0)",
                   }}
