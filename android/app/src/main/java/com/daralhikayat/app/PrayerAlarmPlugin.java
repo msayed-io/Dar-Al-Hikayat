@@ -100,7 +100,7 @@ public class PrayerAlarmPlugin extends Plugin {
             intent.putExtra("id", 88888);
             intent.putExtra("title", title);
             intent.putExtra("body", body);
-            intent.putExtra("prayerId", prayerId);
+            intent.putExtra("prayerId", "test_" + prayerId);
             intent.putExtra("type", "exact");
 
             getContext().sendBroadcast(intent);

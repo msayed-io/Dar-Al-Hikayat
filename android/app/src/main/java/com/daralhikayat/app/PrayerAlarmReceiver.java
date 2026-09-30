@@ -37,11 +37,37 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
     public static final String PREFS_NAME = "dar_prayer_alarms";
     public static final String KEY_ALARMS = "scheduled_alarms";
 
+    // Deduplication window to suppress duplicate broadcasts from OEM dual-queue firings (Xiaomi/Samsung/Realme)
+    private static final long DEDUP_WINDOW_MS = 60 * 1000; // 60 seconds
+
     public static Context getSafeContext(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             return context.isDeviceProtectedStorage() ? context : context.createDeviceProtectedStorageContext();
         }
         return context;
+    }
+
+    private static boolean isDuplicateDelivery(Context context, int id, String prayerId, String type) {
+        if (prayerId != null && prayerId.startsWith("test_")) {
+            return false;
+        }
+        try {
+            Context safeContext = getSafeContext(context);
+            SharedPreferences prefs = safeContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            String key = "last_delivery_" + (prayerId != null ? prayerId : "") + "_" + (type != null ? type : "");
+            long lastTime = prefs.getLong(key, 0);
+            long now = System.currentTimeMillis();
+
+            if (now - lastTime < DEDUP_WINDOW_MS) {
+                Log.w(TAG, "Suppressed duplicate notification delivery for id=" + id + " [" + prayerId + ":" + type + "], elapsed=" + (now - lastTime) + "ms");
+                return true;
+            }
+
+            prefs.edit().putLong(key, now).apply();
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
@@ -73,6 +99,12 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             if ("reschedule".equals(type)) {
                 scheduleNextAlarmsFromCache(context);
             } else {
+                // Defensive deduplication check: Prevents OEM dual-queue firing (e.g. setAlarmClock + setExact)
+                if (isDuplicateDelivery(context, id, prayerId, type)) {
+                    scheduleNextAlarmsFromCache(context);
+                    return;
+                }
+
                 triggerVibration(context, "pre".equals(type));
                 showNotification(context, id, title, body, prayerId, type);
 
@@ -222,12 +254,15 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             if (alarmManager == null || array.length() == 0) return;
 
             long now = System.currentTimeMillis();
+            // Critical Safety Margin: Any alarm less than 30 seconds into the future is either currently firing
+            // or has just elapsed. It must never be re-evaluated as an upcoming future alarm, preventing self-retriggering!
+            long futureThreshold = now + 30000;
             List<JSONObject> futureAlarms = new ArrayList<>();
 
             for (int i = 0; i < array.length(); i++) {
                 JSONObject obj = array.getJSONObject(i);
                 long timestamp = obj.getLong("timestamp");
-                if (timestamp > now) {
+                if (timestamp > futureThreshold) {
                     futureAlarms.add(obj);
                 }
             }
@@ -271,6 +306,11 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
             }
             PendingIntent nextPendingIntent = PendingIntent.getBroadcast(context, nextId, nextIntent, pendingFlags);
 
+            // Clean cancellation of prior exact registration to prevent OEM dual-queue firing
+            try {
+                alarmManager.cancel(nextPendingIntent);
+            } catch (Exception ignored) {}
+
             Intent showIntent = new Intent(context, MainActivity.class);
             PendingIntent showPendingIntent = PendingIntent.getActivity(context, 0, showIntent, pendingFlags);
             AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(nextTimestamp, showPendingIntent);
@@ -298,6 +338,10 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                 intent.putExtra("timestamp", ts);
 
                 PendingIntent pi = PendingIntent.getBroadcast(context, id, intent, pendingFlags);
+
+                try {
+                    alarmManager.cancel(pi);
+                } catch (Exception ignored) {}
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ts, pi);
