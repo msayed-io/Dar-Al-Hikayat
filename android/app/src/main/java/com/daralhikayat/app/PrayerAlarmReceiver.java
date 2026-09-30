@@ -313,8 +313,17 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
 
             Intent showIntent = new Intent(context, MainActivity.class);
             PendingIntent showPendingIntent = PendingIntent.getActivity(context, 0, showIntent, pendingFlags);
-            AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(nextTimestamp, showPendingIntent);
-            alarmManager.setAlarmClock(clockInfo, nextPendingIntent);
+            try {
+                AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(nextTimestamp, showPendingIntent);
+                alarmManager.setAlarmClock(clockInfo, nextPendingIntent);
+            } catch (SecurityException se) {
+                Log.w(TAG, "setAlarmClock not permitted by device policy, falling back to setExactAndAllowWhileIdle: " + se.getMessage());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextTimestamp, nextPendingIntent);
+                } else {
+                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, nextTimestamp, nextPendingIntent);
+                }
+            }
 
             // 2. Schedule the remaining alarms in a rolling window of up to 30 alarms
             int limit = Math.min(futureAlarms.size(), 30);
@@ -343,10 +352,15 @@ public class PrayerAlarmReceiver extends BroadcastReceiver {
                     alarmManager.cancel(pi);
                 } catch (Exception ignored) {}
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ts, pi);
-                } else {
-                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, ts, pi);
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ts, pi);
+                    } else {
+                        alarmManager.setExact(AlarmManager.RTC_WAKEUP, ts, pi);
+                    }
+                } catch (SecurityException se) {
+                    Log.w(TAG, "Exact alarm permission restricted for rolling alarm, falling back to set: " + se.getMessage());
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, ts, pi);
                 }
             }
 
