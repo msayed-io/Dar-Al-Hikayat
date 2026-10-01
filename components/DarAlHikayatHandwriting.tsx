@@ -70,6 +70,16 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const ruledCanvasRef = useRef<HTMLCanvasElement>(null);
 
+    // تتبع وجود اللوحة في الـ DOM: المكوّن يعيد null وهو غير نشط، فتنشأ اللوحتان
+    // لحظة التفعيل فقط — ويجب إعادة تجميع المخزن المؤقت فور إنشائهما قبل أول
+    // رسمة، وإلا بقي مقاس HTML الافتراضي 300×150 بينما تمتدّ اللوحة على كامل
+    // الشاشة (جذر مشكلة الخطوط العملاقة والضبابية المتباعدة عن الإصبع).
+    const [canvasNode, setCanvasNode] = useState<HTMLCanvasElement | null>(null);
+    const assignCanvasRef = useCallback((node: HTMLCanvasElement | null) => {
+      canvasRef.current = node;
+      setCanvasNode(node);
+    }, []);
+
     // Drawing Tool States
     const [activeTool, setActiveTool] = useState<"pen" | "eraser">("pen");
     const [selectedThickness, setSelectedThickness] = useState<number>(3.5);
@@ -292,6 +302,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     );
 
     // Resize canvas to match target container with device pixel ratio
+    // (runs whenever the canvases mount/unmount — canvasNode — or layout changes)
     const resizeCanvases = useCallback(() => {
       const canvas = canvasRef.current;
       const ruledCanvas = ruledCanvasRef.current;
@@ -328,7 +339,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         clearTimeout(timer1);
         clearTimeout(timer2);
       };
-    }, [resizeCanvases]);
+      // canvasNode: يضمن إعادة التجميع لحظة إنشاء اللوحتين في الـ DOM
+      // (عند فتح وضع الكتابة/وضع القراءة) قبل حدوث أي رسم.
+    }, [resizeCanvases, canvasNode]);
 
     // Lock body scroll, reset viewport scroll, and initialize coordinate plane
     useEffect(() => {
@@ -921,7 +934,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         {/* Layer 2: Main Inking Canvas with Two-Finger Infinite Panning & Single-Finger Inking */}
         <canvas
           id="handwriting-canvas-layer"
-          ref={canvasRef}
+          ref={assignCanvasRef}
           className={`absolute inset-0 w-full h-full ${
             isActive
               ? "cursor-crosshair"
