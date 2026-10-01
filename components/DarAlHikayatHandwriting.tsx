@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, MoreHorizontal, Eraser as EraserIcon, Trash2, XCircle, Check, Undo2, Redo2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, MoreHorizontal, Eraser as EraserIcon, Trash2, XCircle, Check, Undo2, Redo2 } from "lucide-react";
 import { ThemeColors } from "../contexts/AppContext";
 
 export interface StrokePoint {
@@ -319,14 +319,22 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     useLayoutEffect(() => {
       resizeCanvases();
       window.addEventListener("resize", resizeCanvases);
+      window.visualViewport?.addEventListener("resize", resizeCanvases);
+      const timer1 = setTimeout(resizeCanvases, 150);
+      const timer2 = setTimeout(resizeCanvases, 400);
       return () => {
         window.removeEventListener("resize", resizeCanvases);
+        window.visualViewport?.removeEventListener("resize", resizeCanvases);
+        clearTimeout(timer1);
+        clearTimeout(timer2);
       };
     }, [resizeCanvases]);
 
-    // Lock body scroll and reset viewport scroll while handwriting mode is active
+    // Lock body scroll, reset viewport scroll, and initialize coordinate plane
     useEffect(() => {
       if (isActive) {
+        panYRef.current = 0;
+        setPanY(0);
         const prevOverflow = document.body.style.overflow;
         const prevTouchAction = document.body.style.touchAction;
         document.body.style.overflow = "hidden";
@@ -868,11 +876,16 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       return null;
     }
 
+    const handwritingBgStyle: React.CSSProperties = {
+      backgroundColor: theme.mode === "apple_dark" ? "#000000" : (theme.bg || (theme.isDark ? "#111718" : "#F4F1EA")),
+      color: theme.text,
+    };
+
     const handwritingView = (
       <div
         className="fixed inset-0 pointer-events-auto transition-opacity duration-300"
         style={{
-          ...backgroundStyle,
+          ...handwritingBgStyle,
           position: "fixed",
           top: 0,
           left: 0,
@@ -928,72 +941,96 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           }}
         />
 
-        {/* Top Header Capsule Bar (Strictly when isActive is true) */}
+        {/* Top Header Capsule Bar (Strictly matching Dar Al Hikayat Editor Header Design) */}
         {isActive && (
-          <div
-            className="fixed top-4 left-0 right-0 px-4 pointer-events-none flex justify-center items-center"
+          <header
+            className="fixed top-4 left-0 right-0 px-4 pointer-events-none flex justify-center items-center transition-all duration-300 ease-out"
             dir="rtl"
             style={{ zIndex: 9999999 }}
           >
             <div
-              className="pointer-events-auto w-full max-w-sm sm:max-w-md md:max-w-lg h-12 px-2.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-1.5 shadow-2xl transition-all"
+              className="pointer-events-auto relative w-full max-w-sm sm:max-w-md md:max-w-lg h-12 p-1.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-1.5 shadow-2xl transition-all duration-300"
               style={{
-                backgroundColor: barBg,
-                borderColor: barBorder,
-                boxShadow: barShadow,
+                backgroundColor: theme.mode === "apple_dark" ? "#1C1C1E" : theme.glass,
+                borderColor: theme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : theme.border,
+                boxShadow: theme.mode === "apple_dark"
+                  ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
+                  : theme.shadow,
                 borderRadius: "9999px",
               }}
             >
-              {/* Right: Done / Back Button */}
-              <div className="flex items-center gap-1">
+              {/* Right: Back Button + Story Title */}
+              <div className="flex items-center gap-1 flex-1 min-w-0 pr-1 overflow-hidden">
                 <button
                   onClick={onClose}
-                  className="h-9 px-3.5 rounded-full flex items-center justify-center gap-1.5 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer font-zain-bold text-xs"
+                  className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer flex-shrink-0 apple-elastic-pinch"
                   style={{ color: theme.text }}
-                  title="تم وحفظ"
+                  title="رجوع وحفظ"
                 >
-                  <Check className="w-4 h-4 text-emerald-500" strokeWidth={2.5} />
-                  <span>تم وحفظ</span>
+                  <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
                 </button>
+                <div className="flex flex-col justify-center min-w-0 h-9 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0 max-w-full overflow-hidden w-full">
+                    <h1
+                      className="text-sm font-zain-bold truncate text-right leading-none min-w-0 flex-1 overflow-hidden whitespace-nowrap block select-none"
+                      style={{ color: theme.text }}
+                      title={title || "بدون عنوان"}
+                    >
+                      {title || "بدون عنوان"}
+                    </h1>
+                  </div>
+                </div>
               </div>
 
-              {/* Center: Title */}
-              <div className="flex items-center justify-center min-w-0 flex-1 px-2">
-                <span
-                  className="text-xs font-zain-bold truncate text-center select-none opacity-85"
-                  style={{ color: theme.text }}
-                >
-                  {title || "كتابة يدوية"}
-                </span>
-              </div>
-
-              {/* Left: Undo & Redo Buttons */}
-              <div className="flex items-center gap-1">
+              {/* Left: Undo, Redo, Divider, Save/Check */}
+              <div className="flex items-center gap-0.5 flex-shrink-0">
                 <button
                   onClick={handleUndo}
                   disabled={historyIndex <= 0}
-                  className={`w-8.5 h-8.5 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
-                    historyIndex > 0 ? "cursor-pointer" : "cursor-not-allowed opacity-35"
+                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
+                    historyIndex > 0 ? "cursor-pointer" : "cursor-not-allowed opacity-40"
                   }`}
-                  style={{ color: theme.text }}
+                  style={{
+                    color: historyIndex > 0 ? theme.text : theme.secondary,
+                  }}
                   title="تراجع"
                 >
                   <Undo2 className="w-4 h-4" />
                 </button>
+
                 <button
                   onClick={handleRedo}
                   disabled={historyIndex >= history.length - 1}
-                  className={`w-8.5 h-8.5 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
-                    historyIndex < history.length - 1 ? "cursor-pointer" : "cursor-not-allowed opacity-35"
+                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
+                    historyIndex < history.length - 1 ? "cursor-pointer" : "cursor-not-allowed opacity-40"
                   }`}
-                  style={{ color: theme.text }}
+                  style={{
+                    color: historyIndex < history.length - 1 ? theme.text : theme.secondary,
+                  }}
                   title="إعادة"
                 >
                   <Redo2 className="w-4 h-4" />
                 </button>
+
+                <div
+                  className="w-px h-5 mx-0.5"
+                  style={{ backgroundColor: theme.border }}
+                />
+
+                <button
+                  onClick={onClose}
+                  className="w-9 h-9 flex items-center justify-center rounded-full active:scale-95 transition-all cursor-pointer shadow-sm apple-elastic-pinch"
+                  style={{
+                    backgroundColor: theme.mode === "apple_dark" ? "#F5F5F5" : theme.accent,
+                    color: theme.mode === "apple_dark" ? "#000000" : theme.bg,
+                  }}
+                  title="حفظ وإغلاق"
+                >
+                  <Check className="w-4 h-4" strokeWidth={2.8} />
+                </button>
               </div>
             </div>
-          </div>
+          </header>
         )}
 
         {/* Floating Bottom Bar & Collapsed Dome (Rendered strictly when isActive is true) */}

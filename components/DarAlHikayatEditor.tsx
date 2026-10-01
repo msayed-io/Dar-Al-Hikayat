@@ -4323,7 +4323,6 @@ const DarAlHikayatMaster: React.FC = () => {
           setHandwritingCanUndo(canUndo);
           setHandwritingCanRedo(canRedo);
         }}
-        backgroundStyle={getBackgroundStyle()}
         title={title}
       />
 

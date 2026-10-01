@@ -262,9 +262,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
 
   const importNotesBulk = (newNotes: Note[]) => {
     setNotes((prevNotes) => {
-      const map = new Map(prevNotes.map((n) => [n.id, n]));
+      const map = new Map<number, Note>(prevNotes.map((n) => [n.id, n]));
       for (const note of newNotes) {
-        map.set(note.id, { ...(map.get(note.id) || {}), ...note });
+        map.set(note.id, { ...(map.get(note.id) || {}), ...note } as Note);
       }
       return Array.from(map.values()).sort((a, b) => (b.id || 0) - (a.id || 0));
     });

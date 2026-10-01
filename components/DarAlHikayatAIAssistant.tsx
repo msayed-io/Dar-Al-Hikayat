@@ -645,6 +645,7 @@ function UserMessageBubble({
 }
 
 interface AgentStepsMessageCardProps {
+  key?: React.Key;
   message: Message;
   theme: any;
 }
