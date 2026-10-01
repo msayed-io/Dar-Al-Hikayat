@@ -4324,6 +4324,7 @@ const DarAlHikayatMaster: React.FC = () => {
           setHandwritingCanRedo(canRedo);
         }}
         backgroundStyle={getBackgroundStyle()}
+        title={title}
       />
 
       {/* Remote Novel Writer Keyboard Modal */}

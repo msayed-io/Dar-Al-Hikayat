@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
-import { ChevronDown, ChevronUp, MoreHorizontal, Eraser as EraserIcon, Trash2, XCircle } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, MoreHorizontal, Eraser as EraserIcon, Trash2, XCircle, Check, Undo2, Redo2 } from "lucide-react";
 import { ThemeColors } from "../contexts/AppContext";
 
 export interface StrokePoint {
@@ -38,6 +39,7 @@ interface DarAlHikayatHandwritingProps {
   containerRef?: React.RefObject<HTMLElement | null>;
   onUndoChange?: (canUndo: boolean, canRedo: boolean) => void;
   backgroundStyle?: React.CSSProperties;
+  title?: string;
 }
 
 // Preset stroke thickness values with noticeable, distinct sizes from ultra-thin calligraphy to bold heading nib
@@ -64,7 +66,7 @@ const COLOR_PALETTE = [
 type PopupType = "none" | "thickness" | "color" | "options" | "eraser";
 
 export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikayatHandwritingProps>(
-  ({ isActive, isReadingMode = false, onClose, onDiscard, theme, initialStrokes = [], initialPageRuled = false, onStrokesChange, containerRef, onUndoChange, backgroundStyle }, ref) => {
+  ({ isActive, isReadingMode = false, onClose, onDiscard, theme, initialStrokes = [], initialPageRuled = false, onStrokesChange, containerRef, onUndoChange, backgroundStyle, title }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const ruledCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -326,10 +328,13 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     useEffect(() => {
       if (isActive) {
         const prevOverflow = document.body.style.overflow;
+        const prevTouchAction = document.body.style.touchAction;
         document.body.style.overflow = "hidden";
+        document.body.style.touchAction = "none";
         window.scrollTo(0, 0);
         return () => {
           document.body.style.overflow = prevOverflow;
+          document.body.style.touchAction = prevTouchAction;
         };
       }
     }, [isActive]);
@@ -863,17 +868,21 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       return null;
     }
 
-    return (
+    const handwritingView = (
       <div
-        className={`fixed inset-0 ${
-          isReadingMode ? "z-20 pointer-events-auto" : "z-40 pointer-events-auto"
-        } transition-opacity duration-300`}
+        className="fixed inset-0 pointer-events-auto transition-opacity duration-300"
         style={{
           ...backgroundStyle,
-          touchAction: "none",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           width: "100vw",
           height: "100vh",
           overflow: "hidden",
+          touchAction: "none",
+          zIndex: isReadingMode ? 20 : 999999,
         }}
         onClick={(e) => {
           if ((e.target as HTMLElement)?.id === "handwriting-canvas-layer") {
@@ -884,15 +893,23 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         {/* Layer 1: Ruled Lines Canvas (Background) */}
         <canvas
           ref={ruledCanvasRef}
-          className="absolute inset-0 pointer-events-none z-10 w-full h-full"
-          style={{ display: isPageRuled ? "block" : "none", width: "100%", height: "100%" }}
+          className="absolute inset-0 pointer-events-none w-full h-full"
+          style={{
+            display: isPageRuled ? "block" : "none",
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 1,
+          }}
         />
 
         {/* Layer 2: Main Inking Canvas with Two-Finger Infinite Panning & Single-Finger Inking */}
         <canvas
           id="handwriting-canvas-layer"
           ref={canvasRef}
-          className={`absolute inset-0 z-20 w-full h-full ${
+          className={`absolute inset-0 w-full h-full ${
             isActive
               ? "cursor-crosshair"
               : isReadingMode
@@ -901,11 +918,83 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           }`}
           onWheel={handleWheel}
           style={{
-            touchAction: "none",
+            position: "absolute",
+            top: 0,
+            left: 0,
             width: "100%",
             height: "100%",
+            touchAction: "none",
+            zIndex: 2,
           }}
         />
+
+        {/* Top Header Capsule Bar (Strictly when isActive is true) */}
+        {isActive && (
+          <div
+            className="fixed top-4 left-0 right-0 px-4 pointer-events-none flex justify-center items-center"
+            dir="rtl"
+            style={{ zIndex: 9999999 }}
+          >
+            <div
+              className="pointer-events-auto w-full max-w-sm sm:max-w-md md:max-w-lg h-12 px-2.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-1.5 shadow-2xl transition-all"
+              style={{
+                backgroundColor: barBg,
+                borderColor: barBorder,
+                boxShadow: barShadow,
+                borderRadius: "9999px",
+              }}
+            >
+              {/* Right: Done / Back Button */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={onClose}
+                  className="h-9 px-3.5 rounded-full flex items-center justify-center gap-1.5 hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer font-zain-bold text-xs"
+                  style={{ color: theme.text }}
+                  title="تم وحفظ"
+                >
+                  <Check className="w-4 h-4 text-emerald-500" strokeWidth={2.5} />
+                  <span>تم وحفظ</span>
+                </button>
+              </div>
+
+              {/* Center: Title */}
+              <div className="flex items-center justify-center min-w-0 flex-1 px-2">
+                <span
+                  className="text-xs font-zain-bold truncate text-center select-none opacity-85"
+                  style={{ color: theme.text }}
+                >
+                  {title || "كتابة يدوية"}
+                </span>
+              </div>
+
+              {/* Left: Undo & Redo Buttons */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleUndo}
+                  disabled={historyIndex <= 0}
+                  className={`w-8.5 h-8.5 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
+                    historyIndex > 0 ? "cursor-pointer" : "cursor-not-allowed opacity-35"
+                  }`}
+                  style={{ color: theme.text }}
+                  title="تراجع"
+                >
+                  <Undo2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1}
+                  className={`w-8.5 h-8.5 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all ${
+                    historyIndex < history.length - 1 ? "cursor-pointer" : "cursor-not-allowed opacity-35"
+                  }`}
+                  style={{ color: theme.text }}
+                  title="إعادة"
+                >
+                  <Redo2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Floating Bottom Bar & Collapsed Dome (Rendered strictly when isActive is true) */}
         {isActive && (
@@ -1400,6 +1489,11 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       )}
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(handwritingView, document.body);
+  }
+  return handwritingView;
   }
 );
 
