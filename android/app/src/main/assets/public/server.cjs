@@ -63,7 +63,39 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
-  app.get("/api/remote-keyboard/ip", (_req, res) => {
+  app.get("/manifest.json", (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.json({
+      id: "/",
+      name: "\u0644\u0648\u062D\u0629 \u0627\u0644\u0631\u0648\u0627\u064A\u0629 \u2014 \u0643\u064A\u0628\u0648\u0631\u062F \u0627\u0644\u0643\u0627\u062A\u0628\u0629 \u0627\u0644\u0644\u0627\u0633\u0644\u0643\u064A",
+      short_name: "\u0644\u0648\u062D\u0629 \u0627\u0644\u0631\u0648\u0627\u064A\u0629",
+      description: "\u0643\u064A\u0628\u0648\u0631\u062F \u0644\u0627\u0633\u0644\u0643\u064A \u0645\u062E\u0635\u0635 \u0644\u0644\u0631\u0648\u0627\u064A\u0627\u062A \u0648\u0627\u0644\u0643\u0627\u062A\u0628\u0627\u062A \u0645\u0648\u0635\u0648\u0644 \u0628\u0627\u0644\u062A\u0627\u0628\u0644\u062A",
+      start_url: "/",
+      display: "standalone",
+      orientation: "landscape",
+      background_color: "#141210",
+      theme_color: "#1D1A16",
+      icons: [
+        {
+          src: "/pwa-192x192.png",
+          sizes: "192x192",
+          type: "image/png"
+        }
+      ]
+    });
+  });
+  app.get("/sw.js", (_req, res) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.send(`
+      self.addEventListener('install', (e) => self.skipWaiting());
+      self.addEventListener('activate', (e) => self.clients.claim());
+      self.addEventListener('fetch', (e) => {
+        if (e.request.url.includes('/api/')) return;
+        e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+      });
+    `);
+  });
+  app.get(["/api/ip", "/api/remote-keyboard/ip"], (_req, res) => {
     const interfaces = import_os.default.networkInterfaces();
     const ips = [];
     let primaryIp = "";
@@ -86,12 +118,70 @@ async function startServer() {
         }
       }
     }
+    const nativePort = 8080;
     res.json({
       ips,
       primaryIp: primaryIp || ips[0] || "127.0.0.1",
-      port: PORT
+      port: nativePort,
+      connectionUrl: `http://${primaryIp || ips[0] || "127.0.0.1"}:${nativePort}/`
     });
   });
+  const handleCommandRequest = (req, res) => {
+    const startTime = Date.now();
+    const query = req.query;
+    const body = req.body || {};
+    const action = query.action || body.action || query.type || body.type || "type";
+    const char = query.char ?? body.char;
+    const text = query.text ?? body.text;
+    const delta = query.delta ?? body.delta;
+    let payloadType = "COMMAND";
+    let commandAction = void 0;
+    if (action === "type") {
+      payloadType = "KEY";
+    } else if (action === "tashkeel") {
+      payloadType = "TASHKEEL";
+    } else if (action === "paste") {
+      payloadType = "PASTE_TEXT";
+    } else if (action === "backspace") {
+      commandAction = "BACKSPACE";
+    } else if (action === "newline") {
+      commandAction = "NEWLINE";
+    } else if (action === "undo") {
+      commandAction = "UNDO";
+    } else if (action === "redo") {
+      commandAction = "REDO";
+    } else if (action === "delete_word") {
+      commandAction = "DELETE_WORD";
+    } else if (action === "cursor_move") {
+      commandAction = parseInt(delta) < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT";
+    }
+    const payload = {
+      sessionPin: query.pin || body.pin || "123456",
+      type: payloadType,
+      char,
+      action: commandAction,
+      text,
+      timestamp: Date.now()
+    };
+    const dataString = `data: ${JSON.stringify(payload)}
+
+`;
+    for (const clientRes of remoteKeyboardClients) {
+      try {
+        clientRes.write(dataString);
+      } catch {
+        remoteKeyboardClients.delete(clientRes);
+      }
+    }
+    res.json({
+      ok: true,
+      action,
+      latencyMs: Date.now() - startTime,
+      timestamp: Date.now()
+    });
+  };
+  app.get("/api/command", handleCommandRequest);
+  app.post("/api/command", handleCommandRequest);
   app.get("/api/remote-keyboard/events", (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -502,7 +592,7 @@ async function startServer() {
   } else {
     const distPath = import_path.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
-    app.get("*all", (_req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }

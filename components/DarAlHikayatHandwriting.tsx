@@ -37,6 +37,7 @@ interface DarAlHikayatHandwritingProps {
   onStrokesChange?: (strokes: Stroke[], isPageRuled: boolean, dataUrl: string) => void;
   containerRef?: React.RefObject<HTMLElement | null>;
   onUndoChange?: (canUndo: boolean, canRedo: boolean) => void;
+  backgroundStyle?: React.CSSProperties;
 }
 
 // Preset stroke thickness values with noticeable, distinct sizes from ultra-thin calligraphy to bold heading nib
@@ -63,7 +64,7 @@ const COLOR_PALETTE = [
 type PopupType = "none" | "thickness" | "color" | "options" | "eraser";
 
 export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikayatHandwritingProps>(
-  ({ isActive, isReadingMode = false, onClose, onDiscard, theme, initialStrokes = [], initialPageRuled = false, onStrokesChange, containerRef, onUndoChange }, ref) => {
+  ({ isActive, isReadingMode = false, onClose, onDiscard, theme, initialStrokes = [], initialPageRuled = false, onStrokesChange, containerRef, onUndoChange, backgroundStyle }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const ruledCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -171,11 +172,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         for (let sIdx = 0; sIdx < strokesToDraw.length; sIdx++) {
           const stroke = strokesToDraw[sIdx];
           if (!stroke.points || stroke.points.length === 0) continue;
-
-          const bounds = getStrokeBounds(stroke);
-          if (bounds.maxY < currentPanY - 60 || bounds.minY > currentPanY + viewportHeight + 60) {
-            continue;
-          }
 
           ctx.strokeStyle = stroke.color;
           ctx.fillStyle = stroke.color;
@@ -325,6 +321,18 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         window.removeEventListener("resize", resizeCanvases);
       };
     }, [resizeCanvases]);
+
+    // Lock body scroll and reset viewport scroll while handwriting mode is active
+    useEffect(() => {
+      if (isActive) {
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        window.scrollTo(0, 0);
+        return () => {
+          document.body.style.overflow = prevOverflow;
+        };
+      }
+    }, [isActive]);
 
     useEffect(() => {
       drawRuledLines(panYRef.current);
@@ -553,7 +561,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.scale(dpr, dpr);
           ctx.translate(0, -panYRef.current);
-          ctx.fillStyle = selectedColorRef.current;
+          ctx.fillStyle = selectedColorRef.current || (theme.isDark ? "#FFFFFF" : "#121A1B");
           ctx.beginPath();
           ctx.arc(worldX, worldY, selectedThicknessRef.current / 2, 0, Math.PI * 2);
           ctx.fill();
@@ -589,7 +597,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             ctx.scale(dpr, dpr);
             ctx.translate(0, -panYRef.current);
 
-            ctx.strokeStyle = selectedColorRef.current;
+            ctx.strokeStyle = selectedColorRef.current || (theme.isDark ? "#FFFFFF" : "#121A1B");
             ctx.lineWidth = width;
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
@@ -629,6 +637,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         const updated = [...strokesRef.current, newStroke];
         strokesRef.current = updated;
         recordHistory(updated);
+        redrawAll(updated, panYRef.current);
       } else if (activeToolRef.current === "eraser" && didEraseDuringDragRef.current) {
         didEraseDuringDragRef.current = false;
         recordHistory(strokesRef.current);
@@ -857,10 +866,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     return (
       <div
         className={`fixed inset-0 ${
-          isReadingMode ? "z-20 pointer-events-auto" : "z-50 pointer-events-auto"
+          isReadingMode ? "z-20 pointer-events-auto" : "z-40 pointer-events-auto"
         } transition-opacity duration-300`}
         style={{
+          ...backgroundStyle,
           touchAction: "none",
+          width: "100vw",
+          height: "100vh",
+          overflow: "hidden",
         }}
         onClick={(e) => {
           if ((e.target as HTMLElement)?.id === "handwriting-canvas-layer") {
@@ -871,15 +884,15 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         {/* Layer 1: Ruled Lines Canvas (Background) */}
         <canvas
           ref={ruledCanvasRef}
-          className="absolute inset-0 pointer-events-none z-10"
-          style={{ display: isPageRuled ? "block" : "none" }}
+          className="absolute inset-0 pointer-events-none z-10 w-full h-full"
+          style={{ display: isPageRuled ? "block" : "none", width: "100%", height: "100%" }}
         />
 
         {/* Layer 2: Main Inking Canvas with Two-Finger Infinite Panning & Single-Finger Inking */}
         <canvas
           id="handwriting-canvas-layer"
           ref={canvasRef}
-          className={`absolute inset-0 z-20 ${
+          className={`absolute inset-0 z-20 w-full h-full ${
             isActive
               ? "cursor-crosshair"
               : isReadingMode

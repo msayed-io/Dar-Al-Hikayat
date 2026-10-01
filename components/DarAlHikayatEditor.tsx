@@ -2961,7 +2961,7 @@ const DarAlHikayatMaster: React.FC = () => {
             : "apple-top-vignette"
         }`}
         style={{
-          opacity: showUI ? 1 : 0,
+          opacity: showUI && !isHandwritingMode ? 1 : 0,
           right: showAIAssistant && isWideScreen ? paneWidthCss : 0,
         }}
       />
@@ -2970,36 +2970,8 @@ const DarAlHikayatMaster: React.FC = () => {
       <div
         className="apple-magnetic-dissolve"
         style={{
-          opacity: showUI ? 1 : 0,
+          opacity: showUI && !isHandwritingMode ? 1 : 0,
           right: showAIAssistant && isWideScreen ? paneWidthCss : 0,
-        }}
-      />
-
-      {/* Handwriting & Inking Canvas Layer (Root-Level Viewport Fixed Placement) */}
-      <DarAlHikayatHandwriting
-        ref={handwritingRef}
-        isActive={isHandwritingMode && !isSavedMode}
-        isReadingMode={isSavedMode}
-        onClose={() => setIsHandwritingMode(false)}
-        onDiscard={() => {
-          setHandwritingStrokes([]);
-          setHandwritingDataUrl("");
-          setIsPageRuled(false);
-          setIsHandwritingMode(false);
-          setIsDirty(true);
-          if (noteId) {
-            try {
-              localStorage.removeItem(`dar_hw_${noteId}`);
-            } catch {}
-          }
-        }}
-        theme={currentTheme}
-        initialStrokes={handwritingStrokes}
-        initialPageRuled={isPageRuled}
-        onStrokesChange={handleHandwritingChange}
-        onUndoChange={(canUndo, canRedo) => {
-          setHandwritingCanUndo(canUndo);
-          setHandwritingCanRedo(canRedo);
         }}
       />
 
@@ -3521,7 +3493,12 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Main Content Area & AI Assistant Dual Pane Split Screen */}
-      <div className="w-full min-h-screen relative overflow-x-hidden" dir="rtl">
+      <div
+        className={`w-full min-h-screen relative overflow-x-hidden ${
+          isHandwritingMode && !isSavedMode ? "hidden" : ""
+        }`}
+        dir="rtl"
+      >
         {/* AI Assistant Studio Pane: Completely fixed to the viewport - 100% immune to editor scrolling or text length */}
         {showAIAssistant && isWideScreen && (
           <aside
@@ -4319,6 +4296,35 @@ const DarAlHikayatMaster: React.FC = () => {
           </span>
         </button>
       )}
+
+      {/* Handwriting & Inking Canvas Layer (Root-Level Viewport Placement at End of DOM Tree) */}
+      <DarAlHikayatHandwriting
+        ref={handwritingRef}
+        isActive={isHandwritingMode && !isSavedMode}
+        isReadingMode={isSavedMode}
+        onClose={() => setIsHandwritingMode(false)}
+        onDiscard={() => {
+          setHandwritingStrokes([]);
+          setHandwritingDataUrl("");
+          setIsPageRuled(false);
+          setIsHandwritingMode(false);
+          setIsDirty(true);
+          if (noteId) {
+            try {
+              localStorage.removeItem(`dar_hw_${noteId}`);
+            } catch {}
+          }
+        }}
+        theme={currentTheme}
+        initialStrokes={handwritingStrokes}
+        initialPageRuled={isPageRuled}
+        onStrokesChange={handleHandwritingChange}
+        onUndoChange={(canUndo, canRedo) => {
+          setHandwritingCanUndo(canUndo);
+          setHandwritingCanRedo(canRedo);
+        }}
+        backgroundStyle={getBackgroundStyle()}
+      />
 
       {/* Remote Novel Writer Keyboard Modal */}
       <RemoteKeyboardModal
