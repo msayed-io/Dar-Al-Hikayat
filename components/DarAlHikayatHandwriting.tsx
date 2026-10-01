@@ -89,13 +89,11 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const panYRef = useRef<number>(0);
     const isTwoFingerPanningRef = useRef<boolean>(false);
     const lastTwoFingerYRef = useRef<number>(0);
-    const twoFingerCooldownRef = useRef<number>(0);
     const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
 
     // Reading Mode Navigation Refs
     const isMousePanningRef = useRef<boolean>(false);
     const lastMouseYRef = useRef<number>(0);
-    const readingTouchStartYRef = useRef<number>(0);
 
     // Drawing in-progress refs
     const isDrawingRef = useRef<boolean>(false);
@@ -108,6 +106,10 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const selectedThicknessRef = useRef<number>(3.5);
     const selectedColorRef = useRef<string>(theme.isDark ? "#FFFFFF" : "#121A1B");
     const strokesRef = useRef<Stroke[]>(initialStrokes);
+
+    // Throttled Redraw RAF & Debounced DataURL Refs
+    const redrawRafIdRef = useRef<number | null>(null);
+    const dataUrlTimeoutRef = useRef<any>(null);
 
     // Spatial index of stroke bounding boxes for 100x faster O(1) eraser culling
     const strokeBoundsRef = useRef<Map<string, { minX: number; maxX: number; minY: number; maxY: number }>>(new Map());
@@ -142,7 +144,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       strokesRef.current = strokes;
     }, [strokes]);
 
-    // Redraw whenever strokes change or canvas resizes, with panY translation
+    // Keep default ink color in sync with theme changes
+    useEffect(() => {
+      const defaultInk = theme.isDark ? "#FFFFFF" : "#121A1B";
+      setSelectedColor(defaultInk);
+      selectedColorRef.current = defaultInk;
+    }, [theme.isDark]);
+
+    // High-performance batched canvas redraw
     const redrawAll = useCallback(
       (strokesToDraw: Stroke[], currentPanY: number = panYRef.current) => {
         const canvas = canvasRef.current;
@@ -160,65 +169,72 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         ctx.translate(0, -currentPanY);
 
         // Render each stroke with smooth quadratic curves
-        strokesToDraw.forEach((stroke) => {
-          if (!stroke.points || stroke.points.length === 0) return;
+        for (let sIdx = 0; sIdx < strokesToDraw.length; sIdx++) {
+          const stroke = strokesToDraw[sIdx];
+          if (!stroke.points || stroke.points.length === 0) continue;
 
           // Viewport culling optimization
-          let minStrokeY = Infinity;
-          let maxStrokeY = -Infinity;
-          for (let p = 0; p < stroke.points.length; p++) {
-            const y = stroke.points[p].y;
-            if (y < minStrokeY) minStrokeY = y;
-            if (y > maxStrokeY) maxStrokeY = y;
-          }
-          if (maxStrokeY < currentPanY - 60 || minStrokeY > currentPanY + viewportHeight + 60) {
-            return;
+          const bounds = getStrokeBounds(stroke);
+          if (bounds.maxY < currentPanY - 60 || bounds.minY > currentPanY + viewportHeight + 60) {
+            continue;
           }
 
-          ctx.save();
           ctx.strokeStyle = stroke.color;
           ctx.fillStyle = stroke.color;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
+          ctx.lineWidth = stroke.width;
 
           if (stroke.points.length === 1) {
             const p = stroke.points[0];
             ctx.beginPath();
             ctx.arc(p.x, p.y, stroke.width / 2, 0, Math.PI * 2);
             ctx.fill();
-            ctx.restore();
-            return;
+            continue;
           }
+
+          ctx.beginPath();
+          const p0 = stroke.points[0];
+          ctx.moveTo(p0.x, p0.y);
 
           for (let i = 1; i < stroke.points.length; i++) {
-            const p0 = stroke.points[i - 1];
-            const p1 = stroke.points[i];
-
-            const midX = (p0.x + p1.x) / 2;
-            const midY = (p0.y + p1.y) / 2;
-
-            // Pressure & velocity sensitive width
-            const currentWidth = stroke.width * (0.65 + (p1.pressure || 0.5) * 0.7);
-            ctx.lineWidth = currentWidth;
-
-            ctx.beginPath();
-            if (i === 1) {
-              ctx.moveTo(p0.x, p0.y);
-              ctx.lineTo(midX, midY);
-            } else {
-              const prevMidX = (stroke.points[i - 2].x + p0.x) / 2;
-              const prevMidY = (stroke.points[i - 2].y + p0.y) / 2;
-              ctx.moveTo(prevMidX, prevMidY);
-              ctx.quadraticCurveTo(p0.x, p0.y, midX, midY);
-            }
-            ctx.stroke();
+            const pt0 = stroke.points[i - 1];
+            const pt1 = stroke.points[i];
+            const midX = (pt0.x + pt1.x) / 2;
+            const midY = (pt0.y + pt1.y) / 2;
+            ctx.quadraticCurveTo(pt0.x, pt0.y, midX, midY);
           }
-          ctx.restore();
-        });
+          const lastPt = stroke.points[stroke.points.length - 1];
+          ctx.lineTo(lastPt.x, lastPt.y);
+          ctx.stroke();
+        }
+
         ctx.restore();
       },
       []
     );
+
+    // Throttled RAF scheduler to repaint at 60/120fps display rate without blocking JS thread
+    const scheduleRedraw = useCallback(() => {
+      if (redrawRafIdRef.current !== null) return;
+      redrawRafIdRef.current = requestAnimationFrame(() => {
+        redrawRafIdRef.current = null;
+        redrawAll(strokesRef.current, panYRef.current);
+      });
+    }, [redrawAll]);
+
+    useEffect(() => {
+      return () => {
+        if (redrawRafIdRef.current !== null) {
+          cancelAnimationFrame(redrawRafIdRef.current);
+          redrawRafIdRef.current = null;
+        }
+        if (dataUrlTimeoutRef.current) {
+          clearTimeout(dataUrlTimeoutRef.current);
+          dataUrlTimeoutRef.current = null;
+        }
+      };
+    }, []);
 
     // Synchronize initial strokes only when note loads externally or changes from outside
     useEffect(() => {
@@ -302,10 +318,10 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         ruledCanvas.style.width = `${docWidth}px`;
         ruledCanvas.style.height = `${docHeight}px`;
 
-        redrawAll(strokes, panYRef.current);
+        redrawAll(strokesRef.current, panYRef.current);
         drawRuledLines(panYRef.current);
       }
-    }, [strokes, redrawAll, drawRuledLines]);
+    }, [redrawAll, drawRuledLines]);
 
     useLayoutEffect(() => {
       resizeCanvases();
@@ -319,41 +335,31 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       drawRuledLines(panYRef.current);
     }, [drawRuledLines, isPageRuled]);
 
-    // Prevent default browser gesture behavior on the canvas
-    useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const preventDefaultTouch = (e: TouchEvent) => {
-        if (isActive || isReadingMode) {
-          e.preventDefault();
-        }
-      };
-
-      canvas.addEventListener("touchstart", preventDefaultTouch, { passive: false });
-      canvas.addEventListener("touchmove", preventDefaultTouch, { passive: false });
-      return () => {
-        canvas.removeEventListener("touchstart", preventDefaultTouch);
-        canvas.removeEventListener("touchmove", preventDefaultTouch);
-      };
-    }, [isActive, isReadingMode]);
-
-    // Export current canvas as data URL
+    // Export current canvas as data URL on-demand
     const generateDataUrl = useCallback(() => {
       const canvas = canvasRef.current;
       if (!canvas) return "";
       return canvas.toDataURL("image/png");
     }, []);
 
-    // Save strokes state to parent
+    // Save strokes state to parent without blocking the main UI thread with heavy base64 serialization
     const notifyChange = useCallback(
       (newStrokes: Stroke[], ruled: boolean) => {
         if (onStrokesChange) {
-          const dataUrl = generateDataUrl();
-          onStrokesChange(newStrokes, ruled, dataUrl);
+          // Send lightweight vector strokes immediately (<1ms)
+          onStrokesChange(newStrokes, ruled, "");
+
+          // Debounce heavy raster dataUrl serialization during active handwriting
+          if (dataUrlTimeoutRef.current) clearTimeout(dataUrlTimeoutRef.current);
+          dataUrlTimeoutRef.current = setTimeout(() => {
+            if (canvasRef.current && onStrokesChange) {
+              const url = canvasRef.current.toDataURL("image/png");
+              onStrokesChange(newStrokes, ruled, url);
+            }
+          }, 800);
         }
       },
-      [onStrokesChange, generateDataUrl]
+      [onStrokesChange]
     );
 
     // Notify undo/redo availability to parent
@@ -386,6 +392,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         setHistoryIndex(nextIndex);
         const previousStrokes = history[nextIndex];
         lastInternalStrokesRef.current = previousStrokes;
+        strokesRef.current = previousStrokes;
         setStrokes(previousStrokes);
         redrawAll(previousStrokes, panYRef.current);
         notifyChange(previousStrokes, isPageRuled);
@@ -402,6 +409,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         setHistoryIndex(nextIndex);
         const nextStrokes = history[nextIndex];
         lastInternalStrokesRef.current = nextStrokes;
+        strokesRef.current = nextStrokes;
         setStrokes(nextStrokes);
         redrawAll(nextStrokes, panYRef.current);
         notifyChange(nextStrokes, isPageRuled);
@@ -432,6 +440,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     // Clear all strokes
     const handleClearAll = useCallback(() => {
       recordHistory([]);
+      strokesRef.current = [];
       redrawAll([], panYRef.current);
       strokeBoundsRef.current.clear();
       setActivePopup("none");
@@ -442,6 +451,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       setStrokes([]);
       setHistory([[]]);
       setHistoryIndex(0);
+      strokesRef.current = [];
       lastInternalStrokesRef.current = [];
       strokeBoundsRef.current.clear();
       redrawAll([], panYRef.current);
@@ -460,7 +470,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       }
     }, [redrawAll, onStrokesChange, onUndoChange, onDiscard, onClose]);
 
-    // Helper: distance between point and line segment
+    // Helper: distance between point and line segment squared
     const distToSegmentSquared = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
       const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
       if (l2 === 0) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
@@ -471,13 +481,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       return (px - projX) * (px - projX) + (py - projY) * (py - projY);
     };
 
-    // Realistic Segment Eraser (Takes world coordinates) - Optimized with double-layer spatial culling
-    const eraseAtPoint = (worldX: number, worldY: number, radius = 24) => {
+    // Ultra-Fast Segment Eraser (Zero lag, throttled RAF redraw, no React re-render during drag)
+    const eraseAtPoint = (worldX: number, worldY: number, radius = 26) => {
       const r2 = radius * radius;
       let didModify = false;
       const nextStrokes: Stroke[] = [];
 
-      for (const stroke of strokesRef.current) {
+      for (let s = 0; s < strokesRef.current.length; s++) {
+        const stroke = strokesRef.current[s];
         // Layer 1: Stroke-level bounding box culling
         const bounds = getStrokeBounds(stroke);
         const intersectsStroke = (
@@ -504,7 +515,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           }
           if (i > 0) {
             const prev = stroke.points[i - 1];
-            // Segment bounding-box pre-check to avoid expensive distance math
             const minSegX = Math.min(prev.x, pt.x) - radius;
             const maxSegX = Math.max(prev.x, pt.x) + radius;
             const minSegY = Math.min(prev.y, pt.y) - radius;
@@ -526,7 +536,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         didModify = true;
 
-        // Split this stroke into segments that lie outside the eraser radius
+        // Clean segment splitting: extract sub-segments outside the eraser circle
         let currentSegment: StrokePoint[] = [];
         for (let i = 0; i < stroke.points.length; i++) {
           const pt = stroke.points[i];
@@ -535,25 +545,25 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           const inside = dx * dx + dy * dy <= r2;
 
           if (inside) {
-            if (currentSegment.length > 0) {
-              if (currentSegment.length > 1) {
-                nextStrokes.push({
-                  id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                  color: stroke.color,
-                  width: stroke.width,
-                  points: currentSegment,
-                });
-              }
-              currentSegment = [];
+            if (currentSegment.length > 1) {
+              const segId = `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              nextStrokes.push({
+                id: segId,
+                color: stroke.color,
+                width: stroke.width,
+                points: currentSegment,
+              });
             }
+            currentSegment = [];
           } else {
             currentSegment.push(pt);
           }
         }
 
         if (currentSegment.length > 1) {
+          const segId = `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
           nextStrokes.push({
-            id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            id: segId,
             color: stroke.color,
             width: stroke.width,
             points: currentSegment,
@@ -564,16 +574,13 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (didModify) {
         didEraseDuringDragRef.current = true;
         strokesRef.current = nextStrokes;
-        setStrokes(nextStrokes);
-        redrawAll(nextStrokes, panYRef.current);
+        // Schedule throttled RAF redraw without triggering React state re-renders during drag!
+        scheduleRedraw();
       }
     };
 
     // Core Drawing Helpers (Operating in World Coordinates)
     const startDrawing = (clientX: number, clientY: number, pressure = 0.5) => {
-      // Synchronously guarantee correct canvas size before any pixel is drawn!
-      resizeCanvases();
-
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -600,7 +607,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           ctx.translate(0, -panYRef.current);
           ctx.fillStyle = selectedColorRef.current;
           ctx.beginPath();
-          ctx.arc(worldX, worldY, (selectedThicknessRef.current * (0.65 + pressure * 0.7)) / 2, 0, Math.PI * 2);
+          ctx.arc(worldX, worldY, selectedThicknessRef.current / 2, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
@@ -624,7 +631,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         if (prevPoint) {
           const midX = (prevPoint.x + worldX) / 2;
           const midY = (prevPoint.y + worldY) / 2;
-          const width = selectedThicknessRef.current * (0.65 + pressure * 0.7);
+          const width = selectedThicknessRef.current;
 
           const ctx = canvas.getContext("2d", { desynchronized: true, alpha: true });
           if (ctx) {
@@ -675,6 +682,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         strokesRef.current = updated;
         recordHistory(updated);
       } else if (activeToolRef.current === "eraser" && didEraseDuringDragRef.current) {
+        didEraseDuringDragRef.current = false;
         recordHistory(strokesRef.current);
       }
 
@@ -682,13 +690,20 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       lastPointRef.current = null;
     };
 
-    // High-Precision Native Pointer Event Listeners (Zero React Event Overhead & Coalesced Sub-Pixel Tracking)
+    // Native High-Precision Pointer Event Listeners (Zero touchstart conflict, robust pointer capture & lifecycle)
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       const onPointerDown = (e: PointerEvent) => {
+        // Prevent browser gestures natively
         e.preventDefault();
+
+        // Safety: If this is the primary pointer or active map was empty, reset stale state
+        if (e.isPrimary || activePointersRef.current.size === 0) {
+          activePointersRef.current.clear();
+          isTwoFingerPanningRef.current = false;
+        }
 
         activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
@@ -697,7 +712,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           let sumY = 0;
           activePointersRef.current.forEach((p) => (sumY += p.clientY));
           lastMouseYRef.current = sumY / activePointersRef.current.size;
-
           try {
             canvas.setPointerCapture(e.pointerId);
           } catch {}
@@ -716,7 +730,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             isDrawingRef.current = false;
             currentPointsRef.current = [];
             lastPointRef.current = null;
-            redrawAll(strokesRef.current, panYRef.current);
+            scheduleRedraw();
           }
 
           let sumY = 0;
@@ -725,16 +739,15 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           return;
         }
 
-        if (activePointersRef.current.size === 1) {
-          if (isTwoFingerPanningRef.current || performance.now() - twoFingerCooldownRef.current < 130) {
-            return;
-          }
-          const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-          startDrawing(e.clientX, e.clientY, pressure);
-        }
+        // Single finger / stylus inking
+        isTwoFingerPanningRef.current = false;
+        const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+        startDrawing(e.clientX, e.clientY, pressure);
       };
 
       const onPointerMove = (e: PointerEvent) => {
+        e.preventDefault();
+
         if (activePointersRef.current.has(e.pointerId)) {
           activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
         }
@@ -744,7 +757,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             let sumY = 0;
             activePointersRef.current.forEach((p) => (sumY += p.clientY));
             const currentAvgY = sumY / activePointersRef.current.size;
-            
+
             const deltaY = currentAvgY - lastMouseYRef.current;
             lastMouseYRef.current = currentAvgY;
 
@@ -752,7 +765,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             if (Math.abs(nextPanY - panYRef.current) > 0.3) {
               panYRef.current = nextPanY;
               setPanY(nextPanY);
-              redrawAll(strokesRef.current, nextPanY);
+              scheduleRedraw();
               drawRuledLines(nextPanY);
             }
           }
@@ -760,8 +773,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         }
 
         if (!isActive) return;
-        e.preventDefault();
 
+        // Multi-touch two finger panning
         if (isTwoFingerPanningRef.current || activePointersRef.current.size >= 2) {
           let sumY = 0;
           activePointersRef.current.forEach((p) => (sumY += p.clientY));
@@ -774,18 +787,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           if (Math.abs(nextPanY - panYRef.current) > 0.3) {
             panYRef.current = nextPanY;
             setPanY(nextPanY);
-            redrawAll(strokesRef.current, nextPanY);
+            scheduleRedraw();
             drawRuledLines(nextPanY);
           }
           return;
         }
 
-        if (isDrawingRef.current && activePointersRef.current.size === 1) {
-          if (performance.now() - twoFingerCooldownRef.current < 130) {
-            return;
-          }
-
-          // Utilize high-frequency sub-frame coalesced points if available
+        // Inking or Erasing
+        if (isDrawingRef.current) {
           if (typeof (e as any).getCoalescedEvents === "function") {
             const coalesced = (e as any).getCoalescedEvents();
             if (coalesced && coalesced.length > 0) {
@@ -823,20 +832,15 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         if (!isActive) return;
 
+        if (activePointersRef.current.size < 2) {
+          isTwoFingerPanningRef.current = false;
+        }
+
         if (activePointersRef.current.size === 0) {
-          if (isTwoFingerPanningRef.current) {
-            isTwoFingerPanningRef.current = false;
-            twoFingerCooldownRef.current = performance.now();
-          }
+          isTwoFingerPanningRef.current = false;
           if (isDrawingRef.current) {
             finishDrawing();
           }
-        } else if (activePointersRef.current.size === 1) {
-          twoFingerCooldownRef.current = performance.now();
-          
-          let sumY = 0;
-          activePointersRef.current.forEach((p) => (sumY += p.clientY));
-          lastTwoFingerYRef.current = sumY / activePointersRef.current.size;
         }
       };
 
@@ -844,18 +848,34 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         onPointerUp(e);
       };
 
+      const onLostPointerCapture = (e: PointerEvent) => {
+        onPointerUp(e);
+      };
+
+      const onWindowBlur = () => {
+        activePointersRef.current.clear();
+        isTwoFingerPanningRef.current = false;
+        if (isDrawingRef.current) {
+          finishDrawing();
+        }
+      };
+
       canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
       canvas.addEventListener("pointermove", onPointerMove, { passive: false });
       canvas.addEventListener("pointerup", onPointerUp, { passive: false });
       canvas.addEventListener("pointercancel", onPointerCancel, { passive: false });
+      canvas.addEventListener("lostpointercapture", onLostPointerCapture, { passive: false });
+      window.addEventListener("blur", onWindowBlur);
 
       return () => {
         canvas.removeEventListener("pointerdown", onPointerDown);
         canvas.removeEventListener("pointermove", onPointerMove);
         canvas.removeEventListener("pointerup", onPointerUp);
         canvas.removeEventListener("pointercancel", onPointerCancel);
+        canvas.removeEventListener("lostpointercapture", onLostPointerCapture);
+        window.removeEventListener("blur", onWindowBlur);
       };
-    }, [isActive, isReadingMode, redrawAll, drawRuledLines]);
+    }, [isActive, isReadingMode, scheduleRedraw, drawRuledLines]);
 
     // Desktop Mouse Wheel & Trackpad Vertical Scroll
     const handleWheel = (e: React.WheelEvent) => {
@@ -864,14 +884,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (nextPanY !== panYRef.current) {
         panYRef.current = nextPanY;
         setPanY(nextPanY);
-        redrawAll(strokes, nextPanY);
+        scheduleRedraw();
         drawRuledLines(nextPanY);
       }
     };
 
     // Imperative handle for parent
     useImperativeHandle(ref, () => ({
-      getStrokes: () => strokes,
+      getStrokes: () => strokesRef.current,
       getDataUrl: () => generateDataUrl(),
       clear: () => handleClearAll(),
       undo: () => handleUndo(),
@@ -987,7 +1007,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
               }}
             >
               {/* --- FLOATING CAPSULES ABOVE THE BAR (Matching Dar Al Hikayat Capsule Design) --- */}
-              <div className="relative w-full max-w-[340px] px-2 flex justify-center pb-2 pointer-events-auto">
+              <div className={`relative w-full max-w-[340px] px-2 flex justify-center pb-2 ${activePopup !== "none" ? "pointer-events-auto" : "pointer-events-none"}`}>
+
                   {/* 1. Thickness Capsule (5 Noticeable Distinct Sizes) */}
                   {activePopup === "thickness" && (
                     <div
