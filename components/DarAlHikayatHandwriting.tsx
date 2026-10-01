@@ -977,7 +977,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         {/* Layer 2: Main Inking Canvas with Two-Finger Infinite Panning & Single-Finger Inking */}
         <canvas
-          id="handwriting-canvas-layer" style={{ touchAction: "none", width: "100%", height: "100%" }}
+          id="handwriting-canvas-layer"
           ref={canvasRef}
           className={`absolute inset-0 z-20 ${
             isActive
@@ -989,6 +989,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           onWheel={handleWheel}
           style={{
             touchAction: "none",
+            width: "100%",
+            height: "100%",
           }}
         />
 
