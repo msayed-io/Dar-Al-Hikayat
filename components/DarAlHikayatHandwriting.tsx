@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useIm
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, ChevronRight, MoreHorizontal, Eraser as EraserIcon, Trash2, XCircle, Check, Undo2, Redo2 } from "lucide-react";
 import { ThemeColors } from "../contexts/AppContext";
+import { eraseStrokePortion } from "../lib/handwriting-eraser";
 
 export interface StrokePoint {
   x: number;
@@ -497,20 +498,10 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       }
     }, [redrawAll, onStrokesChange, onUndoChange, onDiscard, onClose]);
 
-    // Helper: distance between point and line segment squared
-    const distToSegmentSquared = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
-      const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-      if (l2 === 0) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
-      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
-      t = Math.max(0, Math.min(1, t));
-      const projX = x1 + t * (x2 - x1);
-      const projY = y1 + t * (y2 - y1);
-      return (px - projX) * (px - projX) + (py - projY) * (py - projY);
-    };
-
-    // Ultra-Fast 120fps Huawei Notes-Inspired Stroke Eraser (Zero stutter, O(N) culling, instant response)
+    // Ultra-Fast 120fps Precision Partial Eraser (Apple Notes / GoodNotes style):
+    // يمحو الجزء الذي يمرّ عليه القرص فقط ويقسّم الخط إلى المقزّم الباقية —
+    // لا يحذف الخط كاملاً أبدًا. فرز AABB أولاً ثم رياضيات القصّ الدقيقة.
     const eraseAtPoint = (worldX: number, worldY: number, radius = 28) => {
-      const r2 = radius * radius;
       let didModify = false;
       const nextStrokes: Stroke[] = [];
 
@@ -529,28 +520,19 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           continue;
         }
 
-        let touches = false;
-        for (let i = 0; i < stroke.points.length; i++) {
-          const pt = stroke.points[i];
-          const dx = pt.x - worldX;
-          const dy = pt.y - worldY;
-          if (dx * dx + dy * dy <= r2) {
-            touches = true;
-            break;
-          }
-          if (i > 0) {
-            const prev = stroke.points[i - 1];
-            if (distToSegmentSquared(worldX, worldY, prev.x, prev.y, pt.x, pt.y) <= r2) {
-              touches = true;
-              break;
-            }
-          }
+        const pieces = eraseStrokePortion(stroke, worldX, worldY, radius);
+
+        if (pieces.length === 1 && pieces[0] === stroke) {
+          // الحدود تلامس لكن الهندسة لم تُمس — نحتفظ بالمصدر وذاكرة حدوده
+          nextStrokes.push(stroke);
+          continue;
         }
 
-        if (touches) {
-          didModify = true;
-        } else {
-          nextStrokes.push(stroke);
+        didModify = true;
+        // الهندسة استُبدلت مقزّم جديدة بمعرّفات جديدة — تُحذف حدوده المخزّنة
+        strokeBoundsRef.current.delete(stroke.id);
+        for (let p = 0; p < pieces.length; p++) {
+          nextStrokes.push(pieces[p]);
         }
       }
 
