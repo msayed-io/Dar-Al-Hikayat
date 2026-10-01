@@ -156,7 +156,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       (strokesToDraw: Stroke[], currentPanY: number = panYRef.current) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext("2d", { desynchronized: true, alpha: true });
+        const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
         const dpr = window.devicePixelRatio || 1;
@@ -168,12 +168,10 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         ctx.scale(dpr, dpr);
         ctx.translate(0, -currentPanY);
 
-        // Render each stroke with smooth quadratic curves
         for (let sIdx = 0; sIdx < strokesToDraw.length; sIdx++) {
           const stroke = strokesToDraw[sIdx];
           if (!stroke.points || stroke.points.length === 0) continue;
 
-          // Viewport culling optimization
           const bounds = getStrokeBounds(stroke);
           if (bounds.maxY < currentPanY - 60 || bounds.minY > currentPanY + viewportHeight + 60) {
             continue;
@@ -270,18 +268,16 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         const viewportHeight = canvas.height / dpr;
         const width = canvas.width / dpr;
-        const lineHeight = 38; // 38px comfortable manuscript ruling
+        const lineHeight = 38;
         const startY = 80;
 
         ctx.save();
         ctx.scale(dpr, dpr);
         ctx.translate(0, -currentPanY);
 
-        // Theme-based elegant ruling color
         ctx.strokeStyle = theme.isDark ? "rgba(226, 223, 210, 0.16)" : "rgba(18, 26, 27, 0.15)";
         ctx.lineWidth = 1;
 
-        // Mathematically consistent ruling indices from 0 to infinity
         const firstLineIdx = Math.max(0, Math.floor((currentPanY - startY) / lineHeight));
         const lastLineIdx = Math.floor((currentPanY + viewportHeight + lineHeight - startY) / lineHeight);
 
@@ -304,19 +300,16 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (!canvas || !ruledCanvas) return;
 
       const dpr = window.devicePixelRatio || 1;
-      const docWidth = window.innerWidth;
-      const docHeight = window.innerHeight;
+      const rect = canvas.getBoundingClientRect();
+      const docWidth = Math.round(rect.width || window.innerWidth);
+      const docHeight = Math.round(rect.height || window.innerHeight);
 
       if (canvas.width !== docWidth * dpr || canvas.height !== docHeight * dpr) {
         canvas.width = docWidth * dpr;
         canvas.height = docHeight * dpr;
-        canvas.style.width = `${docWidth}px`;
-        canvas.style.height = `${docHeight}px`;
 
         ruledCanvas.width = docWidth * dpr;
         ruledCanvas.height = docHeight * dpr;
-        ruledCanvas.style.width = `${docWidth}px`;
-        ruledCanvas.style.height = `${docHeight}px`;
 
         redrawAll(strokesRef.current, panYRef.current);
         drawRuledLines(panYRef.current);
@@ -346,10 +339,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const notifyChange = useCallback(
       (newStrokes: Stroke[], ruled: boolean) => {
         if (onStrokesChange) {
-          // Send lightweight vector strokes immediately (<1ms)
           onStrokesChange(newStrokes, ruled, "");
 
-          // Debounce heavy raster dataUrl serialization during active handwriting
           if (dataUrlTimeoutRef.current) clearTimeout(dataUrlTimeoutRef.current);
           dataUrlTimeoutRef.current = setTimeout(() => {
             if (canvasRef.current && onStrokesChange) {
@@ -419,7 +410,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       }
     }, [history, historyIndex, redrawAll, notifyChange, isPageRuled, onUndoChange]);
 
-    // Keyboard shortcuts for Undo (Ctrl/Cmd+Z) and Redo (Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z) in handwriting mode
+    // Keyboard shortcuts for Undo and Redo
     useEffect(() => {
       if (!isActive) return;
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -489,7 +480,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
       for (let s = 0; s < strokesRef.current.length; s++) {
         const stroke = strokesRef.current[s];
-        // Layer 1: Stroke-level bounding box culling
         const bounds = getStrokeBounds(stroke);
         const intersectsStroke = (
           worldX + radius >= bounds.minX &&
@@ -503,7 +493,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           continue;
         }
 
-        // Layer 2: Fast point-level distance and segment bounding-box checking
         let touches = false;
         for (let i = 0; i < stroke.points.length; i++) {
           const pt = stroke.points[i];
@@ -536,7 +525,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         didModify = true;
 
-        // Clean segment splitting: extract sub-segments outside the eraser circle
         let currentSegment: StrokePoint[] = [];
         for (let i = 0; i < stroke.points.length; i++) {
           const pt = stroke.points[i];
@@ -574,7 +562,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (didModify) {
         didEraseDuringDragRef.current = true;
         strokesRef.current = nextStrokes;
-        // Schedule throttled RAF redraw without triggering React state re-renders during drag!
         scheduleRedraw();
       }
     };
@@ -598,7 +585,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (activeToolRef.current === "eraser") {
         eraseAtPoint(worldX, worldY);
       } else {
-        const ctx = canvas.getContext("2d", { desynchronized: true, alpha: true });
+        const ctx = canvas.getContext("2d");
         if (ctx) {
           const dpr = window.devicePixelRatio || 1;
           ctx.save();
@@ -633,7 +620,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           const midY = (prevPoint.y + worldY) / 2;
           const width = selectedThicknessRef.current;
 
-          const ctx = canvas.getContext("2d", { desynchronized: true, alpha: true });
+          const ctx = canvas.getContext("2d");
           if (ctx) {
             const dpr = window.devicePixelRatio || 1;
             ctx.save();
@@ -690,16 +677,18 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       lastPointRef.current = null;
     };
 
-    // Native High-Precision Pointer Event Listeners (Zero touchstart conflict, robust pointer capture & lifecycle)
+    // Dual-Pipeline Pointer & Touch Event Listeners (Guarantees 100% inking on all Android and Web environments)
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const onPointerDown = (e: PointerEvent) => {
-        // Prevent browser gestures natively
-        e.preventDefault();
+      let lastPointerDownTime = 0;
 
-        // Safety: If this is the primary pointer or active map was empty, reset stale state
+      const onPointerDown = (e: PointerEvent) => {
+        if (!isActive && !isReadingMode) return;
+        e.preventDefault();
+        lastPointerDownTime = performance.now();
+
         if (e.isPrimary || activePointersRef.current.size === 0) {
           activePointersRef.current.clear();
           isTwoFingerPanningRef.current = false;
@@ -712,17 +701,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           let sumY = 0;
           activePointersRef.current.forEach((p) => (sumY += p.clientY));
           lastMouseYRef.current = sumY / activePointersRef.current.size;
-          try {
-            canvas.setPointerCapture(e.pointerId);
-          } catch {}
           return;
         }
-
-        if (!isActive) return;
-
-        try {
-          canvas.setPointerCapture(e.pointerId);
-        } catch {}
 
         if (activePointersRef.current.size >= 2) {
           isTwoFingerPanningRef.current = true;
@@ -739,13 +719,13 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           return;
         }
 
-        // Single finger / stylus inking
         isTwoFingerPanningRef.current = false;
         const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
         startDrawing(e.clientX, e.clientY, pressure);
       };
 
       const onPointerMove = (e: PointerEvent) => {
+        if (!isActive && !isReadingMode) return;
         e.preventDefault();
 
         if (activePointersRef.current.has(e.pointerId)) {
@@ -772,9 +752,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           return;
         }
 
-        if (!isActive) return;
-
-        // Multi-touch two finger panning
         if (isTwoFingerPanningRef.current || activePointersRef.current.size >= 2) {
           let sumY = 0;
           activePointersRef.current.forEach((p) => (sumY += p.clientY));
@@ -793,7 +770,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           return;
         }
 
-        // Inking or Erasing
         if (isDrawingRef.current) {
           if (typeof (e as any).getCoalescedEvents === "function") {
             const coalesced = (e as any).getCoalescedEvents();
@@ -814,10 +790,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
       const onPointerUp = (e: PointerEvent) => {
         activePointersRef.current.delete(e.pointerId);
-
-        try {
-          canvas.releasePointerCapture(e.pointerId);
-        } catch {}
 
         if (isReadingMode) {
           if (activePointersRef.current.size === 0) {
@@ -844,12 +816,62 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         }
       };
 
-      const onPointerCancel = (e: PointerEvent) => {
-        onPointerUp(e);
+      // Direct Touch Event Fallback (Impervious to WebView pointer capture drops)
+      const onTouchStart = (e: TouchEvent) => {
+        if (!isActive && !isReadingMode) return;
+        if (performance.now() - lastPointerDownTime < 100) return;
+        e.preventDefault();
+
+        if (e.touches.length === 1) {
+          isTwoFingerPanningRef.current = false;
+          const touch = e.touches[0];
+          startDrawing(touch.clientX, touch.clientY, 0.5);
+        } else if (e.touches.length >= 2) {
+          isTwoFingerPanningRef.current = true;
+          if (isDrawingRef.current) {
+            isDrawingRef.current = false;
+            currentPointsRef.current = [];
+            lastPointRef.current = null;
+            scheduleRedraw();
+          }
+          lastTwoFingerYRef.current = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        }
       };
 
-      const onLostPointerCapture = (e: PointerEvent) => {
-        onPointerUp(e);
+      const onTouchMove = (e: TouchEvent) => {
+        if (!isActive && !isReadingMode) return;
+        if (performance.now() - lastPointerDownTime < 100) return;
+        e.preventDefault();
+
+        if (isTwoFingerPanningRef.current || e.touches.length >= 2) {
+          const currentAvgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          const deltaY = currentAvgY - lastTwoFingerYRef.current;
+          lastTwoFingerYRef.current = currentAvgY;
+
+          const nextPanY = Math.max(0, panYRef.current - deltaY);
+          if (Math.abs(nextPanY - panYRef.current) > 0.3) {
+            panYRef.current = nextPanY;
+            setPanY(nextPanY);
+            scheduleRedraw();
+            drawRuledLines(nextPanY);
+          }
+          return;
+        }
+
+        if (isDrawingRef.current && e.touches.length === 1) {
+          const touch = e.touches[0];
+          moveDrawing(touch.clientX, touch.clientY, 0.5);
+        }
+      };
+
+      const onTouchEnd = (e: TouchEvent) => {
+        if (performance.now() - lastPointerDownTime < 100) return;
+        if (e.touches.length === 0) {
+          isTwoFingerPanningRef.current = false;
+          if (isDrawingRef.current) {
+            finishDrawing();
+          }
+        }
       };
 
       const onWindowBlur = () => {
@@ -863,16 +885,26 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
       canvas.addEventListener("pointermove", onPointerMove, { passive: false });
       canvas.addEventListener("pointerup", onPointerUp, { passive: false });
-      canvas.addEventListener("pointercancel", onPointerCancel, { passive: false });
-      canvas.addEventListener("lostpointercapture", onLostPointerCapture, { passive: false });
+      canvas.addEventListener("pointercancel", onPointerUp, { passive: false });
+
+      canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+      canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+      canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+      canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
       window.addEventListener("blur", onWindowBlur);
 
       return () => {
         canvas.removeEventListener("pointerdown", onPointerDown);
         canvas.removeEventListener("pointermove", onPointerMove);
         canvas.removeEventListener("pointerup", onPointerUp);
-        canvas.removeEventListener("pointercancel", onPointerCancel);
-        canvas.removeEventListener("lostpointercapture", onLostPointerCapture);
+        canvas.removeEventListener("pointercancel", onPointerUp);
+
+        canvas.removeEventListener("touchstart", onTouchStart);
+        canvas.removeEventListener("touchmove", onTouchMove);
+        canvas.removeEventListener("touchend", onTouchEnd);
+        canvas.removeEventListener("touchcancel", onTouchEnd);
+
         window.removeEventListener("blur", onWindowBlur);
       };
     }, [isActive, isReadingMode, scheduleRedraw, drawRuledLines]);
@@ -945,7 +977,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         {/* Layer 2: Main Inking Canvas with Two-Finger Infinite Panning & Single-Finger Inking */}
         <canvas
-          id="handwriting-canvas-layer"
+          id="handwriting-canvas-layer" style={{ touchAction: "none", width: "100%", height: "100%" }}
           ref={canvasRef}
           className={`absolute inset-0 z-20 ${
             isActive

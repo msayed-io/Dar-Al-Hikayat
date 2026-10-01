@@ -2975,6 +2975,34 @@ const DarAlHikayatMaster: React.FC = () => {
         }}
       />
 
+      {/* Handwriting & Inking Canvas Layer (Root-Level Viewport Fixed Placement) */}
+      <DarAlHikayatHandwriting
+        ref={handwritingRef}
+        isActive={isHandwritingMode && !isSavedMode}
+        isReadingMode={isSavedMode}
+        onClose={() => setIsHandwritingMode(false)}
+        onDiscard={() => {
+          setHandwritingStrokes([]);
+          setHandwritingDataUrl("");
+          setIsPageRuled(false);
+          setIsHandwritingMode(false);
+          setIsDirty(true);
+          if (noteId) {
+            try {
+              localStorage.removeItem(`dar_hw_${noteId}`);
+            } catch {}
+          }
+        }}
+        theme={currentTheme}
+        initialStrokes={handwritingStrokes}
+        initialPageRuled={isPageRuled}
+        onStrokesChange={handleHandwritingChange}
+        onUndoChange={(canUndo, canRedo) => {
+          setHandwritingCanUndo(canUndo);
+          setHandwritingCanRedo(canRedo);
+        }}
+      />
+
       {/* Header (Editor and Reader Mode Top Bar) */}
       <header
         ref={headerRef}
@@ -3537,33 +3565,7 @@ const DarAlHikayatMaster: React.FC = () => {
             minWidth: 0,
           }}
         >
-          {/* Handwriting & Inking Canvas Layer */}
-          <DarAlHikayatHandwriting
-            ref={handwritingRef}
-            isActive={isHandwritingMode && !isSavedMode}
-            isReadingMode={isSavedMode}
-            onClose={() => setIsHandwritingMode(false)}
-            onDiscard={() => {
-              setHandwritingStrokes([]);
-              setHandwritingDataUrl("");
-              setIsPageRuled(false);
-              setIsHandwritingMode(false);
-              setIsDirty(true);
-              if (noteId) {
-                try {
-                  localStorage.removeItem(`dar_hw_${noteId}`);
-                } catch {}
-              }
-            }}
-            theme={currentTheme}
-            initialStrokes={handwritingStrokes}
-            initialPageRuled={isPageRuled}
-            onStrokesChange={handleHandwritingChange}
-            onUndoChange={(canUndo, canRedo) => {
-              setHandwritingCanUndo(canUndo);
-              setHandwritingCanRedo(canRedo);
-            }}
-          />
+
 
           <main
             id="story-content"
