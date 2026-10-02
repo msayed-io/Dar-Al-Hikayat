@@ -52,6 +52,9 @@ import {
 } from "lucide-react";
 import RemoteKeyboardModal from "./RemoteKeyboardModal";
 import { listenForRemoteKeystrokes, updateRemoteSession, type RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
+import { deactivateRemoteMouse, handleRemoteMousePayload, resetRemoteMouse } from "../lib/remote-mouse";
+import { setRemoteKeyboardSuppressed } from "../lib/soft-keyboard-guard";
+import RemoteMouseCursor from "./RemoteMouseCursor";
 import {
   Document,
   Packer,
@@ -1298,9 +1301,34 @@ const DarAlHikayatMaster: React.FC = () => {
 
   const handleRemoteKeystroke = React.useCallback(
     (payload: RemoteKeystrokePayload) => {
+      // A disconnect payload (any transport) must end the paired session:
+      // the tablet keyboard comes back and the remote pointer is released.
+      if (payload.action === "disconnect") {
+        setIsRemoteConnected(false);
+        resetRemoteMouse();
+        return;
+      }
+
       setIsRemoteConnected(true);
 
       if (payload.action === "PING") {
+        return;
+      }
+
+      // Mouse/trackpad gestures are routed to the pointer overlay and RETURN
+      // here: they must never focus the editor (that popped the tablet IME).
+      if (payload.type === "MOUSE") {
+        handleRemoteMousePayload(payload);
+        return;
+      }
+
+      // A payload that cannot insert anything must never reach the focus logic
+      // below: focusing an editable is exactly what popped the tablet keyboard.
+      if (
+        (payload.type === "KEY" || payload.type === "TASHKEEL" || payload.type === "PASTE_TEXT") &&
+        !payload.char &&
+        !payload.text
+      ) {
         return;
       }
 
@@ -1413,6 +1441,20 @@ const DarAlHikayatMaster: React.FC = () => {
   useEffect(() => {
     updateRemoteSession(remoteSessionPin, isRemoteConnected);
   }, [remoteSessionPin, isRemoteConnected]);
+
+  // While the Story Keyboard phone is paired, the tablet keyboard stays hidden
+  // (typing happens on the phone). The guard is released on disconnect only —
+  // never as part of a re-run, so the pointer is not cancelled mid-session.
+  useEffect(() => {
+    setRemoteKeyboardSuppressed(isRemoteConnected);
+    if (!isRemoteConnected) {
+      resetRemoteMouse();
+    }
+    return () => setRemoteKeyboardSuppressed(false);
+  }, [isRemoteConnected]);
+
+  // Leaving the editor releases the pointer without touching any listener.
+  useEffect(() => () => deactivateRemoteMouse(), []);
 
   // --- Decoupled Application-Level Remote Keyboard Server Listener ---
   useEffect(() => {
@@ -4410,6 +4452,12 @@ const DarAlHikayatMaster: React.FC = () => {
         }}
         sessionPin={remoteSessionPin}
         currentTheme={currentTheme}
+      />
+
+      {/* Wireless pointer driven by the 🖱️ trackpad tab of كيبورد الحكايات */}
+      <RemoteMouseCursor
+        accent={currentTheme?.accent || "#D97706"}
+        isDark={currentTheme?.isDark ?? true}
       />
     </div>
   );

@@ -110,6 +110,38 @@ public class RemoteServerPlugin extends Plugin {
         }
     }
 
+    /**
+     * Hides the tablet's own soft keyboard. Called by the web layer while the
+     * wireless Story Keyboard is paired, so typing from the phone never summons
+     * the tablet IME. It is a no-op when nothing is focused.
+     */
+    @PluginMethod
+    public void hideKeyboard(PluginCall call) {
+        try {
+            android.app.Activity activity = getActivity();
+            if (activity != null) {
+                activity.runOnUiThread(() -> {
+                    try {
+                        android.view.View webView = getBridge().getWebView();
+                        android.view.inputmethod.InputMethodManager imm =
+                                (android.view.inputmethod.InputMethodManager)
+                                        activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+                        if (imm != null && webView != null) {
+                            imm.hideSoftInputFromWindow(webView.getWindowToken(), 0);
+                        }
+                    } catch (Exception inner) {
+                        android.util.Log.w("RemoteServerPlugin", "hideKeyboard failed: " + inner.getMessage());
+                    }
+                });
+            }
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to hide soft keyboard", e);
+        }
+    }
+
     @PluginMethod
     public void updateSession(PluginCall call) {
         try {

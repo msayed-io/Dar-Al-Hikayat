@@ -1,11 +1,45 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
+export type RemoteTextAction =
+  /** Sent when the phone (or the pairing modal) ends the session. */
+  | "disconnect"
+  | "NEWLINE"
+  | "BACKSPACE"
+  | "DELETE_WORD"
+  | "UNDO"
+  | "REDO"
+  | "SELECT_ALL"
+  | "NAVIGATE_LEFT"
+  | "NAVIGATE_RIGHT"
+  | "PING";
+
+/** Mouse gestures sent by the phone's trackpad tab (🖱️) inside the keyboard. */
+export type RemoteMouseAction =
+  | "MOUSE_MODE"
+  | "MOUSE_MOVE"
+  | "MOUSE_CLICK"
+  | "MOUSE_SCROLL"
+  | "MOUSE_DOWN"
+  | "MOUSE_UP";
+
+export type RemoteMouseButton = "left" | "right" | "middle";
+
 export interface RemoteKeystrokePayload {
   sessionPin: string;
-  type: "KEY" | "TASHKEEL" | "COMMAND" | "PASTE_TEXT";
+  type: "KEY" | "TASHKEEL" | "COMMAND" | "PASTE_TEXT" | "MOUSE";
   char?: string;
-  action?: "NEWLINE" | "BACKSPACE" | "DELETE_WORD" | "UNDO" | "REDO" | "SELECT_ALL" | "NAVIGATE_LEFT" | "NAVIGATE_RIGHT" | "PING";
+  action?: RemoteTextAction | RemoteMouseAction;
   text?: string;
+  /** Pointer movement in CSS pixels (MOUSE_MOVE only). */
+  dx?: number;
+  dy?: number;
+  /** Wheel delta in CSS pixels (MOUSE_SCROLL only). */
+  deltaY?: number;
+  button?: RemoteMouseButton;
+  /** 1 = single click, 2 = double click. */
+  clicks?: number;
+  /** MOUSE_MODE only: the phone entered/left the 🖱️ trackpad tab. */
+  enabled?: boolean;
   senderId?: string;
   timestamp: number;
 }
@@ -28,6 +62,8 @@ export interface NativeRemoteServerPlugin {
   startServer(): Promise<{ running: boolean; port: number; ip: string }>;
   stopServer(): Promise<{ running: boolean }>;
   updateSession(options: { pin: string; connected: boolean }): Promise<{ ok: boolean }>;
+  /** Hides the tablet's own IME (used while the wireless keyboard is paired). */
+  hideKeyboard(): Promise<{ ok: boolean }>;
   addListener(
     eventName: "remoteCommand",
     listenerFunc: (data: any) => void
@@ -50,6 +86,95 @@ export async function updateRemoteSession(pin: string, connected: boolean): Prom
     } catch (e) {
       console.warn("Failed to update remote session on native server:", e);
     }
+  }
+}
+
+/** Safe integer parse for values arriving as query-string text. */
+function toInt(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toTruthy(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  const text = String(value ?? "").trim().toLowerCase();
+  return text === "1" || text === "true" || text === "on" || text === "yes";
+}
+
+/**
+ * Maps one native `/api/command?action=...` call into the in-app payload.
+ *
+ * This is the single source of truth for the phone <-> tablet protocol, so the
+ * wireless keyboard (keys, tashkeel, commands, mouse) is decoded in one place
+ * and is fully unit-testable. Returns null for "disconnect" (handled as status)
+ * and for unknown actions with no character — previously those fell through to
+ * a KEY payload that focused the editor and popped the tablet keyboard.
+ */
+export function mapNativeCommandToPayload(
+  action: string,
+  data: Record<string, any>,
+  sessionPin = ""
+): RemoteKeystrokePayload | null {
+  const char = typeof data?.char === "string" ? data.char : "";
+  const text = typeof data?.text === "string" ? data.text : "";
+
+  const base = (type: RemoteKeystrokePayload["type"]): RemoteKeystrokePayload => ({
+    sessionPin,
+    type,
+    char,
+    text,
+    timestamp: Date.now(),
+  });
+
+  switch (action) {
+    case "ping":
+      return { ...base("COMMAND"), action: "PING" };
+    case "tashkeel":
+      return { ...base("TASHKEEL"), char: char || text };
+    case "paste":
+      return { ...base("PASTE_TEXT"), type: "PASTE_TEXT", text };
+    case "backspace":
+      return { ...base("COMMAND"), action: "BACKSPACE" };
+    case "delete_word":
+      return { ...base("COMMAND"), action: "DELETE_WORD" };
+    case "newline":
+      return { ...base("COMMAND"), action: "NEWLINE" };
+    case "undo":
+      return { ...base("COMMAND"), action: "UNDO" };
+    case "redo":
+      return { ...base("COMMAND"), action: "REDO" };
+    case "select_all":
+      return { ...base("COMMAND"), action: "SELECT_ALL" };
+    case "cursor_move": {
+      const delta = toInt(data?.delta, 1);
+      return { ...base("COMMAND"), action: delta < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT" };
+    }
+
+    // --- Mouse / trackpad (🖱️ tab in كيبورد الحكايات) ---
+    case "mouse":
+      return { ...base("MOUSE"), action: "MOUSE_MOVE", dx: toInt(data?.dx), dy: toInt(data?.dy) };
+    case "mouse_click": {
+      const button = String(data?.button ?? "left");
+      return {
+        ...base("MOUSE"),
+        action: "MOUSE_CLICK",
+        button: button === "right" ? "right" : button === "middle" ? "middle" : "left",
+        clicks: toInt(data?.count, 1) > 1 ? 2 : 1,
+      };
+    }
+    case "mouse_scroll":
+      return { ...base("MOUSE"), action: "MOUSE_SCROLL", deltaY: toInt(data?.deltaY) };
+    case "mouse_down":
+      return { ...base("MOUSE"), action: "MOUSE_DOWN", button: String(data?.button ?? "left") as any };
+    case "mouse_up":
+      return { ...base("MOUSE"), action: "MOUSE_UP", button: String(data?.button ?? "left") as any };
+    case "mouse_mode":
+      return { ...base("MOUSE"), action: "MOUSE_MODE", enabled: toTruthy(data?.enabled) };
+
+    default:
+      // A letter/symbol: only meaningful with a real character.
+      if (!char) return null;
+      return base("KEY");
   }
 }
 
@@ -143,6 +268,12 @@ export async function sendRemoteKeystroke(payload: RemoteKeystrokePayload): Prom
     else if (payload.action === "DELETE_WORD") actionParam = "delete_word";
     else if (payload.action === "NAVIGATE_LEFT") actionParam = "cursor_move&delta=-1";
     else if (payload.action === "NAVIGATE_RIGHT") actionParam = "cursor_move&delta=1";
+    else if (payload.action === "MOUSE_MOVE") actionParam = `mouse&dx=${Math.round(payload.dx || 0)}&dy=${Math.round(payload.dy || 0)}`;
+    else if (payload.action === "MOUSE_CLICK") actionParam = `mouse_click&button=${payload.button || "left"}${payload.clicks === 2 ? "&count=2" : ""}`;
+    else if (payload.action === "MOUSE_SCROLL") actionParam = `mouse_scroll&deltaY=${Math.round(payload.deltaY || 0)}`;
+    else if (payload.action === "MOUSE_DOWN") actionParam = `mouse_down&button=${payload.button || "left"}`;
+    else if (payload.action === "MOUSE_UP") actionParam = `mouse_up&button=${payload.button || "left"}`;
+    else if (payload.action === "MOUSE_MODE") actionParam = `mouse_mode&enabled=${payload.enabled === false ? 0 : 1}`;
 
     let url = `/api/command?action=${actionParam}&pin=${encodeURIComponent(payload.sessionPin)}`;
     if (payload.char) url += `&char=${encodeURIComponent(payload.char)}`;
@@ -232,53 +363,14 @@ export function listenForRemoteKeystrokes(
         onStatusChange?.(true, "الهاتف متصل بالسيرفر المباشر");
 
         const action = data.action || data.type || "type";
-        const char = data.char || "";
-        const text = data.text || "";
-
-        let payload: RemoteKeystrokePayload = {
-          sessionPin,
-          type: "KEY",
-          char,
-          timestamp: Date.now(),
-        };
 
         if (action === "disconnect") {
           onStatusChange?.(false, "تم قطع الاتصال");
           return;
         }
 
-        if (action === "ping") {
-          payload.type = "COMMAND";
-          payload.action = "PING";
-        } else if (action === "tashkeel") {
-          payload.type = "TASHKEEL";
-          payload.char = char;
-        } else if (action === "paste") {
-          payload.type = "PASTE_TEXT";
-          payload.text = text;
-        } else if (action === "backspace") {
-          payload.type = "COMMAND";
-          payload.action = "BACKSPACE";
-        } else if (action === "newline") {
-          payload.type = "COMMAND";
-          payload.action = "NEWLINE";
-        } else if (action === "undo") {
-          payload.type = "COMMAND";
-          payload.action = "UNDO";
-        } else if (action === "redo") {
-          payload.type = "COMMAND";
-          payload.action = "REDO";
-        } else if (action === "cursor_move") {
-          const delta = parseInt(data.delta || "1", 10);
-          payload.type = "COMMAND";
-          payload.action = delta < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT";
-        } else if (action === "select_all") {
-          payload.type = "COMMAND";
-          payload.action = "SELECT_ALL";
-        } else {
-          payload.type = "KEY";
-          payload.char = char;
-        }
+        const payload = mapNativeCommandToPayload(action, data, sessionPin);
+        if (!payload) return;
 
         onKeystroke(payload);
       }).then((handle: any) => {
