@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { hasHandwritingInk, type HandwritingSaveResult } from "../lib/handwriting-document";
 import {
   ArrowRight,
   ChevronRight,
@@ -848,6 +850,8 @@ const DarAlHikayatMaster: React.FC = () => {
     return selectedNote?.styles?.handwriting?.dataUrl || "";
   });
   const handwritingRef = useRef<HandwritingHandle>(null);
+  const handwritingSavePendingRef = useRef(false);
+  const [isHandwritingSaving, setIsHandwritingSaving] = useState(false);
 
   const [handwritingCanUndo, setHandwritingCanUndo] = useState<boolean>(false);
   const [handwritingCanRedo, setHandwritingCanRedo] = useState<boolean>(false);
@@ -888,14 +892,8 @@ const DarAlHikayatMaster: React.FC = () => {
     setIsPageRuled(ruled);
     setHandwritingDataUrl(dataUrl);
     setIsDirty(true);
-    if (noteId) {
-      try {
-        localStorage.setItem(
-          `dar_hw_${noteId}`,
-          JSON.stringify({ strokes: newStrokes, isPageRuled: ruled, dataUrl })
-        );
-      } catch {}
-    }
+    // Keep unsaved handwriting in memory. Persisting it as a cache here made
+    // "Discard" ineffective on notes reopened through the legacy cache fallback.
   };
 
   // Sync content state to standard editor div (for Undo/Redo/external updates)
@@ -1579,11 +1577,15 @@ const DarAlHikayatMaster: React.FC = () => {
   };
 
   const isEditorCompletelyEmpty = (): boolean => {
-    // 1. Check handwriting strokes
-    if (Array.isArray(handwritingStrokes) && handwritingStrokes.length > 0) {
+    // Handwriting uses live vectors (including an intentionally empty array).
+    // A transparent PNG is still a long string and is NOT evidence of content.
+    const liveStrokes = isHandwritingMode
+      ? handwritingRef.current?.getStrokes() ?? handwritingStrokes
+      : handwritingStrokes;
+    if (hasHandwritingInk(liveStrokes)) {
       return false;
     }
-    if (handwritingDataUrl && handwritingDataUrl.length > 50) {
+    if (!isHandwritingMode && handwritingDataUrl && handwritingDataUrl.length > 50) {
       return false;
     }
 
@@ -1613,10 +1615,26 @@ const DarAlHikayatMaster: React.FC = () => {
     return true;
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (isEditorCompletelyEmpty()) {
       showEmptyWarningToast("لا يمكن حفظ حكاية فارغة! اكتب نصاً أو ارسم بيدك أولاً.");
-      return;
+      return false;
+    }
+
+    const liveStrokes = isHandwritingMode
+      ? handwritingRef.current?.getStrokes() ?? handwritingStrokes
+      : handwritingStrokes;
+    const liveRuled = isHandwritingMode
+      ? handwritingRef.current?.getPageRuled() ?? isPageRuled
+      : isPageRuled;
+    // Only explicit handwriting saves request a raster export. Empty ink stays empty.
+    let liveDataUrl = handwritingDataUrl;
+    if (isHandwritingMode) {
+      try {
+        liveDataUrl = hasHandwritingInk(liveStrokes) ? handwritingRef.current?.getDataUrl() || "" : "";
+      } catch {
+        liveDataUrl = ""; // Vectors remain fully savable if a device cannot encode PNG.
+      }
     }
 
     const endTime = new Date();
@@ -1657,9 +1675,9 @@ const DarAlHikayatMaster: React.FC = () => {
             textColor,
             paperStyleIndex: activePaperStyleIndex,
             handwriting: {
-              strokes: handwritingStrokes,
-              isPageRuled,
-              dataUrl: handwritingDataUrl,
+              strokes: liveStrokes,
+              isPageRuled: liveRuled,
+              dataUrl: liveDataUrl,
             },
           },
           isLocked: noteIsLocked,
@@ -1667,19 +1685,43 @@ const DarAlHikayatMaster: React.FC = () => {
         });
         if (!success) {
           alert("تعذر حفظ الحكاية. تم الاحتفاظ بالنص المكتوب دون أي تعديل.");
-          return;
+          return false;
         }
       } catch (saveErr) {
         console.error("Save failed:", saveErr);
         alert("حدث خطأ غير متوقع أثناء الحفظ. تم الاحتفاظ بكل ما كتبته.");
-        return;
+        return false;
       }
+    }
+    if (isHandwritingMode) {
+      setHandwritingStrokes(liveStrokes);
+      setIsPageRuled(liveRuled);
+      setHandwritingDataUrl(liveDataUrl);
     }
     setIsSavedMode(true);
     setShowUI(true);
     setShowControls(false);
     setIsDirty(false);
+    return true;
   };
+
+  const handleHandwritingSave = async (): Promise<HandwritingSaveResult> => {
+    if (handwritingSavePendingRef.current) return "busy";
+    if (isEditorCompletelyEmpty()) return "empty";
+    handwritingSavePendingRef.current = true;
+    setIsHandwritingSaving(true);
+    try {
+      return await handleSave() ? "saved" : "failed";
+    } finally {
+      handwritingSavePendingRef.current = false;
+      setIsHandwritingSaving(false);
+    }
+  };
+
+  // The text editor keeps its original stacking context. Only handwriting
+  // dialogs escape it to sit above the document's body-level canvas portal.
+  const renderHandwritingOverlay = (node: React.ReactNode) =>
+    isHandwritingMode ? createPortal(node, document.body) : node;
 
   // تصدير PDF مع المزامنة الفورية من الـ DOM والحفاظ التام على التظليلات
   const handleExportPDF = async (fileName?: string) => {
@@ -1891,6 +1933,7 @@ const DarAlHikayatMaster: React.FC = () => {
   };
 
   const handleBackNavigation = () => {
+    if (isHandwritingMode && handwritingSavePendingRef.current) return;
     if (!isSavedMode && isDirty) {
       if (isEditorCompletelyEmpty()) {
         if (onBack) onBack();
@@ -1900,6 +1943,16 @@ const DarAlHikayatMaster: React.FC = () => {
     } else if (onBack) onBack();
   };
   const handleConfirmSave = () => {
+    if (isHandwritingMode) {
+      // Never leave the canvas (or lose its draft) before persistence succeeds.
+      void handleHandwritingSave().then((result) => {
+        if (result === "saved") {
+          setShowConfirmDialog(false);
+          if (onBack) onBack();
+        }
+      });
+      return;
+    }
     setIsDialogClosing(true);
     setTimeout(() => {
       if (isEditorCompletelyEmpty()) {
@@ -2658,9 +2711,16 @@ const DarAlHikayatMaster: React.FC = () => {
       </div>
 
       {/* Confirm Dialog */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      {showConfirmDialog && renderHandwritingOverlay(
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          dir="rtl"
+          style={isHandwritingMode ? { zIndex: 1000000 } : undefined}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="هل تريد حفظ التغييرات؟"
             className={`confirm-dialog border shadow-2xl text-center ${isDialogClosing ? "animate-out zoom-out-95 duration-200" : "animate-in zoom-in-95 duration-200"}`}
             style={{
               width: "260px",
@@ -2687,6 +2747,7 @@ const DarAlHikayatMaster: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={handleConfirmDiscard}
+                disabled={isHandwritingMode && isHandwritingSaving}
                 className="flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95"
                 style={{ 
                   backgroundColor: "transparent",
@@ -2698,6 +2759,7 @@ const DarAlHikayatMaster: React.FC = () => {
               </button>
               <button
                 onClick={handleConfirmSave}
+                disabled={isHandwritingMode && isHandwritingSaving}
                 className="flex-1 py-2 rounded-full font-zain-bold text-sm transition-all active:scale-95 shadow-sm text-[#121A1B]"
                 style={{ backgroundColor: currentTheme.accent }}
               >
@@ -4302,7 +4364,16 @@ const DarAlHikayatMaster: React.FC = () => {
         ref={handwritingRef}
         isActive={isHandwritingMode && !isSavedMode}
         isReadingMode={isSavedMode}
-        onClose={() => setIsHandwritingMode(false)}
+        onClose={handleBackNavigation}
+        onSave={handleHandwritingSave}
+        onTitleChange={updateTitle}
+        onReturnToEdit={() => {
+          setIsSavedMode(false);
+          setShowSessionReport(false);
+          setIsHandwritingMode(true);
+        }}
+        isSaving={isHandwritingSaving}
+        isDirty={isDirty}
         onDiscard={() => {
           setHandwritingStrokes([]);
           setHandwritingDataUrl("");
