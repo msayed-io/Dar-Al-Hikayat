@@ -13,6 +13,7 @@
  * event dispatch. The React overlay (RemoteMouseCursor) only renders the arrow.
  */
 import type { RemoteKeystrokePayload } from "./remote-keyboard-service";
+import { placeCaretAtPoint } from "./remote-editing";
 
 export type RemoteMouseButton = "left" | "right" | "middle";
 
@@ -226,6 +227,20 @@ export function findScrollableAncestor(start: Element | null): HTMLElement | nul
   return null;
 }
 
+let pointerPressed = false;
+let pressedButton: RemoteMouseButton = "left";
+
+/** True while the remote pointer holds a button (used for selection dragging). */
+export function isRemotePointerPressed(): boolean {
+  return pointerPressed;
+}
+
+/** Extends the selection while the left button is held — like a real mouse. */
+export function extendSelectionTo(x: number, y: number): void {
+  const target = elementAtPoint(x, y);
+  placeCaretAtPoint(x, y, { extend: true, target });
+}
+
 export interface RemoteDispatchResult {
   target: Element | null;
   /** False when a handler called preventDefault() (e.g. a custom wheel handler). */
@@ -250,6 +265,10 @@ export function dispatchRemoteMouseAt(
       const mask = buttonMask(button);
       const clicks = command.clicks && command.clicks > 1 ? 2 : 1;
       const buttonIndex = button === "right" ? 2 : button === "middle" ? 1 : 0;
+      // A click is a caret gesture too (some transports only send clicks).
+      if (button === "left") {
+        placeCaretAtPoint(x, y, { extend: false, target });
+      }
       let effectiveClicks = clicks;
       if (button === "left") {
         const now = Date.now();
@@ -291,6 +310,14 @@ export function dispatchRemoteMouseAt(
       const button = normalizeMouseButton(command.button);
       const mask = command.action === "MOUSE_DOWN" ? buttonMask(button) : 0;
       const type = command.action === "MOUSE_DOWN" ? "mousedown" : "mouseup";
+      // Pressing inside text moves the caret exactly like a real mouse.
+      if (command.action === "MOUSE_DOWN") {
+        pointerPressed = true;
+        pressedButton = button;
+        if (button === "left") placeCaretAtPoint(x, y, { extend: false, target });
+      } else {
+        pointerPressed = false;
+      }
       const event = makeMouseEvent(type, x, y, button === "right" ? 2 : 0, mask);
       const accepted = target.dispatchEvent(event);
       return { target, accepted };

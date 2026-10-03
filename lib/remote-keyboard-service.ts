@@ -6,11 +6,24 @@ export type RemoteTextAction =
   | "NEWLINE"
   | "BACKSPACE"
   | "DELETE_WORD"
+  | "DELETE_FORWARD"
   | "UNDO"
   | "REDO"
   | "SELECT_ALL"
   | "NAVIGATE_LEFT"
   | "NAVIGATE_RIGHT"
+  | "NAVIGATE_UP"
+  | "NAVIGATE_DOWN"
+  /** Writer-shortcut bar in كيبورد الحكايات (cmd=…). */
+  | "COPY"
+  | "CUT"
+  | "PASTE"
+  /** Paste the tablet's own clipboard (chosen from the phone's paste menu). */
+  | "PASTE_LOCAL"
+  | "SAVE"
+  | "BOLD"
+  | "ITALIC"
+  | "UNDERLINE"
   | "PING";
 
 /** Mouse gestures sent by the phone's trackpad tab (🖱️) inside the keyboard. */
@@ -127,6 +140,63 @@ export function mapNativeCommandToPayload(
   });
 
   switch (action) {
+    // --- Physical keys sent by the native keyboard app (?action=key&key=Space) ---
+    case "key": {
+      const rawKey = String(data?.key ?? data?.char ?? data?.text ?? "");
+      const normalized = rawKey.trim().toLowerCase();
+      if (normalized === "space" || rawKey === " ") {
+        return { ...base("KEY"), char: " " };
+      }
+      if (normalized === "backspace" || normalized === "del" || normalized === "delete") {
+        return { ...base("COMMAND"), action: "BACKSPACE" };
+      }
+      if (normalized === "forwarddelete") {
+        return { ...base("COMMAND"), action: "DELETE_FORWARD" };
+      }
+      if (normalized === "enter" || normalized === "return") {
+        return { ...base("COMMAND"), action: "NEWLINE" };
+      }
+      if (normalized === "tab") {
+        return { ...base("KEY"), char: "\t" };
+      }
+      if (normalized === "arrowleft" || normalized === "left") {
+        return { ...base("COMMAND"), action: "NAVIGATE_LEFT" };
+      }
+      if (normalized === "arrowright" || normalized === "right") {
+        return { ...base("COMMAND"), action: "NAVIGATE_RIGHT" };
+      }
+      if (normalized === "arrowup" || normalized === "up") {
+        return { ...base("COMMAND"), action: "NAVIGATE_UP" };
+      }
+      if (normalized === "arrowdown" || normalized === "down") {
+        return { ...base("COMMAND"), action: "NAVIGATE_DOWN" };
+      }
+      // Any other printable key arrives as itself.
+      return char ? base("KEY") : null;
+    }
+
+    // --- Writer shortcut bar (?action=shortcut&cmd=undo|copy|save|…) ---
+    case "shortcut": {
+      const cmd = String(data?.cmd ?? data?.action ?? "").trim().toLowerCase();
+      const map: Record<string, RemoteKeystrokePayload["action"]> = {
+        undo: "UNDO",
+        redo: "REDO",
+        cut: "CUT",
+        copy: "COPY",
+        paste: "PASTE",
+        paste_local: "PASTE_LOCAL",
+        paste_tablet: "PASTE_LOCAL",
+        select_all: "SELECT_ALL",
+        save: "SAVE",
+        bold: "BOLD",
+        italic: "ITALIC",
+        underline: "UNDERLINE",
+      };
+      const mapped = map[cmd];
+      if (!mapped) return null;
+      return { ...base("COMMAND"), action: mapped };
+    }
+
     case "ping":
       return { ...base("COMMAND"), action: "PING" };
     case "tashkeel":

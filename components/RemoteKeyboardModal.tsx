@@ -153,24 +153,18 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
               </div>
             </div>
 
-            {/* Active connection details */}
+            {/* No technical details on screen: the session lives in the background */}
             <div
-              className="flex flex-col gap-2 p-3 rounded-2xl border text-xs"
+              className="flex items-center gap-2.5 p-3 rounded-2xl border text-[11px]"
               style={{
                 backgroundColor: isDark ? "rgba(0, 0, 0, 0.2)" : "rgba(0, 0, 0, 0.03)",
                 borderColor: themeBorder,
               }}
             >
-              <div className="flex items-center justify-between text-[11px]">
-                <span style={{ color: themeSecondary }}>عنوان الرابط النشط:</span>
-                <span className="font-mono text-emerald-500 text-[10px] dir-ltr truncate max-w-[170px]">
-                  {pairingUrl || "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span style={{ color: themeSecondary }}>رمز الأمان (PIN):</span>
-                <span className="font-mono font-bold text-emerald-500">{sessionPin}</span>
-              </div>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="font-zain-reg leading-snug" style={{ color: themeSecondary }}>
+                كيبورد التابلت مخفي تلقائياً، والكتابة والتشكيل والفأرة تعمل من الهاتف مباشرة.
+              </span>
             </div>
 
             {/* Disconnect Option */}
@@ -227,75 +221,17 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
                 )}
               </div>
 
-              {/* Details Column */}
+              {/* Single official path: the native كيبورد الحكايات app scans this code */}
               <div className="flex-1 flex flex-col justify-center gap-2 min-w-0">
-                {/* Direct URL Box */}
-                <div className="flex flex-col gap-1">
-                  <span
-                    className="text-[10px] font-zain-bold leading-tight"
-                    style={{ color: themeSecondary }}
-                  >
-                    ١. افتح تطبيق «كيبورد الحكايات» على الهاتف
-                    <br />
-                    ٢. امسح الرمز بالكاميرا للاقتران
-                  </span>
-                  <div
-                    className="flex items-center justify-between px-3 py-1.5 rounded-full border min-w-0 bg-clip-padding"
-                    style={{
-                      backgroundColor: isDark
-                        ? "rgba(0, 0, 0, 0.25)"
-                        : "rgba(0, 0, 0, 0.04)",
-                      borderColor: themeBorder,
-                    }}
-                  >
-                    <span
-                      className="truncate text-[10px] font-mono dir-ltr min-w-0 pl-1"
-                      style={{ color: themeAccent }}
-                    >
-                      {pairingUrl || "—"}
-                    </span>
-                    <button
-                      onClick={copyUrl}
-                      className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-zain-bold transition cursor-pointer shrink-0 mr-1 active:scale-95 whitespace-nowrap"
-                      style={{
-                        backgroundColor: `${themeAccent}25`,
-                        color: themeAccent,
-                      }}
-                      title="نسخ الرابط"
-                    >
-                      {copied ? (
-                        <Check className="w-2.5 h-2.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-2.5 h-2.5" />
-                      )}
-                      <span>{copied ? "تم" : "نسخ"}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* PIN Code Box */}
-                <div
-                  className="flex items-center justify-between px-3 py-1.5 rounded-full border text-xs bg-clip-padding"
-                  style={{
-                    backgroundColor: isDark
-                      ? "rgba(255, 255, 255, 0.02)"
-                      : "rgba(0, 0, 0, 0.02)",
-                    borderColor: themeBorder,
-                  }}
-                >
-                  <span
-                    className="font-zain-reg text-[10px]"
-                    style={{ color: themeSecondary }}
-                  >
-                    رمز الأمان (PIN):
-                  </span>
-                  <span
-                    className="font-mono font-bold tracking-widest text-xs"
-                    style={{ color: themeAccent }}
-                  >
-                    {sessionPin}
-                  </span>
-                </div>
+                <span className="font-zain-bold text-xs leading-snug" style={{ color: themeText }}>
+                  ١. افتحي تطبيق «كيبورد الحكايات» على الهاتف
+                </span>
+                <span className="font-zain-bold text-xs leading-snug" style={{ color: themeText }}>
+                  ٢. امسحي الرمز بكاميرا التطبيق للاقتران
+                </span>
+                <span className="font-zain-reg text-[10px] leading-snug opacity-75" style={{ color: themeSecondary }}>
+                  الكتابة والتشكيل والفأرة (🖱️) تعمل مباشرة على دار الحكايات
+                </span>
               </div>
             </div>
 

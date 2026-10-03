@@ -13,6 +13,8 @@ import { createPortal } from "react-dom";
 import {
   clampCursor,
   dispatchRemoteMouseAt,
+  extendSelectionTo,
+  isRemotePointerPressed,
   parseRemoteMousePayload,
   subscribeRemoteMouse,
   type RemoteMouseCommand,
@@ -109,16 +111,32 @@ export const RemoteMouseCursor: React.FC<RemoteMouseCursorProps> = ({
         targetRef.current = { x: next.x, y: next.y, ready: true };
         targetRef.current.ready = true;
         schedule();
+        // Button held → drag the text selection, exactly like a mouse.
+        if (isRemotePointerPressed()) {
+          extendSelectionTo(next.x, next.y);
+        }
         break;
       }
       case "MOUSE_CLICK": {
-        dispatchRemoteMouseAt(command, currentRef.current.x, currentRef.current.y);
+        const point = { x: currentRef.current.x, y: currentRef.current.y };
+        if (command.button === "right") {
+          // The WebView never opens a native menu for synthetic events, so our
+          // own compact menu is shown at the pointer instead.
+          window.dispatchEvent(new CustomEvent("dar-remote-context-menu", { detail: point }));
+        } else {
+          window.dispatchEvent(new CustomEvent("dar-remote-context-dismiss"));
+        }
+        dispatchRemoteMouseAt(command, point.x, point.y);
         setRippleKey((key) => key + 1);
         break;
       }
       case "MOUSE_DOWN": {
         setDragging(true);
-        dispatchRemoteMouseAt(command, currentRef.current.x, currentRef.current.y);
+        const point = { x: currentRef.current.x, y: currentRef.current.y };
+        // A press anywhere outside the context menu closes it, exactly like a
+        // native menu — while a press on the menu still presses the menu.
+        window.dispatchEvent(new CustomEvent("dar-remote-pointer-press", { detail: point }));
+        dispatchRemoteMouseAt(command, point.x, point.y);
         break;
       }
       case "MOUSE_UP": {
@@ -127,6 +145,7 @@ export const RemoteMouseCursor: React.FC<RemoteMouseCursorProps> = ({
         break;
       }
       case "MOUSE_SCROLL": {
+        window.dispatchEvent(new CustomEvent("dar-remote-context-dismiss"));
         dispatchRemoteMouseAt(command, currentRef.current.x, currentRef.current.y);
         break;
       }

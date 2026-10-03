@@ -55,6 +55,21 @@ import { listenForRemoteKeystrokes, updateRemoteSession, type RemoteKeystrokePay
 import { deactivateRemoteMouse, handleRemoteMousePayload, resetRemoteMouse } from "../lib/remote-mouse";
 import { setRemoteKeyboardSuppressed } from "../lib/soft-keyboard-guard";
 import RemoteMouseCursor from "./RemoteMouseCursor";
+import RemoteContextMenu from "./RemoteContextMenu";
+import {
+  currentTargetEditable,
+  editableFromNode,
+  cutSelection,
+  copySelection,
+  focusEditable,
+  insertPlainText,
+  readClipboardText,
+  rememberRange,
+  restoreCaretBeforeInsertion,
+  selectAllIn,
+  setLastEditable,
+} from "../lib/remote-editing";
+import { decideTypingGroup, initialTypingState, nextTypingState } from "../lib/typing-groups";
 import {
   Document,
   Packer,
@@ -1299,6 +1314,80 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
+  /**
+   * The writer-shortcut bar of the phone (نسخ/قص/لصق/تحديد/حفظ/تراجع/إعادة) plus
+   * the tablet-side context menu. Copy/cut/paste never require the tablet IME, so
+   * this is exactly the "remote clipboard" a phone-only writer needs.
+   */
+  const runRemoteCommand = React.useCallback(
+    async (action: string) => {
+      const editorEl = isNovelMode
+        ? (document.querySelector(".chapter-item-editable[contenteditable='true']") as HTMLElement) ||
+          (document.querySelector("#story-content [contenteditable='true']") as HTMLElement)
+        : editorRef.current;
+
+      const target = currentTargetEditable() || editorEl || null;
+
+      switch (action) {
+        case "COPY": {
+          const done = await copySelection();
+          showEmptyWarningToast(done ? "تم نسخ النص المحدد" : "لا يوجد نص محدد لنسخه");
+          return;
+        }
+        case "CUT": {
+          const done = await cutSelection();
+          if (done) {
+            setIsDirty(true);
+            showEmptyWarningToast("تم قص النص المحدد");
+          } else {
+            showEmptyWarningToast("لا يوجد نص محدد لقصه");
+          }
+          return;
+        }
+        case "PASTE":
+        case "PASTE_LOCAL": {
+          if (!target) return;
+          const text = await readClipboardText();
+          if (text === null) {
+            showEmptyWarningToast("لم نستطع قراءة محفظة التابلت — استخدمي اللصق من محفظة الهاتف");
+            return;
+          }
+          restoreCaretBeforeInsertion(target);
+          if (insertPlainText(text, target)) {
+            setIsDirty(true);
+          }
+          return;
+        }
+        case "SELECT_ALL": {
+          if (!target) return;
+          focusEditable(target);
+          selectAllIn(target);
+          return;
+        }
+        case "SAVE": {
+          const save = saveHandlerRef.current;
+          if (save) await save();
+          return;
+        }
+        case "BOLD":
+        case "ITALIC":
+        case "UNDERLINE": {
+          try {
+            if (target) focusEditable(target);
+            document.execCommand(action.toLowerCase());
+            setIsDirty(true);
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+        default:
+          return;
+      }
+    },
+    [isNovelMode, showEmptyWarningToast],
+  );
+
   const handleRemoteKeystroke = React.useCallback(
     (payload: RemoteKeystrokePayload) => {
       // A disconnect payload (any transport) must end the paired session:
@@ -1332,41 +1421,31 @@ const DarAlHikayatMaster: React.FC = () => {
         return;
       }
 
-      let activeEl = document.activeElement as HTMLElement | null;
       const editorEl = isNovelMode
         ? (document.querySelector(".chapter-item-editable[contenteditable='true']") as HTMLElement) ||
           (document.querySelector("#story-content [contenteditable='true']") as HTMLElement)
         : editorRef.current;
 
-      if (!activeEl || !activeEl.isContentEditable) {
-        if (editorEl) {
-          editorEl.focus();
-          activeEl = editorEl;
-        }
+      // Prefer the editable the writer last touched (the remote caret lives
+      // there); fall back to the story editor so typing never lands nowhere.
+      let target: HTMLElement | null = currentTargetEditable();
+      if (!target && editorEl) {
+        focusEditable(editorEl);
+        target = editorEl;
       }
+      if (!target) return;
 
+      // Restore the caret if the IME hide blurred the field between characters.
+      restoreCaretBeforeInsertion(target);
+
+      // Character-exact insertion: execCommand for short text, fragment
+      // insertion for big payloads (a 30k-character paste must never truncate).
       const insertTextToSelection = (textToInsert: string) => {
+        if (insertPlainText(textToInsert, target)) return;
         try {
-          if (document.queryCommandSupported("insertText")) {
-            document.execCommand("insertText", false, textToInsert);
-            return;
-          }
+          document.execCommand("insertText", false, textToInsert);
         } catch {
-          // fallback
-        }
-
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const node = document.createTextNode(textToInsert);
-          range.insertNode(node);
-          range.setStartAfter(node);
-          range.setEndAfter(node);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        } else if (editorEl) {
-          editorEl.innerHTML += textToInsert;
+          /* ignore */
         }
       };
 
@@ -1381,6 +1460,22 @@ const DarAlHikayatMaster: React.FC = () => {
           setIsDirty(true);
         }
       } else if (payload.type === "COMMAND") {
+        const sharedCommands = [
+          "COPY",
+          "CUT",
+          "PASTE",
+          "PASTE_LOCAL",
+          "SELECT_ALL",
+          "SAVE",
+          "BOLD",
+          "ITALIC",
+          "UNDERLINE",
+        ];
+        if (payload.action && sharedCommands.includes(payload.action)) {
+          void runRemoteCommand(payload.action);
+          return;
+        }
+
         if (payload.action === "NEWLINE") {
           try {
             document.execCommand("insertParagraph");
@@ -1434,8 +1529,36 @@ const DarAlHikayatMaster: React.FC = () => {
         }
       }
     },
-    [isNovelMode, handleUndo, handleRedo]
+    [isNovelMode, handleUndo, handleRedo, runRemoteCommand]
   );
+
+  // --- Professional undo granularity (Word/Docs style word-level steps) ---
+  const saveHandlerRef = React.useRef<null | (() => Promise<boolean>)>(null);
+  const typingStateRef = React.useRef(initialTypingState());
+  const pendingFlushRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyRef = React.useRef<any[]>([]);
+  const historyIndexRef = React.useRef(0);
+  historyRef.current = history;
+  historyIndexRef.current = historyIndex;
+
+  // Keep the last caret inside an editable so remote typing survives the IME
+  // being hidden (which may blur the field between characters).
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const editable =
+        editableFromNode(range.startContainer.parentElement) ||
+        editableFromNode(range.startContainer as Element);
+      if (editable) {
+        setLastEditable(editable);
+        rememberRange(range);
+      }
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
 
   // Synchronize active session PIN and connection state with native LocalHttpServer
   useEffect(() => {
@@ -1747,6 +1870,9 @@ const DarAlHikayatMaster: React.FC = () => {
     return true;
   };
 
+  // The wireless keyboard's Save command uses the very same handler.
+  saveHandlerRef.current = handleSave;
+
   const handleHandwritingSave = async (): Promise<HandwritingSaveResult> => {
     if (handwritingSavePendingRef.current) return "busy";
     if (isEditorCompletelyEmpty()) return "empty";
@@ -1870,19 +1996,79 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
-  const handleContentChange = (newContent: string) => {
+  /**
+   * Word-level undo groups (the Word / Google Docs behaviour): a fast burst of
+   * letters extends the current step, while a word boundary, a pause, a
+   * deletion burst or a paste closes it. Undo therefore removes the word just
+   * typed, not the whole paragraph.
+   */
+  const commitTypingGroup = (mode: "push" | "merge") => {
+    if (!editorRef.current) return;
+    ensureBlockIdsInElement(editorRef.current);
+    const latestHtml = editorRef.current.innerHTML;
+    setContent(latestHtml);
+
+    const snapshot = { content: latestHtml, chapters: JSON.parse(JSON.stringify([])), isNovel: false };
+    const currentHistory = historyRef.current;
+    const currentIndex = historyIndexRef.current;
+
+    if (mode === "merge" && currentHistory.length > 0 && currentIndex === currentHistory.length - 1) {
+      // Same typing step: move its end point instead of creating a new step.
+      const merged = currentHistory.slice();
+      merged[currentIndex] = snapshot;
+      historyRef.current = merged;
+      setHistory(merged);
+      return;
+    }
+
+    const newHistory = currentHistory.slice(0, currentIndex + 1);
+    newHistory.push(snapshot);
+    if (newHistory.length > 100) newHistory.shift();
+    historyRef.current = newHistory;
+    historyIndexRef.current = newHistory.length - 1;
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const scheduleTypingFlush = (delay: number) => {
+    if (pendingFlushRef.current) clearTimeout(pendingFlushRef.current);
+    pendingFlushRef.current = setTimeout(() => {
+      pendingFlushRef.current = null;
+      commitTypingGroup("merge");
+    }, delay);
+  };
+
+  const handleContentChange = (
+    newContent: string,
+    inputData?: string | null,
+    deleting?: boolean,
+    discrete?: boolean,
+  ) => {
     if (isSavedMode || isNovelMode) return;
     setIsDirty(true);
     setShowUI(false);
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      if (editorRef.current) {
-        ensureBlockIdsInElement(editorRef.current);
-        const latestHtml = editorRef.current.innerHTML;
-        setContent(latestHtml);
-        pushHistory(latestHtml, [], false);
-      }
-    }, 1200);
+
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const decision = decideTypingGroup(typingStateRef.current, inputData || "", now, {
+      deleting: !!deleting,
+      discrete: !!discrete,
+    });
+    typingStateRef.current = nextTypingState(typingStateRef.current, decision, inputData || "", now, {
+      deleting: !!deleting,
+    });
+
+    if (decision === "merge") {
+      // Extend the open step: commit its end point shortly after the pause.
+      scheduleTypingFlush(420);
+      return;
+    }
+
+    // New step: close the previous one immediately, then push this one.
+    if (pendingFlushRef.current) {
+      clearTimeout(pendingFlushRef.current);
+      pendingFlushRef.current = null;
+    }
+    commitTypingGroup("push");
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -3662,6 +3848,14 @@ const DarAlHikayatMaster: React.FC = () => {
                 ref={editorRef}
                 contentEditable={!isSavedMode && !isHandwritingMode}
                 onInput={(e) => {
+                  const native = e.nativeEvent as InputEvent;
+                  const inputData = typeof native?.data === "string" ? native.data : null;
+                  const deleting = native?.inputType?.startsWith("delete") || native?.inputType === "deleteContentBackward";
+                  // A paste/drop is always its own undo step, never merged.
+                  const discrete =
+                    native?.inputType === "insertFromPaste" ||
+                    native?.inputType === "insertFromDrop" ||
+                    (inputData ? inputData.length > 200 : false);
                   const rawText = (e.currentTarget.innerText || "").replace(/[\r\n\t\s]+/g, " ").trim();
                   const customTitleActive = title.trim().length > 0 && title.trim() !== "بدون عنوان";
                   if (rawText.length > 0) {
@@ -3669,7 +3863,7 @@ const DarAlHikayatMaster: React.FC = () => {
                   } else {
                     setHasLiveTyped(customTitleActive || noteIsLocked);
                   }
-                  handleContentChange(e.currentTarget.innerHTML);
+                  handleContentChange(e.currentTarget.innerHTML, inputData, deleting, discrete);
                 }}
                 onPaste={handlePaste}
                 data-placeholder={isHandwritingMode ? "" : "اكتب حكايتك هنا..."}
@@ -4458,6 +4652,16 @@ const DarAlHikayatMaster: React.FC = () => {
       <RemoteMouseCursor
         accent={currentTheme?.accent || "#D97706"}
         isDark={currentTheme?.isDark ?? true}
+      />
+
+      {/* Compact clipboard menu opened by the phone's right click */}
+      <RemoteContextMenu
+        accent={currentTheme?.accent || "#D97706"}
+        isDark={currentTheme?.isDark ?? true}
+        background={currentTheme?.glass}
+        text={currentTheme?.text}
+        border={currentTheme?.border}
+        onAction={(action) => void runRemoteCommand(action)}
       />
     </div>
   );

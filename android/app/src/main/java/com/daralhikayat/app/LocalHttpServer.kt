@@ -123,44 +123,76 @@ class LocalHttpServer(private val port: Int = 8080) {
     private fun handleClient(socket: Socket) {
         val startTime = System.currentTimeMillis()
         try {
-            socket.soTimeout = 5000
-            val reader = BufferedReader(InputStreamReader(socket.inputStream, "UTF-8"))
-            val writer = PrintWriter(socket.outputStream)
+            // Large pastes (up to tens of thousands of characters) need a
+            // generous window while the body is streamed in.
+            socket.soTimeout = 15000
+            val input = socket.getInputStream()
+            // Explicit UTF-8 writer: the response bytes must not depend on the
+            // device default charset (Content-Length is counted in UTF-8 bytes).
+            val writer = PrintWriter(java.io.OutputStreamWriter(socket.outputStream, Charsets.UTF_8))
 
-            val requestLine = reader.readLine() ?: return
+            // --- Read the request head (headers) as raw BYTES ---
+            //
+            // The previous implementation used a BufferedReader and then read the
+            // POST body as CHARACTERS sized by Content-Length (which counts
+            // BYTES). For Arabic text that truncated the body — the reason long
+            // pastes used to arrive incomplete. Everything is byte-accurate now.
+            val headBuffer = java.io.ByteArrayOutputStream()
+            var tail = 0
+            while (true) {
+                val b = input.read()
+                if (b == -1) break
+                headBuffer.write(b)
+                tail = when {
+                    tail == 0 && b == 13 -> 1
+                    tail == 1 && b == 10 -> 2
+                    tail == 2 && b == 13 -> 3
+                    tail == 3 && b == 10 -> 4
+                    b == 13 -> 1
+                    else -> 0
+                }
+                if (tail == 4) break
+                if (headBuffer.size() > 128 * 1024) break
+            }
+
+            val headText = String(headBuffer.toByteArray(), Charsets.UTF_8)
+            val headerLines = headText.split("\r\n")
+            val requestLine = headerLines.firstOrNull() ?: return
             val parts = requestLine.split(" ")
             if (parts.size < 2) return
 
             val method = parts[0].uppercase()
             val fullUrl = parts[1]
 
-            // Parse path and query params
             val urlParts = fullUrl.split("?", limit = 2)
             val path = urlParts[0]
             val queryString = if (urlParts.size > 1) urlParts[1] else ""
             val queryParams = parseQueryParams(queryString)
 
-            // Read Headers
             var contentLength = 0
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                if (line.isNullOrEmpty()) break
-                if (line!!.lowercase().startsWith("content-length:")) {
-                    contentLength = line!!.substring(15).trim().toIntOrNull() ?: 0
+            for (line in headerLines.drop(1)) {
+                if (line.lowercase().startsWith("content-length:")) {
+                    contentLength = line.substring(15).trim().toIntOrNull() ?: 0
                 }
             }
 
-            // Read Body for POST
+            // --- Read the POST body as raw BYTES (exact length) ---
             var bodyString = ""
             if (method == "POST" && contentLength > 0) {
-                val charBuffer = CharArray(contentLength)
-                var bytesRead = 0
-                while (bytesRead < contentLength) {
-                    val read = reader.read(charBuffer, bytesRead, contentLength - bytesRead)
+                val bytes = ByteArray(contentLength)
+                var readTotal = 0
+                while (readTotal < contentLength) {
+                    val read = input.read(bytes, readTotal, contentLength - readTotal)
                     if (read == -1) break
-                    bytesRead += read
+                    readTotal += read
                 }
-                bodyString = String(charBuffer, 0, bytesRead)
+                bodyString = if (readTotal == contentLength) {
+                    String(bytes, Charsets.UTF_8)
+                } else if (readTotal > 0) {
+                    String(bytes, 0, readTotal, Charsets.UTF_8)
+                } else {
+                    ""
+                }
             }
 
             // Route Requests
