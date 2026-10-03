@@ -5,6 +5,23 @@
  * character-exact insertion of large Arabic pastes (the 30k-char contract).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * A fake Capacitor bridge: it lets the native clipboard path be exercised
+ * exactly as the Android WebView would, and swaps the plugin proxy for a plain
+ * object so the native methods can be stubbed.
+ */
+const platform = vi.hoisted(() => ({ native: false }));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: {
+    isNativePlatform: () => platform.native,
+    getPlatform: () => (platform.native ? "android" : "web"),
+    isPluginAvailable: () => platform.native,
+    convertFileSrc: (value: string) => value,
+  },
+  registerPlugin: () => ({}),
+  WebPlugin: class {},
+}));
 import {
   LARGE_PASTE_THRESHOLD,
   caretRangeFromPoint,
@@ -25,6 +42,7 @@ import {
   selectAllIn,
   selectionText,
 } from "../lib/remote-editing";
+import { NativeRemoteServer } from "../lib/remote-keyboard-service";
 
 let host: HTMLDivElement;
 
@@ -51,6 +69,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  platform.native = false;
+  delete (NativeRemoteServer as any).setClipboard;
+  delete (NativeRemoteServer as any).getClipboard;
   vi.restoreAllMocks();
   clearEditingMemory();
 });
@@ -325,5 +346,40 @@ describe("Insertion fidelity", () => {
     document.body.innerHTML = "";
     clearEditingMemory();
     expect(insertPlainText("نص", null)).toBe(false);
+  });
+});
+
+describe("Native clipboard layer (Android WebView without focus)", () => {
+  it("uses the native clipboard first when running on a device", async () => {
+    const setClipboard = vi.fn().mockResolvedValue({ ok: true });
+    platform.native = true;
+    (NativeRemoteServer as any).setClipboard = setClipboard;
+
+    const editable = makeEditable("نص للنسخ");
+    const textNode = editable.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 4);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    await expect(copySelection()).resolves.toBe(true);
+    expect(setClipboard).toHaveBeenCalledWith({ text: "نص ل" });
+  });
+
+  it("reads the tablet clipboard natively on a device", async () => {
+    platform.native = true;
+    (NativeRemoteServer as any).getClipboard = vi.fn().mockResolvedValue({ text: "محفظة التابلت الأصلية" });
+    await expect(readClipboardText()).resolves.toBe("محفظة التابلت الأصلية");
+  });
+
+  it("falls back to the Web clipboard in a browser (and never throws)", async () => {
+    platform.native = false;
+    delete (NativeRemoteServer as any).getClipboard;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText: vi.fn().mockRejectedValue(new Error("blocked")), writeText: vi.fn() },
+    });
+    await expect(readClipboardText()).resolves.toBeNull();
   });
 });

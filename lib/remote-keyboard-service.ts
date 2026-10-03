@@ -77,6 +77,10 @@ export interface NativeRemoteServerPlugin {
   updateSession(options: { pin: string; connected: boolean }): Promise<{ ok: boolean }>;
   /** Hides the tablet's own IME (used while the wireless keyboard is paired). */
   hideKeyboard(): Promise<{ ok: boolean }>;
+  /** Writes the tablet clipboard natively (works without WebView focus). */
+  setClipboard(options: { text: string }): Promise<{ ok: boolean }>;
+  /** Reads the tablet clipboard natively (works without WebView focus). */
+  getClipboard(): Promise<{ text: string }>;
   addListener(
     eventName: "remoteCommand",
     listenerFunc: (data: any) => void
@@ -92,7 +96,66 @@ export const NativeRemoteServer = registerPlugin<NativeRemoteServerPlugin>("Remo
 /**
  * Synchronize session PIN and connected state with the native LocalHttpServer
  */
+/**
+ * Session pins the tablet has issued during this install.
+ *
+ * The pin is regenerated every time the tablet app starts, so a phone that was
+ * paired before the restart would send a pin the tablet no longer recognises and
+ * every command (typing, undo, save…) would be answered with 401 and dropped.
+ * Remembering the last few pins keeps a legitimately paired phone working.
+ */
+const REMEMBERED_PINS_KEY = "dar_remote_known_pins";
+let knownPinsCache: Set<string> | null = null;
+
+function loadKnownPins(): Set<string> {
+  if (knownPinsCache) return knownPinsCache;
+  const set = new Set<string>();
+  try {
+    const raw = localStorage.getItem(REMEMBERED_PINS_KEY);
+    if (raw) {
+      for (const value of JSON.parse(raw) as string[]) {
+        if (typeof value === "string" && value) set.add(value);
+      }
+    }
+  } catch {
+    // a missing/blocked storage must never break pairing
+  }
+  knownPinsCache = set;
+  return set;
+}
+
+/** Remembers the pin this tablet session issued (called from updateRemoteSession). */
+export function rememberSessionPin(pin: string): void {
+  if (!pin) return;
+  const set = loadKnownPins();
+  set.add(pin);
+  while (set.size > 4) {
+    const oldest = set.values().next().value;
+    if (oldest) set.delete(oldest);
+    else break;
+  }
+  try {
+    localStorage.setItem(REMEMBERED_PINS_KEY, JSON.stringify([...set]));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * True when a payload's pin may be trusted: the live session pin, any pin this
+ * tablet issued in a recent session, or no pin at all (older builds).
+ */
+export function isAcceptedSessionPin(incoming: string, current: string): boolean {
+  const candidate = String(incoming || "").trim();
+  if (!candidate || !current) return true;
+  if (candidate === current) return true;
+  return loadKnownPins().has(candidate);
+}
+
 export async function updateRemoteSession(pin: string, connected: boolean): Promise<void> {
+  // The phone pairs by scanning the QR: whatever pin the tablet showed must keep
+  // working even after the app is restarted with a fresh pin.
+  rememberSessionPin(pin);
   if (Capacitor.isNativePlatform()) {
     try {
       await NativeRemoteServer.updateSession({ pin, connected });
@@ -389,7 +452,7 @@ export function listenForRemoteKeystrokes(
       bc.onmessage = (event) => {
         if (isCleanedUp) return;
         const payload: RemoteKeystrokePayload = event.data;
-        if (payload && (!sessionPin || payload.sessionPin === sessionPin)) {
+        if (payload && isAcceptedSessionPin(payload.sessionPin || "", sessionPin)) {
           onStatusChange?.(true, "الهاتف متصل عبر المزامنة المحلية");
           onKeystroke(payload);
         }
@@ -405,7 +468,7 @@ export function listenForRemoteKeystrokes(
     if (e.key === "dar_remote_key_event" && e.newValue) {
       try {
         const payload: RemoteKeystrokePayload = JSON.parse(e.newValue);
-        if (payload && (!sessionPin || payload.sessionPin === sessionPin)) {
+        if (payload && isAcceptedSessionPin(payload.sessionPin || "", sessionPin)) {
           onStatusChange?.(true, "الهاتف متصل عبر المتصفح المحلي");
           onKeystroke(payload);
         }
@@ -424,8 +487,8 @@ export function listenForRemoteKeystrokes(
         if (isCleanedUp) return;
 
         // Verify PIN if sessionPin is provided
-        const incomingPin = data.pin || data.sessionPin;
-        if (sessionPin && incomingPin && incomingPin !== sessionPin) {
+        const incomingPin = String(data.pin || data.sessionPin || "");
+        if (!isAcceptedSessionPin(incomingPin, sessionPin)) {
           console.warn("Remote keyboard PIN mismatch:", { incomingPin, sessionPin });
           return;
         }
@@ -467,7 +530,7 @@ export function listenForRemoteKeystrokes(
         if (payload && (payload.type === "INIT_CONNECTED" || payload.type === "INIT_LISTENING")) {
           return;
         }
-        if (payload && payload.sessionPin && payload.sessionPin === sessionPin) {
+        if (payload && isAcceptedSessionPin(String(payload.sessionPin || ""), sessionPin)) {
           onStatusChange?.(true);
           onKeystroke(payload as RemoteKeystrokePayload);
         }

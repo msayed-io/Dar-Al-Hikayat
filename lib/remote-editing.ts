@@ -14,6 +14,8 @@
  *    one call, and must never lose a single character: large payloads are
  *    inserted as a DocumentFragment built from text nodes and <br> elements.
  */
+import { Capacitor } from "@capacitor/core";
+import { NativeRemoteServer } from "./remote-keyboard-service";
 import type { Stroke } from "../components/DarAlHikayatHandwriting";
 
 export const EDITABLE_SELECTOR =
@@ -263,10 +265,31 @@ export function selectionText(): string {
   return selection.toString();
 }
 
-/** Copy: the WebView clipboard API first, execCommand as the fallback. */
-export async function copySelection(): Promise<boolean> {
-  const text = selectionText();
+/**
+ * Writes text to the tablet clipboard.
+ *
+ * Order matters: on the Android WebView the document is NOT focused while the
+ * writer drives it from the phone, so the Web Clipboard API rejects and
+ * execCommand("copy") is blocked for synthetic events. The native Android
+ * clipboard is used first and the Web API stays as the browser fallback.
+ */
+export async function writeClipboardText(text: string): Promise<boolean> {
   if (!text) return false;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const plugin = NativeRemoteServer as unknown as {
+        setClipboard?: (options: { text: string }) => Promise<{ ok: boolean }>;
+      };
+      if (typeof plugin.setClipboard === "function") {
+        await plugin.setClipboard({ text });
+        return true;
+      }
+    } catch {
+      /* fall through to the Web API */
+    }
+  }
+
   try {
     const clipboard = navigator?.clipboard;
     if (clipboard?.writeText) {
@@ -281,6 +304,13 @@ export async function copySelection(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Copy: the native clipboard first, then the WebView API, then execCommand. */
+export async function copySelection(): Promise<boolean> {
+  const text = selectionText();
+  if (!text) return false;
+  return writeClipboardText(text);
 }
 
 /** Cut = copy + remove the selected ranges (execCommand is unreliable offline). */
@@ -308,6 +338,20 @@ export async function cutSelection(): Promise<boolean> {
 
 /** Reads the tablet's own clipboard (used by "paste from tablet"). */
 export async function readClipboardText(): Promise<string | null> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const plugin = NativeRemoteServer as unknown as {
+        getClipboard?: () => Promise<{ text: string }>;
+      };
+      if (typeof plugin.getClipboard === "function") {
+        const result = await plugin.getClipboard();
+        if (result && typeof result.text === "string") return result.text;
+      }
+    } catch {
+      /* fall through to the Web API */
+    }
+  }
+
   try {
     const clipboard = navigator?.clipboard;
     if (clipboard?.readText) {

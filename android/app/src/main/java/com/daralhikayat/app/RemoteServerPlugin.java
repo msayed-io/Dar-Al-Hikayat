@@ -142,6 +142,79 @@ public class RemoteServerPlugin extends Plugin {
         }
     }
 
+    /**
+     * Writes to the tablet's clipboard from the NATIVE layer.
+     *
+     * While the writer drives the tablet from the phone, the tablet WebView has
+     * no focus and no user activation, so `navigator.clipboard.writeText()` is
+     * rejected and `document.execCommand("copy")` is blocked for synthetic
+     * events — that is exactly why the remote «نسخ» did nothing on the device.
+     * The Android clipboard has no such restriction.
+     */
+    @PluginMethod
+    public void setClipboard(PluginCall call) {
+        final String text = call.getString("text", "");
+        try {
+            android.app.Activity activity = getActivity();
+            if (activity == null) {
+                call.reject("No activity to write the clipboard from");
+                return;
+            }
+            activity.runOnUiThread(() -> {
+                try {
+                    android.content.ClipboardManager manager =
+                            (android.content.ClipboardManager) activity.getSystemService(
+                                    android.content.Context.CLIPBOARD_SERVICE);
+                    if (manager != null) {
+                        manager.setPrimaryClip(
+                                android.content.ClipData.newPlainText("دار الحكايات", text));
+                    }
+                } catch (Exception inner) {
+                    android.util.Log.w("RemoteServerPlugin", "setClipboard failed: " + inner.getMessage());
+                }
+            });
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to write the clipboard", e);
+        }
+    }
+
+    /** Reads the tablet's clipboard natively (used by "محفظة التابلت" paste). */
+    @PluginMethod
+    public void getClipboard(PluginCall call) {
+        try {
+            android.app.Activity activity = getActivity();
+            if (activity == null) {
+                call.reject("No activity to read the clipboard from");
+                return;
+            }
+            activity.runOnUiThread(() -> {
+                String text = "";
+                try {
+                    android.content.ClipboardManager manager =
+                            (android.content.ClipboardManager) activity.getSystemService(
+                                    android.content.Context.CLIPBOARD_SERVICE);
+                    if (manager != null && manager.hasPrimaryClip()
+                            && manager.getPrimaryClip() != null
+                            && manager.getPrimaryClip().getItemCount() > 0) {
+                        CharSequence value =
+                                manager.getPrimaryClip().getItemAt(0).coerceToText(activity);
+                        text = value != null ? value.toString() : "";
+                    }
+                } catch (Exception inner) {
+                    android.util.Log.w("RemoteServerPlugin", "getClipboard failed: " + inner.getMessage());
+                }
+                JSObject ret = new JSObject();
+                ret.put("text", text);
+                call.resolve(ret);
+            });
+        } catch (Exception e) {
+            call.reject("Failed to read the clipboard", e);
+        }
+    }
+
     @PluginMethod
     public void updateSession(PluginCall call) {
         try {

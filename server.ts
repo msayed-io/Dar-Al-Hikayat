@@ -4,9 +4,25 @@ import os from "os";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { getModelsToTry, isModelFallbackError } from "./lib/gemini-models";
+import { mapNativeCommandToPayload } from "./lib/remote-keyboard-service";
 
 // Active SSE client connections for remote keyboard
 const remoteKeyboardClients = new Set<express.Response>();
+
+/**
+ * Pushes one already-decoded payload to every listening tablet.
+ * The phone is the only writer of these events; the tablet only reads them.
+ */
+function broadcastRemotePayload(payload: unknown): void {
+  const frame = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const clientRes of remoteKeyboardClients) {
+    try {
+      clientRes.write(frame);
+    } catch {
+      remoteKeyboardClients.delete(clientRes);
+    }
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -91,60 +107,47 @@ async function startServer() {
   });
 
   // Native Lightweight Command API (/api/command)
+  //
+  // This handler used to decode a hand-written subset of the phone protocol, so
+  // `action=shortcut&cmd=save|select_all|undo|…`, `action=key&key=Space` and the
+  // whole mouse family answered HTTP 200 while the tablet received a payload
+  // with `action: undefined` — the writer pressed a button and nothing happened.
+  // Decoding now goes through the SAME function the native plugin path uses, so
+  // one protocol has exactly one implementation.
   const handleCommandRequest = (req: express.Request, res: express.Response) => {
     const startTime = Date.now();
-    const query = req.query as Record<string, string>;
-    const body = (req.body || {}) as Record<string, string>;
+    const query = (req.query || {}) as Record<string, unknown>;
+    const body = (req.body || {}) as Record<string, unknown>;
 
-    const action = query.action || body.action || query.type || body.type || "type";
-    const char = query.char ?? body.char;
-    const text = query.text ?? body.text;
-    const delta = query.delta ?? body.delta;
-
-    let payloadType: "KEY" | "TASHKEEL" | "COMMAND" | "PASTE_TEXT" = "COMMAND";
-    let commandAction: any = undefined;
-
-    if (action === "type") {
-      payloadType = "KEY";
-    } else if (action === "tashkeel") {
-      payloadType = "TASHKEEL";
-    } else if (action === "paste") {
-      payloadType = "PASTE_TEXT";
-    } else if (action === "backspace") {
-      commandAction = "BACKSPACE";
-    } else if (action === "newline") {
-      commandAction = "NEWLINE";
-    } else if (action === "undo") {
-      commandAction = "UNDO";
-    } else if (action === "redo") {
-      commandAction = "REDO";
-    } else if (action === "delete_word") {
-      commandAction = "DELETE_WORD";
-    } else if (action === "cursor_move") {
-      commandAction = parseInt(delta as string) < 0 ? "NAVIGATE_LEFT" : "NAVIGATE_RIGHT";
+    // Query first (the native app builds GET URLs), JSON body second (large pastes).
+    const data: Record<string, any> = {};
+    for (const [key, value] of Object.entries({ ...query, ...body })) {
+      data[key] = Array.isArray(value) ? value[0] : value;
     }
 
-    const payload = {
-      sessionPin: query.pin || body.pin || "123456",
-      type: payloadType,
-      char: char,
-      action: commandAction,
-      text: text,
-      timestamp: Date.now(),
-    };
+    const action = String(data.action ?? data.type ?? "type");
+    const pin = String(data.pin ?? data.sessionPin ?? "");
 
-    const dataString = `data: ${JSON.stringify(payload)}\n\n`;
-    for (const clientRes of remoteKeyboardClients) {
-      try {
-        clientRes.write(dataString);
-      } catch {
-        remoteKeyboardClients.delete(clientRes);
-      }
+    let payload: ReturnType<typeof mapNativeCommandToPayload> = null;
+    if (action === "disconnect") {
+      payload = {
+        sessionPin: pin,
+        type: "COMMAND",
+        action: "disconnect",
+        timestamp: Date.now(),
+      } as unknown as ReturnType<typeof mapNativeCommandToPayload>;
+    } else {
+      payload = mapNativeCommandToPayload(action, data, pin);
+    }
+
+    if (payload) {
+      broadcastRemotePayload(payload);
     }
 
     res.json({
-      ok: true,
+      ok: !!payload,
       action,
+      decoded: payload ? payload.type : null,
       latencyMs: Date.now() - startTime,
       timestamp: Date.now(),
     });

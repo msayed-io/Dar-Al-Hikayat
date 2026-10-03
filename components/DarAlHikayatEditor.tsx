@@ -62,6 +62,7 @@ import {
   cutSelection,
   copySelection,
   focusEditable,
+  getRememberedRange,
   insertPlainText,
   readClipboardText,
   rememberRange,
@@ -1348,25 +1349,31 @@ const DarAlHikayatMaster: React.FC = () => {
         case "PASTE_LOCAL": {
           if (!target) return;
           const text = await readClipboardText();
-          if (text === null) {
-            showEmptyWarningToast("لم نستطع قراءة محفظة التابلت — استخدمي اللصق من محفظة الهاتف");
+          if (text === null || text === "") {
+            showEmptyWarningToast("محفظة التابلت فارغة — استخدمي اللصق من محفظة الهاتف");
             return;
           }
           restoreCaretBeforeInsertion(target);
           if (insertPlainText(text, target)) {
             setIsDirty(true);
+            showEmptyWarningToast(`تم لصق ${text.length.toLocaleString("ar-EG")} حرفاً ✓`);
           }
           return;
         }
         case "SELECT_ALL": {
           if (!target) return;
           focusEditable(target);
-          selectAllIn(target);
+          const selected = selectAllIn(target);
+          showEmptyWarningToast(selected ? "تم تحديد كل النص ✓" : "لا يوجد نص لتحديده");
           return;
         }
         case "SAVE": {
           const save = saveHandlerRef.current;
-          if (save) await save();
+          if (!save) return;
+          const saved = await save();
+          // Visible confirmation: the writer pressed «حفظ» on the phone and must
+          // see the story answer immediately.
+          showEmptyWarningToast(saved ? "تم حفظ الحكاية ✓" : "تعذّر الحفظ — تحققي من الحكاية");
           return;
         }
         case "BOLD":
@@ -1458,6 +1465,10 @@ const DarAlHikayatMaster: React.FC = () => {
         if (payload.text) {
           insertTextToSelection(payload.text);
           setIsDirty(true);
+          // A single character is typing; anything longer deserves a receipt.
+          if (payload.text.length > 1) {
+            showEmptyWarningToast(`تم لصق ${payload.text.length.toLocaleString("ar-EG")} حرفاً ✓`);
+          }
         }
       } else if (payload.type === "COMMAND") {
         const sharedCommands = [
@@ -1543,21 +1554,58 @@ const DarAlHikayatMaster: React.FC = () => {
 
   // Keep the last caret inside an editable so remote typing survives the IME
   // being hidden (which may blur the field between characters).
+  //
+  // The remembered range is also RE-APPLIED here whenever the live selection is
+  // gone but the editable still holds focus. A React re-render (autosave, word
+  // count, the save button state) can silently drop the live selection, and the
+  // writer's next remote «نسخ» would then copy nothing. Re-asserting the range on
+  // any focus/blur/visibility transition makes the selection survive rendering,
+  // exactly like a native text field.
   useEffect(() => {
-    const onSelectionChange = () => {
+    const captureRange = (): Range | null => {
       const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
+      if (!sel || sel.rangeCount === 0) return null;
       const range = sel.getRangeAt(0);
       const editable =
         editableFromNode(range.startContainer.parentElement) ||
         editableFromNode(range.startContainer as Element);
-      if (editable) {
-        setLastEditable(editable);
-        rememberRange(range);
+      if (!editable) return null;
+      setLastEditable(editable);
+      rememberRange(range);
+      return range;
+    };
+
+    const onSelectionChange = () => {
+      captureRange();
+    };
+
+    const restoreIfLost = () => {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) return; // a real selection is live
+      if (captureRange()) return; // a live caret exists: remember it
+      const editable = currentTargetEditable();
+      const remembered = getRememberedRange();
+      if (!editable || !remembered || !editable.isConnected) return;
+      if (!editable.contains(remembered.startContainer)) return;
+      if (!editable.contains(document.activeElement) && document.activeElement !== editable) return;
+      try {
+        sel?.removeAllRanges();
+        sel?.addRange(remembered);
+      } catch {
+        /* a stale range is harmless */
       }
     };
+
     document.addEventListener("selectionchange", onSelectionChange);
-    return () => document.removeEventListener("selectionchange", onSelectionChange);
+    window.addEventListener("focus", restoreIfLost);
+    window.addEventListener("blur", restoreIfLost, true);
+    document.addEventListener("visibilitychange", restoreIfLost);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      window.removeEventListener("focus", restoreIfLost);
+      window.removeEventListener("blur", restoreIfLost, true);
+      document.removeEventListener("visibilitychange", restoreIfLost);
+    };
   }, []);
 
   // Synchronize active session PIN and connection state with native LocalHttpServer
@@ -2888,10 +2936,13 @@ const DarAlHikayatMaster: React.FC = () => {
 
       {/* Empty Story Warning Toast */}
       <div
-        className={`fixed top-20 z-[80] transition-all duration-300 pointer-events-none ${
+        className={`fixed top-20 transition-all duration-300 pointer-events-none ${
           emptyWarningToast ? "opacity-100 translate-y-0 scale-100" : "opacity-0 -translate-y-4 scale-95"
         }`}
         style={{
+          // Inline z-index: this feedback reports remote actions (save, select
+          // all, paste) and must beat every editor layer, always.
+          zIndex: 2147483200,
           left: showAIAssistant && isWideScreen ? `calc((100vw - ${paneWidthCss}) / 2)` : "50%",
           transform: "translateX(-50%)",
         }}
