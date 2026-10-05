@@ -1,3 +1,4 @@
+import { floatingCapsuleStyle } from "../lib/floating-capsule";
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -1207,11 +1208,7 @@ const HomePage: React.FC = () => {
                 <div
                   className="h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl transition-all duration-300 pointer-events-auto"
                   style={{
-                    backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                    borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                    boxShadow: currentTheme.mode === "apple_dark"
-                      ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                      : currentTheme.shadow,
+                    ...floatingCapsuleStyle(currentTheme),
                   }}
                 >
                   <span
@@ -1227,11 +1224,7 @@ const HomePage: React.FC = () => {
                   <div
                     className="h-11 px-2 rounded-full border flex items-center gap-1 backdrop-blur-xl transition-all duration-300"
                     style={{
-                      backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                      borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                      boxShadow: currentTheme.mode === "apple_dark"
-                        ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                        : currentTheme.shadow,
+                      ...floatingCapsuleStyle(currentTheme),
                     }}
                   >
                     {/* Search Icon Button */}
@@ -1432,11 +1425,7 @@ const HomePage: React.FC = () => {
                   width: "100%",
                   left: 0,
                   right: 0,
-                  backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                  boxShadow: currentTheme.mode === "apple_dark"
-                    ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                    : currentTheme.shadow,
+                  ...floatingCapsuleStyle(currentTheme),
                 }}
               >
                 <Search

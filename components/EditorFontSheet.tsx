@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useEffect, useRef, useState } from "react";
 import { Check, ChevronRight, X } from "lucide-react";
 import {
   EDITOR_FONTS,
@@ -6,17 +6,25 @@ import {
   loadEditorFont,
   type EditorFont,
 } from "../lib/editor-fonts";
+import {
+  FLOATING_CAPSULE_CLASS,
+  floatingCapsuleStyle,
+} from "../lib/floating-capsule";
+import type { ThemeColors } from "../contexts/AppContext";
 import "./EditorFonts.css";
 import "./EditorFontSheet.css";
 interface Props {
-  theme: {
-    bg: string;
-    text: string;
-    accent: string;
-    border: string;
-    shadow?: string;
-    secondary: string;
-  };
+  theme: Pick<
+    ThemeColors,
+    | "bg"
+    | "text"
+    | "accent"
+    | "border"
+    | "shadow"
+    | "secondary"
+    | "glass"
+    | "mode"
+  >;
   anchor: HTMLElement | null;
   scope: "التحديد" | "الفقرة" | "الكل";
   initialFamily?: string;
@@ -48,6 +56,17 @@ export default function EditorFontSheet({
   });
   const panel = useRef<HTMLElement>(null);
   const request = useRef(0);
+  useLayoutEffect(() => {
+    // Targets were captured before opening. Clear the live editor selection
+    // before DOM normalization can restore it and reopen the soft keyboard.
+    // The only focused element during font browsing is a non-editable control.
+    // Blur the editable first: its blur handler otherwise restores a missing
+    // selection while it still owns focus. Then clear the live range.
+    panel.current
+      ?.querySelector<HTMLButtonElement>('[aria-label="إغلاق الخطوط"]')
+      ?.focus({ preventScroll: true });
+    window.getSelection()?.removeAllRanges();
+  }, []);
   useEffect(() => {
     const measure = () => {
       const r = anchor?.getBoundingClientRect();
@@ -75,9 +94,6 @@ export default function EditorFontSheet({
     };
     document.addEventListener("keydown", key);
     // The list is non-modal: no backdrop, focus trap or background blur.
-    panel.current
-      ?.querySelector<HTMLButtonElement>('[aria-label="إغلاق الخطوط"]')
-      ?.focus({ preventScroll: true });
     return () => {
       request.current++;
       observer?.disconnect();
@@ -119,35 +135,51 @@ export default function EditorFontSheet({
           boxShadow: `0 20px 45px -10px ${theme.shadow || "rgba(0,0,0,0.3)"}`,
           "--font-sheet-accent": theme.accent,
           "--font-sheet-border": theme.border,
+          "--font-sheet-bg": theme.bg,
         } as React.CSSProperties
       }
     >
+      <div
+        className="apple-magnetic-dissolve editor-font-top-dissolve"
+        aria-hidden="true"
+      />
+      <div
+        className="apple-magnetic-dissolve-bottom editor-font-bottom-dissolve"
+        aria-hidden="true"
+      />
       <header className="editor-font-sheet-heading">
-        {detail ? (
-          <button
-            aria-label="الرجوع إلى الخطوط"
-            onClick={() => setDetail(null)}
-            className="editor-font-arrow"
+        <div
+          className={`editor-font-title-capsule editor-font-capsule ${FLOATING_CAPSULE_CLASS}`}
+          style={floatingCapsuleStyle(theme)}
+        >
+          {detail && (
+            <button
+              aria-label="الرجوع إلى الخطوط"
+              onClick={() => setDetail(null)}
+              className="editor-font-arrow"
+            >
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </button>
+          )}
+          <h2
+            id="editor-font-title"
+            className="font-zain-xbold"
+            style={{ color: theme.accent }}
+            title={detail?.label}
           >
-            <ChevronRight size={16} strokeWidth={2.5} />
-          </button>
-        ) : (
-          <span className="editor-font-arrow" />
-        )}
-        <h2 id="editor-font-title">{detail ? detail.label : "الخطوط"}</h2>
+            {detail ? detail.label : "الخطوط"}
+          </h2>
+        </div>
         <button
           aria-label="إغلاق الخطوط"
           onClick={onClose}
-          className="editor-font-arrow"
+          className={`editor-font-close editor-font-capsule ${FLOATING_CAPSULE_CLASS} apple-elastic-pinch`}
+          style={{ ...floatingCapsuleStyle(theme), borderRadius: "50%" }}
         >
-          <X size={18} />
+          <X size={16} strokeWidth={2.2} />
         </button>
       </header>
       <div className="editor-font-list-wrap">
-        <div
-          className="apple-magnetic-dissolve editor-font-list-dissolve"
-          aria-hidden="true"
-        />
         <div
           className="editor-font-list"
           aria-label={detail ? "أوزان الخط" : "قائمة الخطوط"}
@@ -216,11 +248,17 @@ export default function EditorFontSheet({
         </p>
       )}
       <footer className="editor-font-actions">
-        <span>{scope}</span>
+        <span
+          className={`editor-font-scope editor-font-capsule ${FLOATING_CAPSULE_CLASS}`}
+          style={floatingCapsuleStyle(theme)}
+        >
+          {scope}
+        </span>
         <button
           disabled={busy}
           onClick={() => void choose(chosen, weight, true)}
-          style={{ background: theme.accent, color: theme.bg }}
+          className={`editor-font-capsule font-zain-bold ${FLOATING_CAPSULE_CLASS}`}
+          style={{ ...floatingCapsuleStyle(theme), color: theme.accent }}
         >
           تطبيق على الكل
         </button>

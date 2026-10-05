@@ -1,3 +1,4 @@
+import { floatingCapsuleStyle } from "../lib/floating-capsule";
 import React, {
   useState,
   useEffect,
@@ -532,11 +533,7 @@ const PrayerPage: React.FC = () => {
           <div
             className="pointer-events-auto h-11 px-5 rounded-full border-[0.5px] flex items-center justify-center backdrop-blur-xl select-none transition-all duration-300"
             style={{
-              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-              boxShadow: currentTheme.mode === "apple_dark"
-                ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                : currentTheme.shadow,
+              ...floatingCapsuleStyle(currentTheme),
             }}
           >
             <span
@@ -557,11 +554,7 @@ const PrayerPage: React.FC = () => {
                 height: "44px",
                 minWidth: "44px",
                 minHeight: "44px",
-                backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
-                borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.08)" : currentTheme.border,
-                boxShadow: currentTheme.mode === "apple_dark"
-                  ? "0 4px 30px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.6)"
-                  : currentTheme.shadow,
+                ...floatingCapsuleStyle(currentTheme),
                 borderRadius: "50%",
               }}
               title="خيارات إضافية"

@@ -19,12 +19,10 @@ vi.mock("../components/DarAlHikayatAIAssistant", () => ({
 vi.mock("../lib/remote-keyboard-service", () => ({
   listenForRemoteKeystrokes: () => () => {},
   updateRemoteSession: vi.fn(),
-  getDeviceLocalIp: vi
-    .fn()
-    .mockResolvedValue({
-      primaryIp: "192.168.1.5",
-      connectionUrl: "http://192.168.1.5:8080/",
-    }),
+  getDeviceLocalIp: vi.fn().mockResolvedValue({
+    primaryIp: "192.168.1.5",
+    connectionUrl: "http://192.168.1.5:8080/",
+  }),
 }));
 import Editor from "../components/DarAlHikayatEditor";
 let dom: ReturnType<typeof setupDom>;
@@ -130,4 +128,31 @@ it("tools entry closes its parent controls and edits the current paragraph, not 
   expect(surface().lastElementChild?.getAttribute("data-editor-font")).toBe(
     "amiri",
   );
+});
+it("font browsing keeps the editable unfocused and selection in memory, without scroll or keyboard suppression", async () => {
+  const { getRememberedRange } = await import("../lib/remote-editing");
+  await seed();
+  await selectWord();
+  const scroll = vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+  const focus = vi.spyOn(surface(), "focus");
+  await click('[aria-label="خط النص المحدد"]');
+  expect(window.getSelection()?.rangeCount).toBe(0);
+  expect(getRememberedRange()?.toString()).toBe("رحمة");
+  await chooseAmiri();
+  expect(getRememberedRange()?.toString()).toBe("رحمة");
+  expect(window.getSelection()?.rangeCount).toBe(0);
+  expect(document.activeElement).not.toBe(surface());
+  await click(".editor-font-actions button");
+  expect(focus).not.toHaveBeenCalled();
+  expect(scroll).not.toHaveBeenCalled();
+  expect(surface().getAttribute("contenteditable")).toBe("true");
+  expect(document.documentElement.hasAttribute("data-remote-keyboard")).toBe(
+    false,
+  );
+  expect(
+    document.querySelector("#story-content")?.hasAttribute("data-font-panel"),
+  ).toBe(false);
+  await click('[aria-label="إغلاق الخطوط"]');
+  await act(async () => surface().focus());
+  expect(document.activeElement).toBe(surface());
 });

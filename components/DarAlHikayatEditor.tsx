@@ -636,14 +636,31 @@ const DarAlHikayatMaster: React.FC = () => {
   const [showTOC, setShowTOC] = useState(false);
   const [showNovelMenu, setShowNovelMenu] = useState(false);
   const [showFontSheet, setShowFontSheet] = useState(false);
-  const [fontPreviewRevision, setFontPreviewRevision] = useState(0);
   const [fontScope, setFontScope] = useState<'التحديد' | 'الفقرة' | 'الكل'>('الفقرة');
   const [fontInitial, setFontInitial] = useState({ family: 'Thmanyah Sans', weight: 400 });
   const fontTargetsRef = useRef<FontTarget[]>([]);
   const lastFontRangeRef = useRef<Range | null>(null);
   const fontAllRef = useRef(false);
   const bottomBarRef = useRef<HTMLDivElement>(null);
-  const closeFontSheet = React.useCallback(() => setShowFontSheet(false), []);
+  const rememberFontSelection = React.useCallback(() => {
+    const target = fontTargetsRef.current[0];
+    if (!target?.root.isConnected) return;
+    const restored = rangeForTarget(target);
+    const lastTarget = fontTargetsRef.current[fontTargetsRef.current.length - 1];
+    if (lastTarget && lastTarget !== target && lastTarget.root.isConnected) {
+      const end = rangeForTarget(lastTarget);restored.setEnd(end.endContainer, end.endOffset);
+    }
+    // Memory only: live Selection restoration focuses Android contenteditable.
+    rememberRange(restored);setLastEditable(target.root);
+  }, []);
+  const closeFontSheet = React.useCallback(() => {
+    rememberFontSelection();setShowFontSheet(false);
+  }, [rememberFontSelection]);
+  React.useLayoutEffect(() => {
+    // Runs after the sheet blurs the editor; chapter normalization on blur must
+    // not invalidate the remembered insertion target, even without a choice.
+    if (showFontSheet) rememberFontSelection();
+  }, [showFontSheet, rememberFontSelection]);
   const [history, setHistory] = useState<any[]>([
     {
       content: initialContent || "",
@@ -2450,17 +2467,7 @@ const DarAlHikayatMaster: React.FC = () => {
       if (isNovelMode) setChapters(after.chapters);else setContent(after.content);
       typingStateRef.current = initialTypingState();setIsDirty(true);
     }
-    setFontPreviewRevision(revision => revision + 1);
-    const target = fontTargetsRef.current[0];
-    if (target?.root.isConnected) {
-      const restored = rangeForTarget(target);
-      const lastTarget = fontTargetsRef.current[fontTargetsRef.current.length - 1];
-      if (lastTarget && lastTarget !== target) {
-        const end = rangeForTarget(lastTarget);restored.setEnd(end.endContainer, end.endOffset);
-      }
-      const selection = window.getSelection();
-      selection?.removeAllRanges();selection?.addRange(restored);rememberRange(restored);setLastEditable(target.root);
-    }
+    rememberFontSelection();
   };
   useEffect(() => {
     const remember = () => {
@@ -2477,23 +2484,6 @@ const DarAlHikayatMaster: React.FC = () => {
     document.addEventListener('pointerdown', closeOnTyping);
     return () => {document.removeEventListener('selectionchange', remember);document.removeEventListener('input', closeOnTyping);document.removeEventListener('pointerdown', closeOnTyping);};
   }, [showFontSheet]);
-
-  useEffect(() => {
-    if (!showFontSheet) return;
-    const frame = requestAnimationFrame(() => {
-      const target = fontTargetsRef.current[0];
-      const panel = document.querySelector('.editor-font-sheet');
-      if (!target?.root.isConnected || !panel) return;
-      const rect = rangeForTarget(target).getBoundingClientRect();
-      const edge = panel.getBoundingClientRect().top;
-      // Leave the actual selected text visible above the floating library.
-      if (edge > 100 && rect.bottom > edge - 24) {
-        const available = edge - 120;
-        window.scrollBy({ top: rect.height > available ? rect.top - 120 : rect.bottom - edge + 40, behavior: 'smooth' });
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [showFontSheet, fontPreviewRevision]);
 
   const clearHighlightFromSelection = (selection: Selection, range: Range) => {
     const container = range.commonAncestorContainer;
@@ -3999,7 +3989,6 @@ const DarAlHikayatMaster: React.FC = () => {
 
           <main
             id="story-content"
-            data-font-panel={showFontSheet ? "open" : undefined}
             className={`w-full relative z-0 pb-36 transition-opacity duration-200 ${
               (isHandwritingMode && !isSavedMode) ||
               (isSavedMode && handwritingStrokes.length > 0 && (!content || content === "<br>"))
