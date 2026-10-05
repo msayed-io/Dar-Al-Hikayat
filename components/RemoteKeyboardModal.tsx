@@ -53,7 +53,11 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
     <div
       dir="rtl"
       className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200`}
-      onClick={onClose}
+      onClick={(event) => {
+        // Connected controls require an explicit close: accidental backdrop
+        // taps must not hide the disconnect action.
+        if (!isConnected && event.target === event.currentTarget) onClose();
+      }}
     >
       <div
         role="dialog"
@@ -76,11 +80,9 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {!isConnected && <>
-        <div className="remote-pairing-waiting-icon">
-          <Smartphone size={28} style={{ color: themeAccent }} strokeWidth={2} aria-hidden="true" />
-        </div>
         <div className="remote-pairing-header">
           <div className="remote-pairing-heading">
+            <Smartphone className="remote-pairing-heading-icon" size={20} style={{ color: themeAccent }} strokeWidth={2} aria-hidden="true" />
             <h3 id="remote-keyboard-modal-title" className="remote-pairing-title">
               ربط الكيبورد اللاسلكي
             </h3>

@@ -49,7 +49,13 @@ it('copies the lock dialog dimensions and theme pill buttons only while connecte
 it('uses lock styling for waiting while keeping its 384px width and inline status',async()=>{
  await render();const d=dom.host.querySelector<HTMLElement>('[role="dialog"]')!;
  expect(d.style.width).toBe('384px');expect(d.style.maxWidth).toBe('calc(100vw - 32px)');expect(d.style.borderRadius).toBe('28px');expect(d.style.padding).toBe('24px 20px');
- expect(dom.host.querySelector('.remote-pairing-waiting-icon svg')).not.toBeNull();
+ expect(dom.host.querySelector('.remote-pairing-heading')!.firstElementChild!.classList.contains('remote-pairing-heading-icon')).toBe(true);
  expect(dom.host.querySelector('.remote-pairing-header [role="status"]')).not.toBeNull();
  expect(dom.host.querySelectorAll('button')).toHaveLength(1);
+});
+
+it('connected controls ignore accidental backdrop taps until explicitly closed',async()=>{
+ await render(true);await click('[dir="rtl"]');await click('[role="dialog"]');
+ expect(close).not.toHaveBeenCalled();expect(disconnect).not.toHaveBeenCalled();
+ await click('.remote-pairing-disconnect');expect(disconnect).toHaveBeenCalledTimes(1);
 });

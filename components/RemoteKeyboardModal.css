@@ -5,7 +5,6 @@
   overflow-y: auto;
 }
 .remote-pairing-waiting-dialog { gap: 16px; }
-.remote-pairing-waiting-icon { display: flex; justify-content: center; margin-bottom: -4px; }
 .remote-pairing-header {
   display: flex;
   align-items: center;
@@ -13,7 +12,9 @@
   gap: 8px;
   min-width: 0;
 }
-.remote-pairing-heading { min-width: 0; }
+.remote-pairing-heading { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.remote-pairing-heading-icon { flex: 0 0 20px; }
+.remote-pairing-waiting-dialog .remote-pairing-header { padding-inline-end: 32px; }
 .remote-pairing-dialog .remote-pairing-title {
   font-size: 16px;
   line-height: 1.8;

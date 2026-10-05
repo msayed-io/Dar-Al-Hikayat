@@ -1626,15 +1626,19 @@ const DarAlHikayatMaster: React.FC = () => {
   // Leaving the editor releases the pointer without touching any listener.
   useEffect(() => () => deactivateRemoteMouse(), []);
 
+  // Dismiss the pairing view once on a disconnected -> connected transition.
+  // Reopening connection controls must survive heartbeats, input and repeated
+  // transport status notifications; those do not change the connection state.
+  useEffect(() => {
+    if (isRemoteConnected) setIsRemoteModalOpen(false);
+  }, [isRemoteConnected]);
+
   // --- Decoupled Application-Level Remote Keyboard Server Listener ---
   useEffect(() => {
     const cleanup = listenForRemoteKeystrokes(
       remoteSessionPin,
       (payload) => {
         setIsRemoteConnected(true);
-        // Requirement #2: Auto-close modal when phone pairs or sends input
-        setIsRemoteModalOpen(false);
-
         if (payload.action === "PING") {
           return;
         }
@@ -1643,9 +1647,6 @@ const DarAlHikayatMaster: React.FC = () => {
       },
       (connected) => {
         setIsRemoteConnected(connected);
-        if (connected) {
-          setIsRemoteModalOpen(false);
-        }
       }
     );
 
