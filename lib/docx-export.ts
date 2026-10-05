@@ -11,6 +11,7 @@ import {
   PageBreak,
   UnderlineType,
 } from "docx";
+import { findEditorFont } from "./editor-fonts";
 import type { NoteStyles } from "../contexts/AppContext";
 import { downloadBlob } from "./pdf-export";
 
@@ -88,6 +89,7 @@ export function hexToWordHighlightName(hex: string): string {
 }
 
 interface InlineStyleContext {
+  fontFamily: string;
   bold: boolean;
   italics: boolean;
   underline: boolean;
@@ -97,13 +99,13 @@ interface InlineStyleContext {
 
 /** استخلاص التنسيقات من عنصر DOM وتمريرها للأبناء */
 function getElementStyleContext(el: HTMLElement, parentStyle: InlineStyleContext): InlineStyleContext {
-  const isBold =
-    parentStyle.bold ||
-    el.tagName === "B" ||
-    el.tagName === "STRONG" ||
-    el.classList.contains("font-zain-bold") ||
-    el.classList.contains("font-zain-xbold") ||
-    parseInt(el.style.fontWeight || "0", 10) >= 600;
+  const explicitWeight = el.style.fontWeight;
+  const numericWeight = Number.parseInt(explicitWeight, 10);
+  const isBold = explicitWeight === "normal" ? false
+    : explicitWeight === "bold" ? true
+    : Number.isFinite(numericWeight) ? numericWeight >= 600
+    : parentStyle.bold || el.tagName === "B" || el.tagName === "STRONG" ||
+      el.classList.contains("font-zain-bold") || el.classList.contains("font-zain-xbold");
 
   const isItalics =
     parentStyle.italics ||
@@ -150,6 +152,7 @@ function getElementStyleContext(el: HTMLElement, parentStyle: InlineStyleContext
   }
 
   return {
+    fontFamily: findEditorFont(el.style.fontFamily)?.family || parentStyle.fontFamily,
     bold: isBold,
     italics: isItalics,
     underline: isUnderline,
@@ -177,7 +180,7 @@ function parseNodeToTextRuns(
         bold: style.bold,
         italics: style.italics,
         underline: style.underline ? { type: UnderlineType.SINGLE } : undefined,
-        font: "Zain",
+        font: style.fontFamily,
         rightToLeft: true,
       };
 
@@ -203,7 +206,7 @@ function parseNodeToTextRuns(
           runs.push(createRun(line));
         }
         if (idx < lines.length - 1) {
-          runs.push(new TextRun({ break: 1, font: "Zain", rightToLeft: true }));
+          runs.push(new TextRun({ break: 1, font: style.fontFamily, rightToLeft: true }));
         }
       });
     } else {
@@ -216,7 +219,7 @@ function parseNodeToTextRuns(
     const el = node as HTMLElement;
 
     if (el.tagName === "BR") {
-      runs.push(new TextRun({ break: 1, font: "Zain", rightToLeft: true }));
+      runs.push(new TextRun({ break: 1, font: style.fontFamily, rightToLeft: true }));
       return runs;
     }
 
@@ -262,6 +265,7 @@ export function htmlToDocxParagraphs(
   const baseTextColor = normalizeHexColor(options.textColor) || "121A1B";
 
   const baseStyle: InlineStyleContext = {
+    fontFamily: "Zain",
     bold: false,
     italics: false,
     underline: false,
@@ -336,9 +340,9 @@ export function htmlToDocxParagraphs(
     const runs = parseNodeToTextRuns(block, baseStyle, fontSizeHalfPoints);
 
     // تجاهل الفقرات الفارغة تماماً
-    const hasVisibleContent = runs.some((r: any) => {
-      return (r.text && r.text.trim().length > 0) || r.break;
-    });
+    // TextRun does not expose public .text/.break properties. Inspect the
+    // source DOM instead, otherwise formatted body paragraphs are discarded.
+    const hasVisibleContent = Boolean(block.textContent?.trim() || block.querySelector("br"));
 
     if (!hasVisibleContent && !isHeading) return;
 

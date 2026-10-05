@@ -50,6 +50,9 @@ import {
   Smartphone,
 } from "lucide-react";
 import RemoteKeyboardModal from "./RemoteKeyboardModal";
+import EditorFontSheet from "./EditorFontSheet";
+import { findEditorFont, type EditorFont } from "../lib/editor-fonts";
+import { applyFontToAll, applyFontToTarget, captureFontTargets, rangeForTarget, type FontTarget } from "../lib/editor-font-formatting";
 import { listenForRemoteKeystrokes, updateRemoteSession, type RemoteKeystrokePayload } from "../lib/remote-keyboard-service";
 import { deactivateRemoteMouse, handleRemoteMousePayload, resetRemoteMouse } from "../lib/remote-mouse";
 import { setRemoteKeyboardSuppressed } from "../lib/soft-keyboard-guard";
@@ -353,11 +356,11 @@ const ChapterItem = React.memo(
       }
     }, [chapter.id, onUpdate]);
 
-    // Sync content updates only when not currently focused or on external updates
+    // Sync external snapshots (including font undo/redo) even while focused.
+    // Local typing remains DOM-owned until its debounced content commit.
     useEffect(() => {
       if (
         divRef.current &&
-        divRef.current !== document.activeElement &&
         divRef.current.innerHTML !== chapter.content
       ) {
         divRef.current.innerHTML = chapter.content;
@@ -632,6 +635,15 @@ const DarAlHikayatMaster: React.FC = () => {
   ]);
   const [showTOC, setShowTOC] = useState(false);
   const [showNovelMenu, setShowNovelMenu] = useState(false);
+  const [showFontSheet, setShowFontSheet] = useState(false);
+  const [fontPreviewRevision, setFontPreviewRevision] = useState(0);
+  const [fontScope, setFontScope] = useState<'التحديد' | 'الفقرة' | 'الكل'>('الفقرة');
+  const [fontInitial, setFontInitial] = useState({ family: 'Thmanyah Sans', weight: 400 });
+  const fontTargetsRef = useRef<FontTarget[]>([]);
+  const lastFontRangeRef = useRef<Range | null>(null);
+  const fontAllRef = useRef(false);
+  const bottomBarRef = useRef<HTMLDivElement>(null);
+  const closeFontSheet = React.useCallback(() => setShowFontSheet(false), []);
   const [history, setHistory] = useState<any[]>([
     {
       content: initialContent || "",
@@ -1276,6 +1288,7 @@ const DarAlHikayatMaster: React.FC = () => {
   };
 
   const handleUndo = () => {
+    setShowFontSheet(false);
     if (isHandwritingMode) {
       handwritingRef.current?.undo();
       setIsDirty(true);
@@ -1295,6 +1308,7 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
   const handleRedo = () => {
+    setShowFontSheet(false);
     if (isHandwritingMode) {
       handwritingRef.current?.redo();
       setIsDirty(true);
@@ -1912,6 +1926,7 @@ const DarAlHikayatMaster: React.FC = () => {
       setHandwritingDataUrl(liveDataUrl);
     }
     setIsSavedMode(true);
+    setShowFontSheet(false);
     setShowUI(true);
     setShowControls(false);
     setIsDirty(false);
@@ -2159,6 +2174,10 @@ const DarAlHikayatMaster: React.FC = () => {
   };
 
   const toggleFontWeight = () => {
+    if (document.querySelector('#story-content [data-editor-font]')) {
+      openFontSheet();
+      return;
+    }
     const nextIndex =
       (fontLevels.indexOf(activeFontWeight) + 1) % fontLevels.length;
     setActiveFontWeight(fontLevels[nextIndex]);
@@ -2389,6 +2408,93 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
+  const fontRoots = () => Array.from(document.querySelectorAll<HTMLElement>('#story-content .editor-container'));
+  const openFontSheet = () => {
+    if (isSavedMode || isHandwritingMode || isAgentEditLocked()) return;
+    const roots = fontRoots();
+    const live = window.getSelection();
+    let range = live?.rangeCount ? live.getRangeAt(0) : null;
+    if (!range || !roots.some(root => root.contains(range!.startContainer))) range = lastFontRangeRef.current;
+    if (!range || !roots.some(root => root.contains(range!.startContainer))) {
+      if (!roots[0]) return;
+      range = document.createRange(); range.selectNodeContents(roots[0]); range.collapse(false);
+    }
+    fontTargetsRef.current = captureFontTargets(roots, range);
+    const element = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer as HTMLElement : range.startContainer.parentElement;
+    const computed = element ? getComputedStyle(element) : null;
+    setFontInitial({ family: findEditorFont(computed?.fontFamily || '')?.family || 'Thmanyah Sans', weight: Number(computed?.fontWeight) || 400 });
+    setFontScope(range.collapsed ? 'الفقرة' : 'التحديد');fontAllRef.current = false;
+    setShowControls(false);setToolbarVisible(false);setShowUI(true);setShowFontSheet(true);
+  };
+  const applyEditorFont = (font: EditorFont, weight: number, all: boolean) => {
+    if (isSavedMode || isHandwritingMode || isAgentEditLocked()) return;
+    const roots = fontRoots();
+    if (!roots.length || fontTargetsRef.current.some(t => !t.root.isConnected)) return;
+    if (pendingFlushRef.current) {clearTimeout(pendingFlushRef.current);pendingFlushRef.current = null;}
+    const snapshot = () => ({
+      content: isNovelMode ? content : roots[0].innerHTML,
+      chapters: isNovelMode ? chapters.map(c => ({...c, content: roots.find(el => el.dataset.chapterId === c.id)?.innerHTML ?? c.content})) : [],
+      isNovel: isNovelMode,
+    });
+    const before = snapshot();
+    const useAll = all || fontAllRef.current;
+    if (useAll) {applyFontToAll(roots, font, weight);fontAllRef.current = true;setFontScope('الكل');}
+    else fontTargetsRef.current.forEach(target => applyFontToTarget(target, font, weight));
+    const after = snapshot();
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      const steps = historyRef.current.slice(0, historyIndexRef.current + 1);
+      if (JSON.stringify(steps[steps.length - 1]) !== JSON.stringify(before)) steps.push(before);
+      steps.push(after);if (steps.length > 100) steps.splice(0, steps.length - 100);
+      historyRef.current = steps;historyIndexRef.current = steps.length - 1;
+      setHistory(steps);setHistoryIndex(steps.length - 1);
+      if (isNovelMode) setChapters(after.chapters);else setContent(after.content);
+      typingStateRef.current = initialTypingState();setIsDirty(true);
+    }
+    setFontPreviewRevision(revision => revision + 1);
+    const target = fontTargetsRef.current[0];
+    if (target?.root.isConnected) {
+      const restored = rangeForTarget(target);
+      const lastTarget = fontTargetsRef.current[fontTargetsRef.current.length - 1];
+      if (lastTarget && lastTarget !== target) {
+        const end = rangeForTarget(lastTarget);restored.setEnd(end.endContainer, end.endOffset);
+      }
+      const selection = window.getSelection();
+      selection?.removeAllRanges();selection?.addRange(restored);rememberRange(restored);setLastEditable(target.root);
+    }
+  };
+  useEffect(() => {
+    const remember = () => {
+      if (showFontSheet) return;
+      const selection = window.getSelection();if (!selection?.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      if (fontRoots().some(root => root.contains(range.startContainer))) lastFontRangeRef.current = range.cloneRange();
+    };
+    const closeOnTyping = (event: Event) => {
+      if ((event.target as Element)?.closest?.('#story-content .editor-container')) setShowFontSheet(false);
+    };
+    document.addEventListener('selectionchange', remember);
+    document.addEventListener('input', closeOnTyping);
+    document.addEventListener('pointerdown', closeOnTyping);
+    return () => {document.removeEventListener('selectionchange', remember);document.removeEventListener('input', closeOnTyping);document.removeEventListener('pointerdown', closeOnTyping);};
+  }, [showFontSheet]);
+
+  useEffect(() => {
+    if (!showFontSheet) return;
+    const frame = requestAnimationFrame(() => {
+      const target = fontTargetsRef.current[0];
+      const panel = document.querySelector('.editor-font-sheet');
+      if (!target?.root.isConnected || !panel) return;
+      const rect = rangeForTarget(target).getBoundingClientRect();
+      const edge = panel.getBoundingClientRect().top;
+      // Leave the actual selected text visible above the floating library.
+      if (edge > 100 && rect.bottom > edge - 24) {
+        const available = edge - 120;
+        window.scrollBy({ top: rect.height > available ? rect.top - 120 : rect.bottom - edge + 40, behavior: 'smooth' });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [showFontSheet, fontPreviewRevision]);
+
   const clearHighlightFromSelection = (selection: Selection, range: Range) => {
     const container = range.commonAncestorContainer;
     const elementsToUnwrap = new Set<HTMLElement>();
@@ -2448,7 +2554,12 @@ const DarAlHikayatMaster: React.FC = () => {
     span.style.borderRadius = "3px";
     span.style.padding = "1px 5px";
     span.style.margin = "0 1px";
-    span.style.fontWeight = "600";
+    if (document.querySelector('#story-content [data-editor-font]')) {
+      span.dataset.preserveFont = 'true';
+      span.style.setProperty('font-weight', 'inherit', 'important');
+    } else {
+      span.style.fontWeight = "600";
+    }
     span.style.boxDecorationBreak = "clone";
     (span.style as any).webkitBoxDecorationBreak = "clone";
     
@@ -2546,7 +2657,8 @@ const DarAlHikayatMaster: React.FC = () => {
         ? rect.bottom + window.scrollY + 60
         : rect.top + window.scrollY - 95;
       
-      const left = Math.max(60, Math.min(window.innerWidth - 60, rect.left + rect.width / 2));
+      const halfWidth = (toolbarRef.current?.offsetWidth || 250) / 2;
+      const left = Math.max(halfWidth + 12, Math.min(window.innerWidth - halfWidth - 12, rect.left + rect.width / 2));
       
       setToolbarPosition({ top, left });
       setToolbarVisible(true);
@@ -3887,6 +3999,7 @@ const DarAlHikayatMaster: React.FC = () => {
 
           <main
             id="story-content"
+            data-font-panel={showFontSheet ? "open" : undefined}
             className={`w-full relative z-0 pb-36 transition-opacity duration-200 ${
               (isHandwritingMode && !isSavedMode) ||
               (isSavedMode && handwritingStrokes.length > 0 && (!content || content === "<br>"))
@@ -3990,6 +4103,7 @@ const DarAlHikayatMaster: React.FC = () => {
           }}
         >
           <div
+            ref={bottomBarRef}
             className="pointer-events-auto w-full max-w-sm h-12 p-1.5 rounded-full backdrop-blur-2xl border-[0.5px] flex justify-between items-center gap-2 transition-all duration-300"
             style={{
               backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
@@ -4239,10 +4353,17 @@ const DarAlHikayatMaster: React.FC = () => {
         </footer>
       )}
 
+      {showFontSheet && !isSavedMode && !isHandwritingMode && <EditorFontSheet
+        theme={currentTheme} anchor={bottomBarRef.current} scope={fontScope}
+        initialFamily={fontInitial.family} initialWeight={fontInitial.weight}
+        onApply={applyEditorFont} onClose={closeFontSheet}/>}
+
       {/* Settings Panel */}
       {!isSavedMode && !isHandwritingMode && (
         <div
-          className={`fixed bottom-28 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
+          aria-hidden={!showControls || !showUI || showFontSheet}
+          inert={!showControls || !showUI || showFontSheet}
+          className={`fixed bottom-28 z-50 backdrop-blur-2xl rounded-3xl border p-6 transition-all duration-500 ${showControls && showUI && !showFontSheet ? "opacity-100" : "opacity-0 translate-y-10 scale-95 pointer-events-none"}`}
           style={{
             left: showAIAssistant && isWideScreen ? `calc((100vw - ${paneWidthCss}) / 2)` : "50%",
             transform: "translateX(-50%)",
@@ -4318,6 +4439,10 @@ const DarAlHikayatMaster: React.FC = () => {
                   } as React.CSSProperties}
                 />
               </div>
+              <button type="button" aria-label="الخطوط" onMouseDown={e => e.preventDefault()} onClick={openFontSheet}
+                className="dar-font-library-trigger" style={{color:currentTheme.text,borderColor:currentTheme.border}}>
+                <Type size={18}/><span>الخطوط</span><ChevronRight size={16} strokeWidth={2.5} style={{marginInlineStart:'auto',transform:'rotate(180deg)'}}/>
+              </button>
               <div className="dar-editor-tools grid grid-cols-5 gap-2 items-center">
                 <div className="flex flex-col items-center gap-2">
                   <span
@@ -4500,7 +4625,7 @@ const DarAlHikayatMaster: React.FC = () => {
         </div>
       )}
 
-      {toolbarVisible && !isAgentEditLocked() && (
+      {toolbarVisible && !showFontSheet && !isAgentEditLocked() && (
         <div
           ref={toolbarRef}
           className="fixed z-50 flex items-center gap-1 p-0.5 px-1.5 rounded-full shadow-2xl backdrop-blur-md transition-all duration-200 ease-out border"
@@ -4514,6 +4639,8 @@ const DarAlHikayatMaster: React.FC = () => {
           }}
           dir="rtl"
         >
+          {!isSavedMode && !isHandwritingMode && <button aria-label="خط النص المحدد" onMouseDown={e => e.preventDefault()} onClick={openFontSheet}
+            className="flex items-center justify-center p-1.5 rounded-full" style={{color:currentTheme.text}}><Type size={16}/></button>}
           {/* Main Highlight Action */}
           <button
             onMouseDown={(e) => {
@@ -4583,7 +4710,7 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Separate Adjacent @ Mention Capsule Button */}
-      {toolbarVisible && !isAgentEditLocked() && screenInfo.canOpenAssistant && wordCount >= 50 && (
+      {toolbarVisible && !showFontSheet && !isAgentEditLocked() && screenInfo.canOpenAssistant && wordCount >= 50 && (
         <button
           onMouseDown={(e) => {
             e.preventDefault();

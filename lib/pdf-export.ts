@@ -51,7 +51,7 @@ function buildStoryHtml(
       el.style.setProperty("border-radius", "3px", "important");
       el.style.setProperty("padding", "1px 5px", "important");
       el.style.setProperty("margin", "0 1px", "important");
-      el.style.setProperty("font-weight", "600", "important");
+      if (!el.hasAttribute("data-editor-font") && !el.hasAttribute("data-preserve-font")) el.style.setProperty("font-weight", "600", "important");
       el.style.setProperty("line-height", "1.4", "important");
       el.style.setProperty("box-decoration-break", "clone", "important");
       el.style.setProperty("-webkit-box-decoration-break", "clone", "important");
