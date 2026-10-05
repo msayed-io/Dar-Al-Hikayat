@@ -4,18 +4,18 @@
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
 }
+.remote-pairing-waiting-dialog { gap: 16px; }
+.remote-pairing-waiting-icon { display: flex; justify-content: center; margin-bottom: -4px; }
 .remote-pairing-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 28px;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding-bottom: 12px;
-  border-bottom-width: 1px;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
 }
-.remote-pairing-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.remote-pairing-phone { width: 28px; height: 28px; flex: 0 0 28px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.remote-pairing-heading { min-width: 0; }
 .remote-pairing-dialog .remote-pairing-title {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.8;
   font-weight: 700;
   margin: 0;
@@ -23,9 +23,7 @@
   overflow: visible;
 }
 .remote-pairing-status {
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: start;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -39,8 +37,9 @@
   max-width: 100%;
 }
 .remote-pairing-close {
-  grid-column: 3;
-  grid-row: 1;
+  position: absolute;
+  top: 16px;
+  left: 16px;
   width: 28px;
   height: 32px;
   border-radius: 50%;
@@ -53,12 +52,11 @@
 .remote-pairing-close:hover { background: rgba(127,127,127,0.1); }
 .remote-pairing-close:focus-visible, .remote-pairing-disconnect:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .remote-pairing-close-action:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-/* The connected state intentionally copies the story-lock dialog's dimensions
-   and centered icon/title/description/action layout; waiting keeps its own size. */
+/* Both states share the story-lock visual language; waiting retains its wider QR layout. */
+.remote-pairing-waiting-dialog .remote-pairing-body { gap: 16px; text-align: center; }
+
 @media (max-width: 359px) {
   .remote-pairing-dialog .remote-pairing-title { font-size: 12px; }
-  .remote-pairing-heading { gap: 4px; }
-  .remote-pairing-phone { width: 20px; height: 24px; flex-basis: 20px; }
   .remote-pairing-status { font-size: 10px; padding-inline: 6px; }
 }
 @media (max-width: 359px) {

@@ -52,7 +52,7 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
   return (
     <div
       dir="rtl"
-      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 ${isConnected ? "bg-black/70" : "bg-black/60"} backdrop-blur-sm animate-in fade-in duration-200`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200`}
       onClick={onClose}
     >
       <div
@@ -61,41 +61,42 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
         aria-labelledby="remote-keyboard-modal-title"
         className={isConnected
           ? "remote-pairing-dialog remote-pairing-connected-dialog border shadow-2xl text-center animate-in zoom-in-95 duration-200"
-          : "remote-pairing-dialog w-full max-w-sm rounded-[24px] p-4 border shadow-2xl relative flex flex-col gap-3.5 overflow-hidden transition-all"}
+          : "remote-pairing-dialog remote-pairing-waiting-dialog w-full max-w-sm border shadow-2xl relative flex flex-col text-center animate-in zoom-in-95 duration-200"}
         style={{
           backgroundColor: themeBg,
           borderColor: themeBorder,
           color: themeText,
-          ...(isConnected ? {
-            width: "260px",
+            width: isConnected ? "260px" : "384px",
             maxWidth: "calc(100vw - 32px)",
             borderRadius: "28px",
             padding: "24px 20px",
             boxShadow: `0 20px 45px -10px ${currentTheme?.shadow || "rgba(0,0,0,0.3)"}`,
-          } : {}),
+
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {!isConnected && <div className="remote-pairing-header" style={{ borderColor: themeBorder }}>
+        {!isConnected && <>
+        <div className="remote-pairing-waiting-icon">
+          <Smartphone size={28} style={{ color: themeAccent }} strokeWidth={2} aria-hidden="true" />
+        </div>
+        <div className="remote-pairing-header">
           <div className="remote-pairing-heading">
-            <div className="remote-pairing-phone" style={{ backgroundColor: `${themeAccent}18`, color: themeAccent }}>
-              <Smartphone size={16} aria-hidden="true" />
-            </div>
             <h3 id="remote-keyboard-modal-title" className="remote-pairing-title">
               ربط الكيبورد اللاسلكي
             </h3>
           </div>
           <span className="remote-pairing-status" role="status" style={{
-            backgroundColor: isConnected ? "rgba(16,185,129,0.12)" : `${themeAccent}15`,
-            color: isConnected ? (isDark ? "#6EE7B7" : "#047857") : themeText,
+            backgroundColor: `${themeAccent}15`,
+            color: themeText,
           }}>
-            {isConnected ? "متصل" : "في انتظار الاتصال"}
+            في انتظار الاتصال
           </span>
           <button type="button" onClick={onClose} aria-label="إغلاق نافذة الاقتران"
             className="remote-pairing-close" style={{ color: themeSecondary }}>
             <X size={18} aria-hidden="true" />
           </button>
-        </div>}
+        </div>
+        </>}
 
         {/* Content Body - Conditional on Connection State */}
         {isConnected ? (
@@ -155,10 +156,10 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
 
               {/* Single official path: the native كيبورد الحكايات app scans this code */}
               <div className="flex-1 flex flex-col justify-center gap-2 min-w-0">
-                <span className="font-zain-bold text-xs leading-snug" style={{ color: themeText }}>
+                <span className="font-zain-reg text-xs leading-relaxed" style={{ color: themeSecondary }}>
                   ١. افتحي تطبيق «كيبورد الحكايات» على الهاتف
                 </span>
-                <span className="font-zain-bold text-xs leading-snug" style={{ color: themeText }}>
+                <span className="font-zain-reg text-xs leading-relaxed" style={{ color: themeSecondary }}>
                   ٢. امسحي الرمز بكاميرا التطبيق للاقتران
                 </span>
 

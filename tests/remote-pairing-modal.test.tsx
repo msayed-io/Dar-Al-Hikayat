@@ -43,5 +43,13 @@ it('copies the lock dialog dimensions and theme pill buttons only while connecte
  const button=dom.host.querySelector<HTMLButtonElement>('.remote-pairing-disconnect')!;
  expect(button.style.borderRadius).toBe('9999px');expect(button.style.height).toBe('34px');expect(button.parentElement!.querySelectorAll('button')).toHaveLength(2);
  expect(button.style.backgroundColor).toBe('rgb(167, 170, 99)');
- await render(false);expect(d.style.width).toBe('');expect(d.style.padding).toBe('');expect(d.classList.contains('max-w-sm')).toBe(true);
+ await render(false);expect(d.style.width).toBe('384px');expect(d.style.padding).toBe('24px 20px');expect(d.classList.contains('max-w-sm')).toBe(true);
+});
+
+it('uses lock styling for waiting while keeping its 384px width and inline status',async()=>{
+ await render();const d=dom.host.querySelector<HTMLElement>('[role="dialog"]')!;
+ expect(d.style.width).toBe('384px');expect(d.style.maxWidth).toBe('calc(100vw - 32px)');expect(d.style.borderRadius).toBe('28px');expect(d.style.padding).toBe('24px 20px');
+ expect(dom.host.querySelector('.remote-pairing-waiting-icon svg')).not.toBeNull();
+ expect(dom.host.querySelector('.remote-pairing-header [role="status"]')).not.toBeNull();
+ expect(dom.host.querySelectorAll('button')).toHaveLength(1);
 });
