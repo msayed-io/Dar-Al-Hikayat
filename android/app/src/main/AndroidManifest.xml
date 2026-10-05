@@ -77,13 +77,20 @@
                 <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION"/>
             </intent-filter>
         </receiver>
-        <activity-alias android:name=".RoyalClassicLauncher" android:enabled="true" android:exported="true" android:icon="@mipmap/ic_launcher_royal_classic" android:targetActivity=".MainActivity" android:label="@string/app_name">
+        <!-- Launcher aliases live in a disposable task, never the WebView task. -->
+        <activity android:name=".LauncherEntryActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:taskAffinity=""
+            android:noHistory="true"
+            android:excludeFromRecents="true"/>
+        <activity-alias android:name=".RoyalClassicLauncher" android:enabled="true" android:exported="true" android:icon="@mipmap/ic_launcher_royal_classic" android:targetActivity=".LauncherEntryActivity" android:label="@string/app_name">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity-alias>
-        <activity-alias android:name=".NightWhisperLauncher" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_night_whisper" android:targetActivity=".MainActivity" android:label="@string/app_name">
+        <activity-alias android:name=".NightWhisperLauncher" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_night_whisper" android:targetActivity=".LauncherEntryActivity" android:label="@string/app_name">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity-alias>
-        <activity-alias android:name=".AppleDarkLauncher" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_apple_dark" android:targetActivity=".MainActivity" android:label="@string/app_name">
+        <activity-alias android:name=".AppleDarkLauncher" android:enabled="false" android:exported="true" android:icon="@mipmap/ic_launcher_apple_dark" android:targetActivity=".LauncherEntryActivity" android:label="@string/app_name">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity-alias>
     </application>

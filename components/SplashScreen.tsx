@@ -34,20 +34,6 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
     ? "#A1A1A6"
     : (isDark ? "#E2DFD2" : "#2C3E30");
 
-  const glassBg = currentTheme.mode === "apple_dark"
-    ? "rgba(28, 28, 30, 0.92)"
-    : isDark
-    ? "rgba(23, 31, 33, 0.92)"
-    : "rgba(255, 255, 255, 0.85)";
-
-  const glassBorder = currentTheme.mode === "apple_dark"
-    ? "rgba(255, 255, 255, 0.12)"
-    : `${currentTheme.accent}40`;
-
-  const glassShadow = isDark
-    ? "0 16px 40px -10px rgba(0, 0, 0, 0.6)"
-    : "0 16px 40px -10px rgba(167, 170, 99, 0.25)";
-
   return (
     <div
       className={`fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden transition-opacity duration-500 ease-out
@@ -100,11 +86,11 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       {/* --- Main Logo Container --- */}
       <div className="relative mb-6 p-1 animate-smooth-pop">
         <div
-          className="relative w-28 h-28 rounded-3xl flex items-center justify-center border shadow-xl overflow-hidden"
+          className="relative w-28 h-28 rounded-3xl flex items-center justify-center border overflow-hidden"
           style={{
-            background: glassBg,
-            borderColor: glassBorder,
-            boxShadow: glassShadow,
+            background: "transparent",
+            borderColor: "transparent",
+            boxShadow: "none",
           }}
         >
           {/* Icon */}

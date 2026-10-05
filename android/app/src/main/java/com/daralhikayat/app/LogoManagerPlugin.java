@@ -4,6 +4,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.util.Log;
+import android.os.Build;
+import java.util.ArrayList;
+import java.util.List;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -25,26 +28,26 @@ public class LogoManagerPlugin extends Plugin {
         super.load();
         // Do NOT mutate or re-toggle activity aliases during startup/onCreate.
         // The Android OS already persists the enabled launcher alias in packages.xml.
-        // Calling setComponentEnabledSetting on startup is what kills the process.
+        // The web theme effect reconciles state idempotently when its theme is ready.
         syncStorage(getContext());
     }
 
     @PluginMethod
-    public void setTheme(PluginCall call) {
+    public synchronized void setTheme(PluginCall call) {
         String theme = call.getString("theme", "royal_classic");
         if (!isSupported(theme)) theme = "royal_classic";
-
-        String previousTheme = getStoredTheme(getContext());
         saveTheme(getContext(), theme);
 
-        // Only touch PackageManager if the theme actually changed or is not in the desired state
-        if (!theme.equals(previousTheme) || !isAliasActive(getContext(), theme)) {
+        try {
+            // Reconcile actual package state; repeated requests are a no-op.
             applyTheme(getContext(), theme);
+            JSObject result = new JSObject();
+            result.put("theme", theme);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "Error applying launcher alias", e);
+            call.reject("Unable to update launcher icon", e);
         }
-
-        JSObject result = new JSObject();
-        result.put("theme", theme);
-        call.resolve(result);
     }
 
     public static void saveTheme(Context context, String theme) {
@@ -101,51 +104,46 @@ public class LogoManagerPlugin extends Plugin {
         return ROYAL;
     }
 
-    private static boolean isAliasActive(Context context, String theme) {
-        try {
-            PackageManager pm = context.getPackageManager();
-            String targetAlias = getAliasForTheme(theme);
-            ComponentName targetComp = new ComponentName(context.getPackageName(), targetAlias);
-            int state = pm.getComponentEnabledSetting(targetComp);
-            if (targetAlias.equals(ROYAL) && state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT) {
-                return true;
-            }
-            return state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
-        } catch (Exception e) {
-            return false;
-        }
+    private static boolean isEnabled(PackageManager pm, ComponentName component) {
+        int state = pm.getComponentEnabledSetting(component);
+        return state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            || (state == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+                && ROYAL.equals(component.getClassName()));
     }
 
-    private static void applyTheme(Context context, String theme) {
-        try {
-            PackageManager pm = context.getPackageManager();
-            String targetAlias = getAliasForTheme(theme);
+    static void applyTheme(Context context, String theme) {
+        PackageManager pm = context.getPackageManager();
+        String targetAlias = getAliasForTheme(theme);
+        // Target first: older Android versions must never have zero launcher entries.
+        List<ComponentName> components = new ArrayList<>();
+        List<Integer> states = new ArrayList<>();
+        ComponentName target = new ComponentName(context.getPackageName(), targetAlias);
+        if (!isEnabled(pm, target)) {
+            components.add(target);
+            states.add(PackageManager.COMPONENT_ENABLED_STATE_ENABLED);
+        }
+        for (String alias : ALL_ALIASES) {
+            ComponentName component = new ComponentName(context.getPackageName(), alias);
+            if (!alias.equals(targetAlias) && isEnabled(pm, component)) {
+                components.add(component);
+                states.add(PackageManager.COMPONENT_ENABLED_STATE_DISABLED);
+            }
+        }
+        if (components.isEmpty()) return;
 
-            // Step 1: Enable the target alias FIRST so the app always maintains an active launcher
-            ComponentName targetComp = new ComponentName(context.getPackageName(), targetAlias);
-            if (pm.getComponentEnabledSetting(targetComp) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+        // API 33+: one atomic package update, not intermediate duplicate icons.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            List<PackageManager.ComponentEnabledSetting> changes = new ArrayList<>();
+            for (int i = 0; i < components.size(); i++) {
+                changes.add(new PackageManager.ComponentEnabledSetting(
+                    components.get(i), states.get(i), PackageManager.DONT_KILL_APP));
+            }
+            pm.setComponentEnabledSettings(changes);
+        } else {
+            for (int i = 0; i < components.size(); i++) {
                 pm.setComponentEnabledSetting(
-                    targetComp,
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                    PackageManager.DONT_KILL_APP
-                );
+                    components.get(i), states.get(i), PackageManager.DONT_KILL_APP);
             }
-
-            // Step 2: Disable all other aliases SECOND
-            for (String alias : ALL_ALIASES) {
-                if (!alias.equals(targetAlias)) {
-                    ComponentName comp = new ComponentName(context.getPackageName(), alias);
-                    if (pm.getComponentEnabledSetting(comp) != PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-                        pm.setComponentEnabledSetting(
-                            comp,
-                            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                            PackageManager.DONT_KILL_APP
-                        );
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error applying launcher alias: " + e.getMessage(), e);
         }
     }
 }

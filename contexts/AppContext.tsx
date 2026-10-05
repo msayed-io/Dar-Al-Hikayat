@@ -447,8 +447,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const toggleTheme = (mode: ThemeMode) => {
+    // The theme effect persists and synchronizes this once after React commits.
     setThemeMode(mode);
-    void syncNativeLogoTheme(mode);
   };
 
   const value = {
