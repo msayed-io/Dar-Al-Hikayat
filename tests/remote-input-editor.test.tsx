@@ -205,3 +205,17 @@ describe("Wireless pointer inside the editor", () => {
     expect(document.activeElement).not.toBe(surface);
   });
 });
+
+it('remote letters stay in order through first-block normalization and later typing', async () => {
+  const surface = editorSurface()!;
+  surface.setAttribute('contenteditable', 'true');
+  Object.defineProperty(document, "execCommand", { configurable: true, writable: true, value: () => false });
+  // jsdom uses the fragment fallback; browser QA also exercises execCommand.
+  for (const char of ['ر', 'ح', 'م', 'ة']) {
+    await push({ type: 'PASTE_TEXT', text: char });
+  }
+  expect(surface.textContent).toBe('رحمة');
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 450)); });
+  await push({ type: 'KEY', char: '!' });
+  expect(surface.textContent).toBe('رحمة!');
+});

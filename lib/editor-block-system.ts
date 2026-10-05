@@ -366,6 +366,22 @@ export function buildNormalizedTextWithMap(rawText: string): NormalizedIndexMapp
 export function ensureBlockIdsInElement(container: HTMLElement): boolean {
   if (!container) return false;
 
+  // Moving an inline/text node into its block collapses live DOM Ranges at
+  // the old parent. cloneRange() is live too, so retain node references and
+  // numeric offsets instead (including boundaries between root children).
+  const selection = window.getSelection();
+  const bookmark = (node: Node | null, offset: number) => {
+    if (!node || !container.contains(node)) return null;
+    const next = node === container ? node.childNodes[offset] : null;
+    const previous = node === container && offset > 0 ? node.childNodes[offset - 1] : null;
+    return () => {
+      if (next?.parentNode) return { node: next.parentNode, offset: Array.prototype.indexOf.call(next.parentNode.childNodes, next) };
+      if (previous?.parentNode) return { node: previous.parentNode, offset: Array.prototype.indexOf.call(previous.parentNode.childNodes, previous) + 1 };
+      return { node, offset };
+    };
+  };
+  const anchor = bookmark(selection?.anchorNode ?? null, selection?.anchorOffset ?? 0);
+  const focus = bookmark(selection?.focusNode ?? null, selection?.focusOffset ?? 0);
   let mutated = false;
   const seenIds = new Set<string>();
 
@@ -447,6 +463,12 @@ export function ensureBlockIdsInElement(container: HTMLElement): boolean {
     mutated = true;
   }
 
+  if (mutated && selection && anchor && focus) {
+    const a = anchor();
+    const f = focus();
+    // Preserve backwards selections as well as the collapsed typing caret.
+    selection.setBaseAndExtent(a.node, a.offset, f.node, f.offset);
+  }
   return mutated;
 }
 
