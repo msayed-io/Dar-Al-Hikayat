@@ -31,7 +31,6 @@ import {
   BookHeart,
   Hourglass,
   Cog,
-  Moon,
   Book,
   List,
   Plus,
@@ -605,7 +604,7 @@ export const checkIsTabletOrWideScreen = (): ScreenClassification => {
 };
 
 const DarAlHikayatMaster: React.FC = () => {
-  const { selectedNote, backToHome, saveNote, currentTheme, toggleTheme } =
+  const { selectedNote, backToHome, saveNote, currentTheme } =
     useApp();
 
   const noteId = selectedNote?.id;
@@ -4308,17 +4307,17 @@ const DarAlHikayatMaster: React.FC = () => {
                   min="16"
                   max="36"
                   value={fontSize}
+                  aria-label="حجم الخط"
                   onChange={(e) => updateFontSize(e.target.value)}
-                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                  className="dar-font-size-range"
                   style={{
-                    accentColor: currentTheme.accent,
-                    backgroundColor: currentTheme.isDark
-                      ? "rgba(255,255,255,0.1)"
-                      : "rgba(0,0,0,0.1)",
-                  }}
+                    "--range-accent": currentTheme.accent,
+                    "--range-track": currentTheme.border,
+                    "--range-progress": `${Math.max(0, Math.min(100, ((Number(fontSize) - 16) / 20) * 100))}%`,
+                  } as React.CSSProperties}
                 />
               </div>
-              <div className="grid grid-cols-4 gap-4 items-center">
+              <div className="dar-editor-tools grid grid-cols-5 gap-2 items-center">
                 <div className="flex flex-col items-center gap-2">
                   <span
                     className="text-[10px] font-zain-bold"
@@ -4460,6 +4459,28 @@ const DarAlHikayatMaster: React.FC = () => {
                     })()}
                   </button>
                 </div>
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-[10px] font-zain-bold whitespace-nowrap" style={{ color: textColor }}>كتابة يدوية</span>
+                  <button
+                    id="handwriting-mode-trigger-btn"
+                    onClick={() => {
+                      setShowControls(false);
+                      setShowColorGrid(false);
+                      setShowStatsPanel(false);
+                      (document.activeElement as HTMLElement)?.blur?.();
+                      setIsHandwritingMode(true);
+                    }}
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center hover:bg-black/5 border"
+                    style={{
+                      backgroundColor: currentTheme.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                      borderColor: currentTheme.border,
+                    }}
+                    title="الكتابة اليدوية والرسم"
+                    aria-label="الكتابة اليدوية والرسم"
+                  >
+                    <PenTool className="w-5 h-5" style={{ color: currentTheme.text }} />
+                  </button>
+                </div>
               </div>
               <div
                 className="flex justify-between items-center mt-4 pt-4 border-t"
@@ -4471,58 +4492,7 @@ const DarAlHikayatMaster: React.FC = () => {
                 >
                   {paperStyles[activePaperStyleIndex].name}
                 </span>
-                <div className="flex gap-2 items-center">
-                  <button
-                    id="handwriting-mode-trigger-btn"
-                    onClick={() => {
-                      setShowControls(false);
-                      setShowColorGrid(false);
-                      setShowStatsPanel(false);
-                      (document.activeElement as HTMLElement)?.blur?.();
-                      setIsHandwritingMode(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm"
-                    style={{
-                      backgroundColor: currentTheme.isDark
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : "rgba(0, 0, 0, 0.05)",
-                      borderColor: currentTheme.accent,
-                      color: currentTheme.accent,
-                    }}
-                    title="الكتابة اليدوية والرسم"
-                  >
-                    <PenTool className="w-3.5 h-3.5" />
-                    <span className="text-[11px] font-zain-bold whitespace-nowrap">
-                      كتابة يدوية
-                    </span>
-                  </button>
-                  <div
-                    className="w-px h-4 mx-0.5"
-                    style={{ backgroundColor: currentTheme.border }}
-                  />
-                  <button
-                    onClick={() => toggleTheme("royal_classic")}
-                    className={`w-6 h-6 rounded-full border transition-transform cursor-pointer ${currentTheme.mode === "royal_classic" ? "ring-2 ring-offset-1 ring-[#A7AA63] scale-110" : "opacity-75 hover:opacity-100"}`}
-                    title="كلاسيكي ملكي"
-                    aria-label="كلاسيكي ملكي"
-                    style={{
-                      backgroundColor: "#EAE6D2",
-                      borderColor: "#121A1B",
-                    }}
-                  />
-                  <button
-                    onClick={() => toggleTheme("night_whisper")}
-                    className={`w-6 h-6 rounded-full border flex items-center justify-center transition-transform cursor-pointer ${currentTheme.mode === "night_whisper" ? "ring-2 ring-offset-1 ring-[#9FA365] scale-110" : "opacity-75 hover:opacity-100"}`}
-                    title="همس الليالي"
-                    aria-label="همس الليالي"
-                    style={{
-                      backgroundColor: "#111718",
-                      borderColor: "#9FA365",
-                    }}
-                  >
-                    <Moon className="w-3 h-3 text-[#9FA365]" />
-                  </button>
-                </div>
+
               </div>
             </>
           )}

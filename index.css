@@ -786,3 +786,109 @@
 
 
 
+
+/* Explicit themed tracks/thumbs: native accent-color does not style an appearance:none range. */
+.dar-font-size-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--range-accent);
+  --range-direction: to right;
+}
+.dar-font-size-range:dir(rtl) { --range-direction: to left; }
+.dar-font-size-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(var(--range-direction), var(--range-accent) 0 var(--range-progress), var(--range-track) var(--range-progress) 100%);
+}
+.dar-font-size-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(var(--range-direction), var(--range-accent) 0 var(--range-progress), var(--range-track) var(--range-progress) 100%);
+}
+.dar-font-size-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--range-accent);
+}
+.dar-font-size-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--range-accent);
+}
+.dar-font-size-range:focus-visible { outline: 2px solid var(--range-accent); outline-offset: 3px; border-radius: 999px; }
+
+/* Source demo indicator, scoped to assistant waiting states only. */
+.dar-thinking-line {
+  display: inline-flex;
+  font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: normal;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.dar-thinking-orb {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+/* Exact shimmer treatment used by the source demo. */
+.dar-thinking-shimmer {
+  position: relative;
+  display: inline-block;
+  color: var(--dar-shimmer-base);
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+.dar-thinking-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--dar-shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: 400% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: dar-thinking-shimmer 2000ms linear infinite;
+}
+@keyframes dar-thinking-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dar-thinking-shimmer::before { animation: none !important; }
+}
+
+/* Keep all five tools equal and inside the card on narrow phones as well. */
+.dar-editor-tools { gap: clamp(4px, 1vw, 8px); }
+.dar-editor-tools > div { min-width: 0; }
+.dar-editor-tools > div > button { width: min(48px, 100%); height: auto; aspect-ratio: 1; }

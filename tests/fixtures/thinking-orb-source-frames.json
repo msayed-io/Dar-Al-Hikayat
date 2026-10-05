@@ -1,0 +1,22 @@
+[
+  {
+    "t": 0,
+    "sha256": "3ba960ee99d1bd797a77adf71538218190a62576eb4588b8ed484923ac8bc389"
+  },
+  {
+    "t": 0.6,
+    "sha256": "f22ad23c70e3135ac54efaad515a28e89b57d519a79114107137e2522ca5e5c1"
+  },
+  {
+    "t": 2.75,
+    "sha256": "bce3eb7afedb9276e0ba5a2923106cbde72e4bdddb3c10fe514eb5cef413a00d"
+  },
+  {
+    "t": 30,
+    "sha256": "d7dcade9f83904966fa24b950a5a82ae0de21586b6730fb22f372e4e2a8a7a6c"
+  },
+  {
+    "t": 300,
+    "sha256": "c900d2015d5ca4ed77ed34fdc2bebccd8c72f4dc906d569c9d87ac255fd29b85"
+  }
+]

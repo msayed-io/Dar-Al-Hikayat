@@ -1,3 +1,4 @@
+import ThinkingIndicator from "./ThinkingIndicator";
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -111,18 +112,12 @@ type WelcomeLine = {
 };
 
 const welcomeLines: WelcomeLine[] = [
-  {
-    title: "ما الذي نكتبه معًا اليوم؟",
-    subtitle: "اسألي بهدوء عن الحبكة، الشخصيات، الصياغة، أو تطور الأحداث.",
-  },
-  {
-    title: "كيف نطور الحكاية اليوم؟",
-    subtitle: "أنا هنا لمعاونتكِ خطوة بخطوة في صقل السرد وبناء المشاهد.",
-  },
-  {
-    title: "في أي تفصيل سردي نبدأ معًا؟",
-    subtitle: "مساحة هادئة لمراجعة النص وتدقيق الأسلوب باحترافية وتوازن.",
-  },
+  { title: "كيف نطوّر الحكاية اليوم؟", subtitle: "أنا هنا لمعاونتكِ خطوة بخطوة في صقل السرد وبناء المشاهد." },
+  { title: "أيّ حكاية نمنحها الحياة اليوم؟", subtitle: "من بذرة الفكرة إلى تفاصيل المشهد، نرافق حكايتكِ بعناية." },
+  { title: "أيّ شخصية نقترب من عالمها اليوم؟", subtitle: "نستكشف دوافع شخصياتكِ وأصواتها، مع الحفاظ على رؤيتكِ." },
+  { title: "أيّ مشهد نُضيء تفاصيله اليوم؟", subtitle: "نعتني بالإيقاع والصورة والحوار، ليصل إحساسكِ إلى القارئ." },
+  { title: "إلى أين يأخذنا خيالكِ اليوم؟", subtitle: "مساحة هادئة لتجربة الأفكار ونسج الاحتمالات على مهل." },
+  { title: "أيّ سطر نصقله معًا اليوم؟", subtitle: "نراجع اللغة ونوازن الإيقاع، ويبقى للنص صوتكِ الخاص." },
 ];
 
 const getInitialWelcomeLineIndex = () => {
@@ -939,7 +934,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const [isMultiline, setIsMultiline] = useState(false);
   const [longMsgs, setLongMsgs] = useState<Set<string>>(new Set());
   const [expandedMsgs, setExpandedMsgs] = useState<Set<string>>(new Set());
-  const [welcomeLineIndex] = useState(getInitialWelcomeLineIndex);
+  const [welcomeLineIndex, setWelcomeLineIndex] = useState(getInitialWelcomeLineIndex);
   const [conversations, setConversations] = useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeFullTextMention, setActiveFullTextMention] = useState<AttachedMention | null>(null);
@@ -1009,10 +1004,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      "dar_alhikayat_ai_welcome_line_index",
-      String(welcomeLineIndex)
-    );
+    try {
+      localStorage.setItem("dar_alhikayat_ai_welcome_line_index", String(welcomeLineIndex));
+    } catch { /* Welcome rotation still works in memory if storage is unavailable. */ }
   }, [welcomeLineIndex]);
 
   // Initial load of conversations
@@ -1125,6 +1119,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   };
 
   const startNewConversation = () => {
+    setWelcomeLineIndex(index => (index + 1) % welcomeLines.length);
     setActiveConversationId(null);
     setMessages([]);
     setInputValue("");
@@ -1791,7 +1786,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     void handleSendMessage(editingContent, messageId);
   };
 
-  const userName = "أستاذة رحمة";
+  const userName = "كاتبتنا رحمة";
 
   return (
     <div
@@ -1829,8 +1824,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none select-none"
         style={{ left: "16px", right: "16px" }}
       >
-        {/* Right Capsule: Dar Al Hikayat AI Title Only */}
-        <div
+        {/* Keep the conversation header; omit its branding capsule on the welcome screen. */}
+        {messages.length > 0 && <div
           className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
           style={{
             height: "44px",
@@ -1849,10 +1844,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               دار الحكايات AI
             </span>
           </div>
-        </div>
+        </div>}
 
         {/* Left Side: Circular Action Buttons (New Chat & Close Button) */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-2 pointer-events-auto" style={{ marginInlineStart: "auto" }}>
           {messages.length > 0 && (
             <button
               type="button"
@@ -2355,20 +2350,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 transition={{ duration: 0.24, ease: "easeOut" }}
                 className="flex flex-col items-center justify-center text-center max-w-[340px] space-y-3"
               >
-                <div
-                  className="w-11 h-11 rounded-full border flex items-center justify-center shadow-xs"
-                  style={{
-                    backgroundColor: currentTheme.glass,
-                    borderColor: currentTheme.border,
-                  }}
-                >
-                  <Sparkles size={20} style={{ color: currentTheme.accent }} />
-                </div>
                 <p
                   className="text-xs font-zain-bold tracking-wide"
                   style={{ color: currentTheme.accent }}
                 >
-                  أهلًا بكِ، {userName}
+                  السلام عليكم، {userName}
                 </p>
                 <h2
                   className="text-base md:text-lg font-zain-xbold leading-snug"
@@ -2383,28 +2369,6 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                   {welcomeLines[welcomeLineIndex].subtitle}
                 </p>
 
-                {/* Quick Prompts Suggestions */}
-                <div className="pt-2 flex flex-wrap gap-1.5 justify-center">
-                  {[
-                    "اقترح حبكة مشوقة للمشهد",
-                    "صقل وتدقيق لغة السرد",
-                    "تطوير حوار بين الشخصيات",
-                  ].map((promptText, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleSendMessage(promptText)}
-                      className="px-3 py-1 rounded-full border text-[11px] font-zain-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                      style={{
-                        backgroundColor: currentTheme.glass,
-                        borderColor: currentTheme.border,
-                        color: currentTheme.text,
-                      }}
-                    >
-                      {promptText}
-                    </button>
-                  ))}
-                </div>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -2485,22 +2449,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                       <div className="w-full mb-1.5" dir="rtl">
                         {m.isStreaming && (!m.content || m.content.trim() === "") ? (
                           <div className="flex items-center gap-2 select-none">
-                            <span
-                              className="agent-text-shimmer text-xs font-zain-bold tracking-wide select-none"
-                              style={{
-                                backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${
-                                  currentTheme.isDark
-                                    ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)"
-                                    : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"
-                                }`,
-                                WebkitBackgroundClip: "text",
-                                backgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                                color: "transparent",
-                              }}
-                            >
-                              جَارٍ التفكير...
-                            </span>
+                            <ThinkingIndicator theme={currentTheme} />
                             {m.isAgent && (
                               <span
                                 className="text-[10px] font-zain-bold tracking-wide px-2 py-0.5 rounded-full border leading-none select-none inline-flex items-center justify-center"
@@ -2851,22 +2800,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                   <div className="w-full flex flex-col animate-in fade-in duration-200">
                     <div className="w-full" dir="rtl">
                       <div className="flex items-center gap-2 mb-1.5 select-none">
-                        <span
-                          className="agent-text-shimmer text-xs font-zain-bold tracking-wide select-none"
-                          style={{
-                            backgroundImage: `${"linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.95) 50%, transparent 75%)"}, ${
-                              currentTheme.isDark
-                                ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)"
-                                : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)"
-                            }`,
-                            WebkitBackgroundClip: "text",
-                            backgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                            color: "transparent",
-                          }}
-                        >
-                          جَارٍ التفكير...
-                        </span>
+                        <ThinkingIndicator theme={currentTheme} />
                         {isAgentExecuting && (
                           <span
                             className="text-[10px] font-zain-bold tracking-wide px-2 py-0.5 rounded-full border leading-none select-none inline-flex items-center justify-center"
