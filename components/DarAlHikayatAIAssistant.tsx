@@ -1824,8 +1824,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none select-none"
         style={{ left: "16px", right: "16px" }}
       >
-        {/* Keep the conversation header; omit its branding capsule on the welcome screen. */}
-        {messages.length > 0 && <div
+        {/* Right Capsule: Dar Al Hikayat AI Title Only */}
+        <div
           className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
           style={{
             height: "44px",
@@ -1844,10 +1844,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               دار الحكايات AI
             </span>
           </div>
-        </div>}
+        </div>
 
         {/* Left Side: Circular Action Buttons (New Chat & Close Button) */}
-        <div className="flex items-center gap-2 pointer-events-auto" style={{ marginInlineStart: "auto" }}>
+        <div className="flex items-center gap-2 pointer-events-auto">
           {messages.length > 0 && (
             <button
               type="button"

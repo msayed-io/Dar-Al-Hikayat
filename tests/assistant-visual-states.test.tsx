@@ -21,7 +21,8 @@ it("welcomes the writer without the empty-state icon or quick prompts and rotate
   await dom.render(view()); await settle();
   expect(dom.host.textContent).toContain('السلام عليكم، كاتبتنا رحمة');
   expect(dom.host.textContent).not.toContain('أستاذة');
-  expect(dom.host.querySelector('header')!.textContent).not.toContain('دار الحكايات AI');
+  expect(dom.host.querySelector('header')!.textContent).toContain('دار الحكايات AI');
+  expect(dom.host.querySelector('header .lucide-sparkles')).not.toBeNull();
   expect(dom.host.textContent).not.toContain('اقترح حبكة مشوقة للمشهد');
   const title = dom.host.querySelector('h2')!;
   expect(title.parentElement?.querySelector('svg')).toBeNull();
