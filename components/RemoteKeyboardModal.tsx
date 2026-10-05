@@ -52,22 +52,31 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
   return (
     <div
       dir="rtl"
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 ${isConnected ? "bg-black/70" : "bg-black/60"} backdrop-blur-sm animate-in fade-in duration-200`}
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="remote-keyboard-modal-title"
-        className="remote-pairing-dialog w-full max-w-sm rounded-[24px] p-4 border shadow-2xl relative flex flex-col gap-3.5 overflow-hidden transition-all"
+        className={isConnected
+          ? "remote-pairing-dialog remote-pairing-connected-dialog border shadow-2xl text-center animate-in zoom-in-95 duration-200"
+          : "remote-pairing-dialog w-full max-w-sm rounded-[24px] p-4 border shadow-2xl relative flex flex-col gap-3.5 overflow-hidden transition-all"}
         style={{
           backgroundColor: themeBg,
           borderColor: themeBorder,
           color: themeText,
+          ...(isConnected ? {
+            width: "260px",
+            maxWidth: "calc(100vw - 32px)",
+            borderRadius: "28px",
+            padding: "24px 20px",
+            boxShadow: `0 20px 45px -10px ${currentTheme?.shadow || "rgba(0,0,0,0.3)"}`,
+          } : {}),
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="remote-pairing-header" style={{ borderColor: themeBorder }}>
+        {!isConnected && <div className="remote-pairing-header" style={{ borderColor: themeBorder }}>
           <div className="remote-pairing-heading">
             <div className="remote-pairing-phone" style={{ backgroundColor: `${themeAccent}18`, color: themeAccent }}>
               <Smartphone size={16} aria-hidden="true" />
@@ -86,20 +95,34 @@ export const RemoteKeyboardModal: React.FC<RemoteKeyboardModalProps> = ({
             className="remote-pairing-close" style={{ color: themeSecondary }}>
             <X size={18} aria-hidden="true" />
           </button>
-        </div>
+        </div>}
 
         {/* Content Body - Conditional on Connection State */}
         {isConnected ? (
-          <div className="remote-pairing-connected">
-            <p className="remote-pairing-ready" style={{ color: themeText }}>
-              الهاتف متصل وجاهز للكتابة.
+          <>
+            <div className="flex justify-center mb-3">
+              <Smartphone className="w-7 h-7" style={{ color: themeAccent }} strokeWidth={2} aria-hidden="true" />
+            </div>
+            <h2 id="remote-keyboard-modal-title" role="status"
+              className="text-base font-zain-xbold mb-1 leading-tight text-center">
+              الكيبورد متصل
+            </h2>
+            <p className="remote-pairing-ready text-xs font-zain-reg mb-4 opacity-70 leading-relaxed text-center px-1">
+              الهاتف جاهز للكتابة.
             </p>
-            <button type="button" onClick={() => onDisconnect?.()}
-              className="remote-pairing-disconnect"
-              style={{ color: isDark ? "#FDA4AF" : "#BE123C", backgroundColor: "rgba(244,63,94,0.08)", borderColor: "rgba(244,63,94,0.24)" }}>
-              قطع الاتصال
-            </button>
-          </div>
+            <div className="flex items-center justify-center gap-3">
+              <button type="button" onClick={() => onDisconnect?.()}
+                className="remote-pairing-disconnect font-zain-bold text-xs shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                style={{ height: "34px", padding: "0 22px", borderRadius: "9999px", backgroundColor: themeAccent, color: themeBg, whiteSpace: "nowrap" }}>
+                قطع الاتصال
+              </button>
+              <button type="button" onClick={onClose} aria-label="إغلاق نافذة الاقتران"
+                className="remote-pairing-close-action font-zain-bold text-xs active:scale-95 transition-all cursor-pointer opacity-70 hover:opacity-100 flex items-center justify-center"
+                style={{ height: "34px", padding: "0 16px", borderRadius: "9999px", color: themeSecondary, whiteSpace: "nowrap" }}>
+                إغلاق
+              </button>
+            </div>
+          </>
         ) : (
           /* PAIRING / QR CODE VIEW */
           <>

@@ -19,8 +19,8 @@ it('keeps the exact pairing URL and both steps, removes the footer and supplemen
  expect(dom.host.querySelectorAll('button')).toHaveLength(1);
 });
 it('connected state has one concise message, one disconnect action and no QR or duplicate panels',async()=>{
- await render(true);expect(dom.host.querySelector('[role="status"]')!.textContent).toBe('متصل');expect(dom.host.querySelector('svg[data-pairing-url]')).toBeNull();
- expect(dom.host.textContent).toContain('الهاتف متصل وجاهز للكتابة.');expect(dom.host.querySelectorAll('button')).toHaveLength(2);
+ await render(true);expect(dom.host.querySelector('[role="status"]')!.textContent).toBe('الكيبورد متصل');expect(dom.host.querySelector('svg[data-pairing-url]')).toBeNull();
+ expect(dom.host.textContent).toContain('الهاتف جاهز للكتابة.');expect(dom.host.querySelectorAll('button')).toHaveLength(2);
  expect(dom.host.textContent).not.toContain('الانتقال للمحرر');expect(dom.host.textContent).not.toContain('التابلت');
  await click('.remote-pairing-disconnect');expect(disconnect).toHaveBeenCalledTimes(1);expect(close).not.toHaveBeenCalled();
 });
@@ -35,4 +35,13 @@ it('closed modal does not start network lookup and keeps loading placeholder whe
 });
 it('switches from connected back to QR without changing the PIN or triggering another action',async()=>{
  await render(true);await render(false);expect(dom.host.querySelector('[data-pairing-url]')!.getAttribute('data-pairing-url')).toContain('pin=481780');expect(disconnect).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
+});
+
+it('copies the lock dialog dimensions and theme pill buttons only while connected',async()=>{
+ await render(true); const d=dom.host.querySelector<HTMLElement>('[role="dialog"]')!;
+ expect(d.style.width).toBe('260px');expect(d.style.maxWidth).toBe('calc(100vw - 32px)');expect(d.style.borderRadius).toBe('28px');expect(d.style.padding).toBe('24px 20px');
+ const button=dom.host.querySelector<HTMLButtonElement>('.remote-pairing-disconnect')!;
+ expect(button.style.borderRadius).toBe('9999px');expect(button.style.height).toBe('34px');expect(button.parentElement!.querySelectorAll('button')).toHaveLength(2);
+ expect(button.style.backgroundColor).toBe('rgb(167, 170, 99)');
+ await render(false);expect(d.style.width).toBe('');expect(d.style.padding).toBe('');expect(d.classList.contains('max-w-sm')).toBe(true);
 });
