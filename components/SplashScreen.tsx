@@ -45,10 +45,6 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       }}
     >
       <style>{`
-        .font-zain-reg   { font-family: 'Zain', sans-serif; font-weight: 400; }
-        .font-zain-bold  { font-family: 'Zain', sans-serif; font-weight: 700; }
-        .font-zain-xbold { font-family: 'Zain', sans-serif; font-weight: 900; }
-
         @keyframes smooth-pop {
           0% {
             opacity: 0;
@@ -84,10 +80,13 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       `}</style>
 
       {/* --- Main Logo Container --- */}
-      <div className="relative mb-6 p-1 animate-smooth-pop">
+      <div className="relative animate-smooth-pop"
+        style={{ marginBottom: 16 }}>
         <div
-          className="relative w-28 h-28 rounded-3xl flex items-center justify-center border overflow-hidden"
+          className="relative flex items-center justify-center"
           style={{
+            width: 64,
+            height: 64,
             background: "transparent",
             borderColor: "transparent",
             boxShadow: "none",
@@ -97,7 +96,8 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           <img
             src={logoSrc}
             alt="شعار الترحيب"
-            className="w-20 h-20 object-contain relative z-20 drop-shadow-md"
+            className="object-contain relative z-20 drop-shadow-md"
+            style={{ width: 64, height: 64 }}
             onError={(e) => {
               e.currentTarget.style.display = "none";
               e.currentTarget.nextElementSibling?.removeAttribute("style");
@@ -112,11 +112,20 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       </div>
 
       {/* --- Text Container --- */}
-      <div className="text-center animate-text-fade flex flex-col items-center">
+      <div className="text-center animate-text-fade flex flex-col items-center"
+        style={{ maxWidth: "100%", paddingInline: 24, boxSizing: "border-box" }}>
         {/* Title */}
         <h1
-          className="text-4xl font-zain-xbold tracking-wide mb-2 drop-shadow-sm"
-          style={{ color: titleColor }}
+          className="drop-shadow-sm"
+          style={{
+            color: titleColor,
+            fontFamily: "'Thmanyah Serif Display', 'Thmanyah Sans', serif",
+            fontWeight: 900,
+            fontSize: "clamp(32px, 5vw, 36px)",
+            lineHeight: 1.4,
+            letterSpacing: "normal",
+            margin: "0 0 8px",
+          }}
         >
           دَارُ الحِكَايَاتِ
         </h1>
@@ -128,8 +137,16 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
         {/* Subtitle */}
         <p
-          className="text-base font-zain-reg tracking-[0.1em]"
-          style={{ color: subtitleColor }}
+          className="dar-splash-byline"
+          style={{
+            color: subtitleColor,
+            fontFamily: "'Thmanyah Serif Text', 'Thmanyah Sans', serif",
+            fontWeight: 500,
+            fontSize: 14,
+            lineHeight: 1.7,
+            letterSpacing: "normal",
+            margin: 0,
+          }}
         >
           للكاتبة رحمه السيد موافي
         </p>

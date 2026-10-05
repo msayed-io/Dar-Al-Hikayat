@@ -8,16 +8,22 @@ import SplashScreen from "../components/SplashScreen";
 let dom: ReturnType<typeof setupDom>;
 beforeEach(() => { dom=setupDom(); app.currentTheme=theme; });
 afterEach(() => { dom.cleanup(); vi.useRealTimers(); });
-it.each(['royal_classic','night_whisper','apple_dark'])('removes only the logo backing, retaining dimensions and text (%s)', async mode => {
+it.each(['royal_classic','night_whisper','apple_dark'])('keeps the transparent logo and gives the title/byline a scoped hierarchy (%s)', async mode => {
   app.currentTheme={...theme,mode,isDark:mode!=='royal_classic'};
   await dom.render(<SplashScreen onFinish={() => {}} />);
   const img=dom.host.querySelector('img')!; const frame=img.parentElement!;
   expect(img.getAttribute('src')).toBe(`/dar-al-hikayat-logo-transparent-${mode}.png`);
-  expect(img.className).toBe('w-20 h-20 object-contain relative z-20 drop-shadow-md');
-  expect(frame.classList.contains('w-28')).toBe(true); expect(frame.classList.contains('h-28')).toBe(true);
-  expect(frame.classList.contains('border')).toBe(true); // preserve box geometry
+  expect(img.style.width).toBe('64px'); expect(img.style.height).toBe('64px');
+  expect(frame.style.width).toBe('64px'); expect(frame.style.height).toBe('64px');
   expect(frame.style.background).toBe('transparent'); expect(frame.style.borderColor).toBe('transparent');expect(frame.style.boxShadow).toBe('none');
-  expect(frame.parentElement!.className).toBe('relative mb-6 p-1 animate-smooth-pop');
+  expect(frame.parentElement!.classList.contains('animate-smooth-pop')).toBe(true);
+  expect(frame.parentElement!.style.marginBottom).toBe('16px');
+  const title=dom.host.querySelector('h1')!; const byline=dom.host.querySelector('p')!;
+  expect(title.style.fontSize).toBe('clamp(32px, 5vw, 36px)');
+  expect(title.style.fontFamily).toContain('Thmanyah Serif Display');
+  expect(byline.style.fontFamily).toContain('Thmanyah Serif Text');
+  expect(byline.style.fontSize).toBe('14px');
+  expect(byline.style.letterSpacing).toBe('normal');
   expect(dom.host.querySelector('h1')!.textContent).toBe('دَارُ الحِكَايَاتِ');
   expect(dom.host.querySelector('p')!.textContent).toBe('للكاتبة رحمه السيد موافي');
 });
