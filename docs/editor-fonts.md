@@ -23,3 +23,9 @@ PDF uses the locally loaded faces and preserves inline font formatting, includin
 ## Expanded collection
 
 Added Cairo, Tajawal, Almarai, Alexandria, Readex Pro, El Messiri, Changa, Harmattan, Lateef, Markazi Text, Mada, Vazirmatn, Kufam, Lalezar, Reem Kufi, Rakkas, Lemonada, Mirza, Gulzar, Noto Kufi Arabic, Marhey, Katibeh, Baloo Bhaijaan 2 and Qahiri. These are OFL-licensed upstream fonts, not copied commercial Canva/Adobe assets. Existing picker geometry, magnetic dissolves, selection handling and export implementations are unchanged by this expansion.
+
+## Fixed-height Android WebView correction
+
+The font sheet now has an explicit **420px border-box height**, matching the previously measured approved family-list height, independent of family/weight count. A `calc(100vh - 112px)` maximum makes it smaller only on short viewports; dynamic viewport units are an optional `@supports` enhancement, never the sole constraint. The wrapper has `flex: 1 1 0; min-height: 0`, and the padded list uses `height: 100%; box-sizing: border-box; overflow-y: auto`. Header/footer, dissolves, editor position and keyboard-selection logic are unchanged.
+
+Root-cause reproduction in Chromium with unsupported `dvh` simulated in the stylesheet: the previous rules produced a 1626px panel with 31 choices. The corrected panel remained 420px for 7, 31 and 5031 rows and for the two-weight detail view. Six layout cases cover 320/390px widths, short 768×360 landscape (248px cap), and both modern/fallback styles. The scroll extent exceeded 240,000px without changing panel height or the editor/document scroll. This is a simulated compatibility test, not physical testing of an older Android WebView.
