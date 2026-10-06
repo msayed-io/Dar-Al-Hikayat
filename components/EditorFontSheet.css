@@ -7,8 +7,7 @@
   border-radius: 28px;
   padding: 0;
   overflow: hidden;
-  /* Keep the approved 420px shell independent of row count. Plain px/vh
-     fallbacks are essential for Android WebViews without dvh support. */
+  /* Bound the shell without changing the original floating list layout. */
   height: 420px;
   max-height: calc(100vh - 112px);
   display: flex;
@@ -89,7 +88,6 @@
 }
 .editor-font-list-wrap {
   position: relative;
-  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   border-radius: inherit;
@@ -109,9 +107,8 @@
 .editor-font-list {
   overflow-y: auto;
   overscroll-behavior: contain;
-  box-sizing: border-box;
-  height: 100%;
-  min-height: 0;
+  max-height: 418px;
+  max-height: min(418px, calc(100vh - 114px));
   padding: 72px 20px 64px;
   scroll-padding: 72px 0 64px;
   scrollbar-width: thin;
@@ -226,10 +223,12 @@
   font-size: 12px;
 }
 
-/* Enhancement only: unsupported dynamic viewport units must never remove
-   the fixed height or the legacy viewport safety limit above. */
+/* Dynamic viewport support is optional, not a prerequisite for bounded size. */
 @supports (height: 100dvh) {
   .editor-font-sheet {
     max-height: calc(100dvh - 112px);
+  }
+  .editor-font-list {
+    max-height: min(418px, calc(100dvh - 114px));
   }
 }

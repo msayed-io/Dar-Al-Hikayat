@@ -26,6 +26,12 @@ Added Cairo, Tajawal, Almarai, Alexandria, Readex Pro, El Messiri, Changa, Harma
 
 ## Fixed-height Android WebView correction
 
-The font sheet now has an explicit **420px border-box height**, matching the previously measured approved family-list height, independent of family/weight count. A `calc(100vh - 112px)` maximum makes it smaller only on short viewports; dynamic viewport units are an optional `@supports` enhancement, never the sole constraint. The wrapper has `flex: 1 1 0; min-height: 0`, and the padded list uses `height: 100%; box-sizing: border-box; overflow-y: auto`. Header/footer, dissolves, editor position and keyboard-selection logic are unchanged.
+The font sheet now has an explicit **420px border-box height**, matching the previously measured approved family-list height, independent of family/weight count. A `calc(100vh - 112px)` maximum makes it smaller only on short viewports; dynamic viewport units are an optional `@supports` enhancement, never the sole constraint. The original v1.0.122 wrapper/list layout is retained: no added flex-basis or percentage height. The list keeps its original 418px maximum (viewport-capped), padding and internal scrolling. Header/footer capsules, dissolve layers, editor position and keyboard-selection logic are unchanged.
 
 Root-cause reproduction in Chromium with unsupported `dvh` simulated in the stylesheet: the previous rules produced a 1626px panel with 31 choices. The corrected panel remained 420px for 7, 31 and 5031 rows and for the two-weight detail view. Six layout cases cover 320/390px widths, short 768×360 landscape (248px cap), and both modern/fallback styles. The scroll extent exceeded 240,000px without changing panel height or the editor/document scroll. This is a simulated compatibility test, not physical testing of an older Android WebView.
+
+## Original-design restoration after v1.0.123
+
+Restored `EditorFontSheet.css` from commit `102a330` (v1.0.122), applying only shell height/viewport limits and legacy-unit fallbacks. Removed the v1.0.123 inner flex-fill and percentage-height changes. Capsule styles, spacing, floating controls, original magnetic masks and blur strengths were taken directly from that reference, not recreated.
+
+Pixel-comparison QA: 18 PNG-exact comparisons against the original stylesheet (three themes × top/middle/end scroll × modern/unsupported-dvh simulation). All match, including the areas under the floating capsules. Six size/scroll stress cases also pass with 5031 rows, two-weight detail/back, short landscape and stationary editor. These are Chromium tests, not physical Android WebView verification. TypeScript, 302 unit tests/36 files and the production web build pass.
