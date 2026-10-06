@@ -16,9 +16,9 @@ import { CITIES, type CityData } from "./prayer-cities";
 import { reverseGeocodeCoordinates } from "./reverse-geocoding";
 
 interface PrayerAlarmPlugin {
-  checkNotificationPermission(): Promise<{ granted: boolean }>;
+  checkNotificationPermission(): Promise<{ granted: boolean; canRequest?: boolean }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
-  requestExactAlarmPermission(): Promise<{ granted: boolean }>;
+  requestExactAlarmPermission(): Promise<{ granted: boolean; openedSettings?: boolean }>;
   canScheduleExactAlarms(): Promise<{ canSchedule: boolean }>;
   isIgnoringBatteryOptimizations?(): Promise<{ isIgnoring: boolean }>;
   requestIgnoreBatteryOptimizations?(): Promise<void>;
@@ -114,15 +114,19 @@ function alarmBody(prayerId: string, type: "exact" | "pre"): string {
 }
 
 /** التحقق من حالة إذن الإشعارات */
-export async function checkNotificationPermission(): Promise<boolean> {
-  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm) return true;
+export async function getNotificationPermissionStatus(): Promise<{ granted: boolean; canRequest: boolean }> {
+  if (Capacitor.getPlatform() !== "android") return { granted: true, canRequest: false };
   try {
-    const { granted } = await PrayerAlarm.checkNotificationPermission();
-    return granted;
+    const result = await PrayerAlarm.checkNotificationPermission();
+    return { granted: result.granted, canRequest: result.canRequest ?? !result.granted };
   } catch (e) {
     console.error("Check notification permission error:", e);
-    return false;
+    return { granted: false, canRequest: false };
   }
+}
+
+export async function checkNotificationPermission(): Promise<boolean> {
+  return (await getNotificationPermissionStatus()).granted;
 }
 
 /** طلب صلاحية الإشعارات */
@@ -135,6 +139,12 @@ export async function requestNotificationPermission(): Promise<boolean> {
     console.error("Notification permission error:", e);
     return false;
   }
+}
+
+/** Explicit setup action: surface native launch failures instead of a silent false. */
+export async function requestExactAlarmAccess(): Promise<{ granted: boolean; openedSettings?: boolean }> {
+  if (Capacitor.getPlatform() !== "android") return { granted: true };
+  return PrayerAlarm.requestExactAlarmPermission();
 }
 
 /** طلب صلاحية التنبيهات الدقيقة */
@@ -162,22 +172,26 @@ export async function checkExactAlarmPermission(): Promise<boolean> {
 }
 
 /** فتح شاشة إعدادات إشعارات التطبيق */
-export async function openNativeNotificationSettings(): Promise<void> {
-  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.openNotificationSettings) return;
+export async function openNativeNotificationSettings(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.openNotificationSettings) return false;
   try {
     await PrayerAlarm.openNotificationSettings();
+    return true;
   } catch (e) {
     console.error("Open notification settings error:", e);
+    return false;
   }
 }
 
 /** فتح صفحة إعدادات التطبيق في النظام */
-export async function openNativeAppSettings(): Promise<void> {
-  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.openAppSettings) return;
+export async function openNativeAppSettings(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== "android" || !PrayerAlarm?.openAppSettings) return false;
   try {
     await PrayerAlarm.openAppSettings();
+    return true;
   } catch (e) {
     console.error("Open app settings error:", e);
+    return false;
   }
 }
 

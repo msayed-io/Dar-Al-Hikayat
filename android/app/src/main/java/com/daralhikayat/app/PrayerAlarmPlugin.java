@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
 import androidx.core.content.ContextCompat;
+import androidx.core.app.NotificationManagerCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -184,40 +185,42 @@ public class PrayerAlarmPlugin extends Plugin {
         call.resolve();
     }
 
-    @PluginMethod
-    public void checkNotificationPermission(PluginCall pluginCall) {
-        boolean granted = true;
-        if (Build.VERSION.SDK_INT >= 33) {
-            granted = ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
-        }
-        JSObject jSObject = new JSObject();
-        jSObject.put("granted", granted);
-        pluginCall.resolve(jSObject);
+    private boolean notificationsEnabled() {
+        boolean runtimeGranted = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED;
+        return runtimeGranted && NotificationManagerCompat.from(getContext()).areNotificationsEnabled();
     }
 
     @PluginMethod
-    public void requestNotificationPermission(PluginCall pluginCall) {
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED) {
-                JSObject jSObject = new JSObject();
-                jSObject.put("granted", true);
-                pluginCall.resolve(jSObject);
-                return;
-            }
-            requestPermissionForAlias("notifications", pluginCall, "notificationPermissionCallback");
+    public void checkNotificationPermission(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("granted", notificationsEnabled());
+        // A blocked app toggle (including Android <13) or permanent denial
+        // requires Settings; another runtime request cannot display a prompt.
+        boolean runtimeMissing = Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED;
+        result.put("canRequest", runtimeMissing && getPermissionState("notifications") != PermissionState.DENIED);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(getContext(), "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED &&
+            getPermissionState("notifications") != PermissionState.DENIED) {
+            requestPermissionForAlias("notifications", call, "notificationPermissionCallback");
             return;
         }
-        JSObject jSObject2 = new JSObject();
-        jSObject2.put("granted", true);
-        pluginCall.resolve(jSObject2);
+        JSObject result = new JSObject();
+        result.put("granted", notificationsEnabled());
+        call.resolve(result);
     }
 
     @PermissionCallback
-    private void notificationPermissionCallback(PluginCall pluginCall) {
-        boolean granted = getPermissionState("notifications") == PermissionState.GRANTED;
-        JSObject jSObject = new JSObject();
-        jSObject.put("granted", granted);
-        pluginCall.resolve(jSObject);
+    private void notificationPermissionCallback(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("granted", notificationsEnabled());
+        call.resolve(result);
     }
 
     @PluginMethod
@@ -235,9 +238,13 @@ public class PrayerAlarmPlugin extends Plugin {
                 intent.setData(Uri.parse("package:" + getContext().getPackageName()));
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getContext().startActivity(intent);
-            } catch (Exception ignored) {}
+            } catch (Exception error) {
+                pluginCall.reject("Failed to open exact alarm settings: " + error.getMessage());
+                return;
+            }
             JSObject jSObject2 = new JSObject();
             jSObject2.put("granted", false);
+            jSObject2.put("openedSettings", true);
             pluginCall.resolve(jSObject2);
             return;
         }

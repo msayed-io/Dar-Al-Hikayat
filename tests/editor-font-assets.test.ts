@@ -25,8 +25,12 @@ it("ships unmodified pinned upstream font files with licences and only actual we
       expect(bytes.length).toBe(asset.bytes);
       expect(bytes.readUInt32BE(0)).toBe(0x00010000);
       expect(css).toContain(`/fonts/editor/${name}`);
-      for (let w = asset.weightRange[0]; w <= asset.weightRange[1]; w += 100)
-        supported.add(w);
+      supported.add(asset.weightRange[0]);
+      supported.add(asset.weightRange[1]);
+      for (let w = 100; w <= 1000; w += 100) {
+        if (w >= asset.weightRange[0] && w <= asset.weightRange[1])
+          supported.add(w);
+      }
     }
     expect(font.weights).toEqual([...supported].sort((a, b) => a - b));
   }

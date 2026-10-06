@@ -16,7 +16,7 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { PermissionsGuard } from "./components/PermissionsGuard";
 import {
-  requestNotificationPermission,
+  checkNotificationPermission,
   schedulePrayerAlarms,
   getLastSavedLocation,
   loadPrayerSettings,
@@ -494,7 +494,7 @@ function App() {
           const result = await checkForUpdates({ manual: false, force });
           if (result.hasUpdate && result.latestInfo && result.currentVersion) {
             if (Capacitor.getPlatform() === "android") {
-              const notificationPermissionGranted = await requestNotificationPermission();
+              const notificationPermissionGranted = await checkNotificationPermission();
               if (!notificationPermissionGranted) {
                 console.warn("Update notification skipped: Android notification permission is not granted");
               }

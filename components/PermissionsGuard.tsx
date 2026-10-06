@@ -1,729 +1,297 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import {
-  Bell,
-  AlarmClock,
-  MapPin,
-  Check,
-  ChevronLeft,
-  X,
-  Loader2,
-  ExternalLink,
-  Sparkles,
-} from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapApp } from "@capacitor/app";
 import { Geolocation } from "@capacitor/geolocation";
 import { useApp } from "../contexts/AppContext";
+import type { PrayerLocation } from "../lib/prayer-config";
 import {
-  checkNotificationPermission,
+  getNotificationPermissionStatus,
   requestNotificationPermission,
-  requestExactAlarmPermission,
   checkExactAlarmPermission,
+  requestExactAlarmAccess,
   openNativeNotificationSettings,
-  requestBatteryOptimizationExemption,
+  openNativeAppSettings,
   autoDetectLocation,
   checkOrRequestLocationPermissionSmartly,
   schedulePrayerAlarms,
 } from "../lib/prayer-alarms";
+import PermissionSetupDialog, {
+  type PermissionStep,
+} from "./PermissionSetupDialog";
 
-interface PermissionsGuardProps {
-  children: React.ReactNode;
+const COMPLETE = "dar_onboarding_completed";
+const DEFERRED = "dar_permissions_deferred_this_session";
+const LOCATION_CONFIRMED = "dar_prayer_location_confirmed";
+function flag(storage: Storage, key: string) {
+  try {
+    return storage.getItem(key) === "true";
+  } catch {
+    return false;
+  }
+}
+function mark(storage: Storage, key: string) {
+  try {
+    storage.setItem(key, "true");
+  } catch {
+    /* permission flow still works without storage */
+  }
+}
+function validLocation(
+  location: PrayerLocation | null | undefined,
+): location is PrayerLocation {
+  return (
+    !!location &&
+    Number.isFinite(location.latitude) &&
+    Number.isFinite(location.longitude) &&
+    Math.abs(location.latitude) <= 90 &&
+    Math.abs(location.longitude) <= 180
+  );
 }
 
-type StepKey = "notifications" | "exactAlarms" | "location" | "completed";
-
-export const PermissionsGuard: React.FC<PermissionsGuardProps> = ({ children }) => {
+/** One owner for foreground permission prompts; background launch/update checks never request them. */
+export const PermissionsGuard: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { currentTheme, prayerState, updatePrayerState } = useApp();
-  const [showSheet, setShowSheet] = useState(false);
-  const [currentStep, setCurrentStep] = useState<StepKey>("notifications");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [stepSuccessPulse, setStepSuccessPulse] = useState(false);
-  const [needsManualSettings, setNeedsManualSettings] = useState(false);
-  const isCheckingRef = useRef(false);
-
-  // تحقق شامل وتحديث الخطوة الحالية بدقة
-  const evaluatePermissions = useCallback(async (): Promise<{
-    notifications: boolean;
-    exactAlarms: boolean;
-    location: boolean;
-  }> => {
-    if (Capacitor.getPlatform() !== "android") {
-      return { notifications: true, exactAlarms: true, location: true };
-    }
-
+  const latest = useRef({ prayerState, updatePrayerState });
+  latest.current = { prayerState, updatePrayerState };
+  const [visible, setVisible] = useState(false);
+  const [step, setStep] = useState<PermissionStep>("notifications");
+  const [busy, setBusy] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [message, setMessage] = useState("");
+  const mounted = useRef(false),
+    shown = useRef(false),
+    working = useRef(false),
+    generation = useRef(0);
+  const acceptedLocation = useRef<PrayerLocation | null>(null);
+  const view = useRef({ step, settings });
+  view.current = { step, settings };
+  const current = (token: number) =>
+    mounted.current && token === generation.current;
+  const show = (next: PermissionStep, manual = false) => {
+    view.current = { step: next, settings: manual };
+    setStep(next);
+    setSettings(manual);
+    shown.current = true;
+    setVisible(true);
+  };
+  const run = useCallback(async (work: (token: number) => Promise<void>) => {
+    if (!mounted.current || working.current) return;
+    const token = ++generation.current;
+    working.current = true;
+    setBusy(true);
+    setMessage("");
     try {
-      const notif = await checkNotificationPermission();
-      const alarm = await checkExactAlarmPermission();
-      const geoPerm = await Geolocation.checkPermissions();
-      const loc = geoPerm.location === "granted" || geoPerm.coarseLocation === "granted";
-
-      return {
-        notifications: notif,
-        exactAlarms: alarm,
-        location: loc,
-      };
+      await work(token);
     } catch (e) {
-      console.error("Error evaluating permissions:", e);
-      return { notifications: false, exactAlarms: false, location: false };
+      if (current(token)) {
+        console.warn("Permission setup action failed", e);
+        setMessage("تعذّر إكمال الخطوة. حاول مجددًا.");
+      }
+    } finally {
+      if (current(token)) {
+        working.current = false;
+        setBusy(false);
+      }
     }
   }, []);
-
-  // تحديد الخطوة التالية غير المفعلة
-  const resolveActiveStep = useCallback(
-    (perms: { notifications: boolean; exactAlarms: boolean; location: boolean }): StepKey => {
-      if (!perms.notifications) return "notifications";
-      if (!perms.exactAlarms) return "exactAlarms";
-      if (!perms.location) return "location";
-      return "completed";
-    },
-    []
-  );
-
-  // الفحص الأولي عند تشغيل التطبيق
-  useEffect(() => {
-    if (Capacitor.getPlatform() !== "android") {
-      setShowSheet(false);
+  const advance = useCallback(async (token: number, initial = false) => {
+    const [notifications, exact] = await Promise.all([
+      getNotificationPermissionStatus(),
+      checkExactAlarmPermission(),
+    ]);
+    if (!current(token)) return;
+    if (!notifications.granted) {
+      show("notifications", !notifications.canRequest);
       return;
     }
-
-    const initCheck = async () => {
-      const alreadyDone = localStorage.getItem("dar_onboarding_completed") === "true";
-      if (alreadyDone) {
-        // Completing the first-run setup does not mean notification permission
-        // is still granted: the user may have denied it or revoked it later.
-        // Re-check this permission on every launch so update notifications can
-        // be enabled through the official Android prompt when needed.
-        let notificationsGranted = await checkNotificationPermission();
-        if (!notificationsGranted && sessionStorage.getItem("dar_notification_prompt_attempted") !== "true") {
-          sessionStorage.setItem("dar_notification_prompt_attempted", "true");
-          notificationsGranted = await requestNotificationPermission();
-        }
-        if (!notificationsGranted) {
-          setCurrentStep("notifications");
-          setShowSheet(true);
-        } else {
-          setShowSheet(false);
-        }
-        return;
-      }
-
-      let perms = await evaluatePermissions();
-      if (!perms.notifications && sessionStorage.getItem("dar_notification_prompt_attempted") !== "true") {
-        sessionStorage.setItem("dar_notification_prompt_attempted", "true");
-        await requestNotificationPermission();
-        perms = await evaluatePermissions();
-      }
-      const nextStep = resolveActiveStep(perms);
-
-      if (nextStep === "completed") {
-        localStorage.setItem("dar_onboarding_completed", "true");
-        setShowSheet(false);
-      } else {
-        setCurrentStep(nextStep);
-        setShowSheet(true);
-      }
-    };
-
-    initCheck();
-  }, [evaluatePermissions, resolveActiveStep]);
-
-  // إعادة الفحص التلقائي بمجرد رجوع المستخدم للتطبيق من إعدادات النظام (App Resume / Focus)
-  const handleAppResume = useCallback(async () => {
-    if (isCheckingRef.current || !showSheet) return;
-    isCheckingRef.current = true;
-
-    try {
-      const perms = await evaluatePermissions();
-      const nextStep = resolveActiveStep(perms);
-
-      // إذا كانت الخطوة السابقة قد تفعلت بنجاح أثناء غياب المستخدم
-      if (nextStep !== currentStep && currentStep !== "completed") {
-        setStepSuccessPulse(true);
-        setNeedsManualSettings(false);
-        setTimeout(() => {
-          setStepSuccessPulse(false);
-          setCurrentStep(nextStep);
-          if (nextStep === "completed") {
-            handleFinishOnboarding();
-          }
-        }, 600);
-      }
-    } finally {
-      isCheckingRef.current = false;
+    if (!exact) {
+      show("exactAlarms");
+      return;
     }
-  }, [showSheet, currentStep, evaluatePermissions, resolveActiveStep]);
-
-  useEffect(() => {
-    if (Capacitor.getPlatform() !== "android") return;
-
-    let appListenerHandle: any = null;
-    CapApp.addListener("appStateChange", (state) => {
-      if (state.isActive) {
-        handleAppResume();
+    if (initial && flag(localStorage, COMPLETE)) {
+      shown.current = false;
+      setVisible(false);
+      return;
+    }
+    const saved = latest.current.prayerState.location;
+    const location =
+      acceptedLocation.current ||
+      ((flag(localStorage, LOCATION_CONFIRMED) ||
+        flag(localStorage, COMPLETE)) &&
+      validLocation(saved)
+        ? saved
+        : null);
+    if (!validLocation(location)) {
+      show("location");
+      return;
+    }
+    show("finish");
+    const scheduled = await schedulePrayerAlarms(
+      location,
+      latest.current.prayerState.method,
+    );
+    if (!current(token)) return;
+    if (!scheduled) {
+      setMessage("تعذّر تفعيل التنبيهات. حاول مجددًا.");
+      return;
+    }
+    mark(localStorage, COMPLETE);
+    shown.current = false;
+    setVisible(false);
+  }, []);
+  const dismiss = useCallback(() => {
+    ++generation.current;
+    working.current = false;
+    shown.current = false;
+    mark(sessionStorage, DEFERRED);
+    setBusy(false);
+    setVisible(false);
+    // Deferral is not successful setup, and never schedules or opens another prompt.
+  }, []);
+  const resume = useCallback(() => {
+    if (!shown.current) return;
+    void run(async (token) => {
+      const wasLocation = view.current.step === "location";
+      if (wasLocation && view.current.settings) {
+        const permission = await Geolocation.checkPermissions();
+        if (!current(token)) return;
+        if (
+          permission.location === "granted" ||
+          permission.coarseLocation === "granted"
+        ) {
+          setSettings(false);
+          view.current.settings = false;
+        }
+        return; // Permission != a GPS fix. The writer explicitly chooses Detect / saved city.
       }
-    }).then((handle) => {
-      appListenerHandle = handle;
+      await advance(token);
     });
-
-    window.addEventListener("focus", handleAppResume);
-
+  }, [run, advance]);
+  useEffect(() => {
+    mounted.current = true;
+    if (Capacitor.getPlatform() !== "android")
+      return () => {
+        mounted.current = false;
+      };
+    if (!flag(sessionStorage, DEFERRED))
+      void run((token) => advance(token, true));
+    let disposed = false;
+    let listener: { remove: () => Promise<void> } | undefined;
+    CapApp.addListener("appStateChange", (state) => {
+      if (state.isActive) resume();
+    })
+      .then((handle) => {
+        if (disposed) void handle.remove();
+        else listener = handle;
+      })
+      .catch((e) => console.warn("Permission resume listener unavailable", e));
+    window.addEventListener("focus", resume);
     return () => {
-      if (appListenerHandle) {
-        appListenerHandle.remove();
-      }
-      window.removeEventListener("focus", handleAppResume);
+      disposed = true;
+      mounted.current = false;
+      ++generation.current;
+      working.current = false;
+      void listener?.remove();
+      window.removeEventListener("focus", resume);
     };
-  }, [handleAppResume]);
-
-  // معالجة الخطوة 1: طلب إذن الإشعارات
-  const handleActivateNotifications = async () => {
-    setIsProcessing(true);
-    setNeedsManualSettings(false);
-    try {
-      const granted = await requestNotificationPermission();
-      if (granted) {
-        setStepSuccessPulse(true);
-        setTimeout(async () => {
-          setStepSuccessPulse(false);
-          const perms = await evaluatePermissions();
-          const next = resolveActiveStep(perms);
-          setCurrentStep(next);
-          if (next === "completed") handleFinishOnboarding();
-        }, 600);
-      } else {
-        // إذا رفض المستخدم، نوفر زر الانتقال المباشر للإعدادات
-        setNeedsManualSettings(true);
-      }
-    } catch (e) {
-      console.error("Activate notifications error:", e);
-      setNeedsManualSettings(true);
-    } finally {
-      setIsProcessing(false);
+  }, [advance, resume, run]);
+  const acceptLocation = async (location: PrayerLocation, token: number) => {
+    if (!current(token)) return;
+    if (!validLocation(location)) {
+      setMessage("الموقع غير صالح. حاول تحديده مجددًا.");
+      return;
     }
+    acceptedLocation.current = location;
+    latest.current.updatePrayerState({ location });
+    mark(localStorage, LOCATION_CONFIRMED);
+    await advance(token);
   };
-
-  // معالجة الخطوة 2: طلب إذن المنبهات الدقيقة
-  const handleActivateExactAlarms = async () => {
-    setIsProcessing(true);
-    try {
-      const granted = await requestExactAlarmPermission();
-      // طلب استثناء توفير الطاقة لمنع نظام أندرويد من قتل التنبيهات في الخلفية
-      await requestBatteryOptimizationExemption();
-      if (granted) {
-        setStepSuccessPulse(true);
-        setTimeout(async () => {
-          setStepSuccessPulse(false);
-          const perms = await evaluatePermissions();
-          const next = resolveActiveStep(perms);
-          setCurrentStep(next);
-          if (next === "completed") handleFinishOnboarding();
-        }, 600);
-      }
-    } catch (e) {
-      console.error("Activate exact alarms error:", e);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // معالجة الخطوة 3: تحديد الموقع عبر GPS
-  const handleActivateLocation = async () => {
-    setIsProcessing(true);
-    try {
-      const isGranted = await checkOrRequestLocationPermissionSmartly();
-      if (isGranted) {
-        try {
-          const loc = await autoDetectLocation();
-          updatePrayerState({ location: loc });
-          const scheduled = await schedulePrayerAlarms(loc, prayerState.method);
-          if (!scheduled) {
-            setNeedsManualSettings(true);
-            return;
-          }
-        } catch (gpsErr) {
-          console.warn("GPS lookup failed:", gpsErr);
-          setNeedsManualSettings(true);
+  const activate = () =>
+    void run(async (token) => {
+      const active = view.current;
+      if (active.step === "notifications") {
+        if (active.settings) {
+          const opened = await openNativeNotificationSettings();
+          if (current(token))
+            setMessage(
+              opened
+                ? "فعّل الإشعارات ثم عُد للتطبيق."
+                : "تعذّر فتح الإعدادات. حاول مجددًا.",
+            );
           return;
         }
-        setStepSuccessPulse(true);
-        setTimeout(() => {
-          setStepSuccessPulse(false);
-          setCurrentStep("completed");
-          handleFinishOnboarding();
-        }, 600);
-      } else {
-        setNeedsManualSettings(true);
-      }
-    } catch (e) {
-      console.error("Activate location error:", e);
-      setNeedsManualSettings(true);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // إنهاء التهيئة وجدولة المنبهات وإغلاق البطاقة
-  const handleFinishOnboarding = () => {
-    localStorage.setItem("dar_onboarding_completed", "true");
-    if (prayerState.location) {
-      schedulePrayerAlarms(prayerState.location, prayerState.method).catch((e) => {
-        console.warn("Auto schedule on onboarding close failed:", e);
-      });
-    }
-    setTimeout(() => {
-      setShowSheet(false);
-    }, 700);
-  };
-
-  // تخطي مؤقت
-  const handleDismiss = () => {
-    localStorage.setItem("dar_onboarding_completed", "true");
-    setShowSheet(false);
-    if (prayerState.location) {
-      schedulePrayerAlarms(prayerState.location, prayerState.method).catch(() => {});
-    }
-  };
-
-  const getStepNumber = () => {
-    switch (currentStep) {
-      case "notifications":
-        return { current: 1, total: 3 };
-      case "exactAlarms":
-        return { current: 2, total: 3 };
-      case "location":
-        return { current: 3, total: 3 };
-      case "completed":
-        return { current: 3, total: 3 };
-    }
-  };
-
-  const stepMeta = getStepNumber();
-
+        const granted = await requestNotificationPermission();
+        if (!current(token)) return;
+        if (granted) await advance(token);
+        else {
+          show("notifications", true);
+          setMessage("لم يُمنح الإذن. يمكنك تفعيله من الإعدادات.");
+        }
+      } else if (active.step === "exactAlarms") {
+        const result = await requestExactAlarmAccess();
+        if (!current(token)) return;
+        if (result.granted) await advance(token);
+        else setMessage("فعّل المنبّهات ثم عُد للتطبيق.");
+        // Never launch battery settings over the exact-alarm screen.
+      } else if (active.step === "location") {
+        if (active.settings) {
+          const opened = await openNativeAppSettings();
+          if (current(token))
+            setMessage(
+              opened
+                ? "اسمح بالموقع ثم عُد للتطبيق."
+                : "تعذّر فتح الإعدادات. حاول مجددًا.",
+            );
+          return;
+        }
+        const granted = await checkOrRequestLocationPermissionSmartly();
+        if (!current(token)) return;
+        if (!granted) {
+          show("location", true);
+          setMessage(
+            validLocation(latest.current.prayerState.location)
+              ? "اسمح بالموقع، أو استخدم المدينة الحالية."
+              : "اسمح بالموقع من إعدادات التطبيق.",
+          );
+          return;
+        }
+        try {
+          const location = await autoDetectLocation();
+          await acceptLocation(location, token);
+        } catch {
+          if (current(token))
+            setMessage("تعذّر تحديد الموقع. فعّل خدمة الموقع وحاول مجددًا.");
+        }
+      } else await advance(token);
+    });
+  const saved = prayerState.location;
   return (
     <>
-      {/* التطبيق يعمل دائماً في الخلفية بدون حجب */}
       {children}
-
-      {/* البطاقة السفلية التفاعلية للتهيئة خطوة بخطوة */}
-      <AnimatePresence>
-        {showSheet && (
-          <div className="fixed inset-0 z-[120] flex items-end justify-center pointer-events-auto p-0 select-none">
-            {/* الخلفية المظلمة الشفافة ذات التغبيش */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              onClick={handleDismiss}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
-            />
-
-            {/* الحاوية السفلية بتصميم Apple المتناسق */}
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 320 }}
-              className="relative w-full max-w-lg overflow-hidden border-t shadow-2xl z-10"
-              style={{
-                borderTopLeftRadius: "36px",
-                borderTopRightRadius: "36px",
-                borderBottomLeftRadius: "0px",
-                borderBottomRightRadius: "0px",
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                backdropFilter: "blur(28px)",
-                WebkitBackdropFilter: "blur(28px)",
-                boxShadow: `0 -12px 48px -8px ${currentTheme.shadow}`,
-                paddingBottom: "max(env(safe-area-inset-bottom), 24px)",
-              }}
-              onClick={(e) => e.stopPropagation()}
-              dir="rtl"
-            >
-              {/* مقبض السحب العلوي (Drag Handle) */}
-              <div className="flex justify-center pt-3 pb-1">
-                <div
-                  className="w-12 h-1.5 rounded-full opacity-35"
-                  style={{ backgroundColor: currentTheme.text }}
-                />
-              </div>
-
-              {/* صف الترويسة: زر الإغلاق + العنوان + كبسولة التقدم */}
-              <div className="px-5 pt-2 pb-2 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  className="w-8 h-8 rounded-full border flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                  style={{
-                    backgroundColor: currentTheme.isDark
-                      ? "rgba(255,255,255,0.08)"
-                      : "rgba(0,0,0,0.05)",
-                    borderColor: currentTheme.border,
-                    color: currentTheme.text,
-                  }}
-                  title="تخطي"
-                  aria-label="تخطي"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-                <h2
-                  className="font-zain-xbold text-lg leading-tight text-center"
-                  style={{ color: currentTheme.text }}
-                >
-                  تهيئة التنبيهات والأذونات
-                </h2>
-
-                {/* كبسولة الخطوة الحالية */}
-                <div
-                  className="rounded-full border text-xs font-zain-bold px-2.5 py-1"
-                  style={{
-                    backgroundColor: `${currentTheme.accent}15`,
-                    borderColor: `${currentTheme.accent}30`,
-                    color: currentTheme.accent,
-                  }}
-                >
-                  {currentStep === "completed"
-                    ? "مكتمل"
-                    : `الخطوة ${stepMeta.current} من ${stepMeta.total}`}
-                </div>
-              </div>
-
-              {/* مؤشر الخطوات الدائري المصغر */}
-              <div className="flex items-center justify-center gap-1.5 pt-1 pb-3">
-                {[1, 2, 3].map((stepIdx) => {
-                  const isActive = stepMeta.current === stepIdx;
-                  const isDone = stepMeta.current > stepIdx || currentStep === "completed";
-                  return (
-                    <div
-                      key={stepIdx}
-                      className="h-1.5 rounded-full transition-all duration-300"
-                      style={{
-                        width: isActive ? "24px" : "8px",
-                        backgroundColor: isDone || isActive
-                          ? currentTheme.accent
-                          : currentTheme.isDark
-                          ? "rgba(255,255,255,0.2)"
-                          : "rgba(0,0,0,0.15)",
-                      }}
-                    />
-                  );
-                })}
-              </div>
-
-              {/* محتوى الخطوة الواحدة (تفعيل واحد فقط في كل مرة) */}
-              <div className="px-5 pb-4">
-                <AnimatePresence mode="wait">
-                  {/* ── الخطوة 1: إشعارات الصلوات ── */}
-                  {currentStep === "notifications" && (
-                    <motion.div
-                      key="step-notifications"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.22 }}
-                      className="flex flex-col items-center text-center py-4 px-2 w-full"
-                    >
-                      <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4 transition-transform"
-                        style={{
-                          backgroundColor: stepSuccessPulse
-                            ? "rgba(34, 197, 94, 0.18)"
-                            : `${currentTheme.accent}15`,
-                          borderColor: stepSuccessPulse
-                            ? "rgba(34, 197, 94, 0.4)"
-                            : `${currentTheme.accent}30`,
-                          color: stepSuccessPulse ? "#16a34a" : currentTheme.accent,
-                        }}
-                      >
-                        {stepSuccessPulse ? (
-                          <Check className="w-7 h-7 text-green-600 animate-scale" />
-                        ) : (
-                          <Bell className="w-6 h-6" />
-                        )}
-                      </div>
-
-                      <h3
-                        className="font-zain-xbold text-lg mb-1.5"
-                        style={{ color: currentTheme.text }}
-                      >
-                        إشعارات الصلوات والتحديثات
-                      </h3>
-
-                      <p
-                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
-                        style={{ color: currentTheme.secondary }}
-                      >
-                        تفعيل إشعارات الأذان والتذكيرات، والتنبيه عند توفر تحديث جديد للتطبيق.
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={handleActivateNotifications}
-                        disabled={isProcessing || stepSuccessPulse}
-                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-                        style={{
-                          backgroundColor: currentTheme.accent,
-                          color: currentTheme.isDark ? "#111" : "#fff",
-                          opacity: isProcessing ? 0.75 : 1,
-                        }}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : stepSuccessPulse ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <Bell className="w-4 h-4" />
-                        )}
-                        <span>
-                          {stepSuccessPulse
-                            ? "تم تفعيل الإشعارات بنجاح"
-                            : "تفعيل إشعارات التطبيق"}
-                        </span>
-                      </button>
-
-                      {needsManualSettings && (
-                        <button
-                          type="button"
-                          onClick={() => openNativeNotificationSettings()}
-                          className="mt-3 text-xs font-zain-bold flex items-center gap-1.5 opacity-85 hover:opacity-100 transition-opacity cursor-pointer"
-                          style={{ color: currentTheme.accent }}
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>فتح إعدادات إشعارات التطبيق في الهاتف</span>
-                        </button>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {/* ── الخطوة 2: المنبهات الدقيقة وتخطي الخمول ── */}
-                  {currentStep === "exactAlarms" && (
-                    <motion.div
-                      key="step-exactAlarms"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.22 }}
-                      className="flex flex-col items-center text-center py-4 px-2 w-full"
-                    >
-                      <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4 transition-transform"
-                        style={{
-                          backgroundColor: stepSuccessPulse
-                            ? "rgba(34, 197, 94, 0.18)"
-                            : `${currentTheme.accent}15`,
-                          borderColor: stepSuccessPulse
-                            ? "rgba(34, 197, 94, 0.4)"
-                            : `${currentTheme.accent}30`,
-                          color: stepSuccessPulse ? "#16a34a" : currentTheme.accent,
-                        }}
-                      >
-                        {stepSuccessPulse ? (
-                          <Check className="w-7 h-7 text-green-600 animate-scale" />
-                        ) : (
-                          <AlarmClock className="w-6 h-6" />
-                        )}
-                      </div>
-
-                      <h3
-                        className="font-zain-xbold text-lg mb-1.5"
-                        style={{ color: currentTheme.text }}
-                      >
-                        المنبهات الدقيقة
-                      </h3>
-
-                      <p
-                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
-                        style={{ color: currentTheme.secondary }}
-                      >
-                        تفعيل إذن المنبه الدقيق لتنبيهك في وقت الأذان بدقة فائقة وتخطي وضع سكون الهاتف.
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={handleActivateExactAlarms}
-                        disabled={isProcessing || stepSuccessPulse}
-                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-                        style={{
-                          backgroundColor: currentTheme.accent,
-                          color: currentTheme.isDark ? "#111" : "#fff",
-                          opacity: isProcessing ? 0.75 : 1,
-                        }}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : stepSuccessPulse ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <AlarmClock className="w-4 h-4" />
-                        )}
-                        <span>
-                          {stepSuccessPulse
-                            ? "تم تفعيل المنبهات الدقيقة"
-                            : "تفعيل المنبه الدقيق"}
-                        </span>
-                      </button>
-
-                      <p
-                        className="mt-3 text-[11px] font-zain-reg opacity-65 max-w-xs"
-                        style={{ color: currentTheme.secondary }}
-                      >
-                        سيتم توجيهك لشاشة الإعدادات لتفعيل الخيار، ثم العودة تلقائياً.
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {/* ── الخطوة 3: تحديد الموقع الجغرافي ── */}
-                  {currentStep === "location" && (
-                    <motion.div
-                      key="step-location"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.22 }}
-                      className="flex flex-col items-center text-center py-4 px-2 w-full"
-                    >
-                      <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4 transition-transform"
-                        style={{
-                          backgroundColor: stepSuccessPulse
-                            ? "rgba(34, 197, 94, 0.18)"
-                            : `${currentTheme.accent}15`,
-                          borderColor: stepSuccessPulse
-                            ? "rgba(34, 197, 94, 0.4)"
-                            : `${currentTheme.accent}30`,
-                          color: stepSuccessPulse ? "#16a34a" : currentTheme.accent,
-                        }}
-                      >
-                        {stepSuccessPulse ? (
-                          <Check className="w-7 h-7 text-green-600 animate-scale" />
-                        ) : (
-                          <MapPin className="w-6 h-6" />
-                        )}
-                      </div>
-
-                      <h3
-                        className="font-zain-xbold text-lg mb-1.5"
-                        style={{ color: currentTheme.text }}
-                      >
-                        تحديد الموقع الجغرافي
-                      </h3>
-
-                      <p
-                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
-                        style={{ color: currentTheme.secondary }}
-                      >
-                        تحديد موقعك الجغرافي تلقائياً لضبط وحساب مواقيت الصلاة بدقة متناهية.
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={handleActivateLocation}
-                        disabled={isProcessing || stepSuccessPulse}
-                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-                        style={{
-                          backgroundColor: currentTheme.accent,
-                          color: currentTheme.isDark ? "#111" : "#fff",
-                          opacity: isProcessing ? 0.75 : 1,
-                        }}
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : stepSuccessPulse ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <MapPin className="w-4 h-4" />
-                        )}
-                        <span>
-                          {stepSuccessPulse
-                            ? "تم استشعار الموقع بنجاح"
-                            : "تحديد الموقع تلقائياً (GPS)"}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleFinishOnboarding}
-                        className="mt-3 text-xs font-zain-bold opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                        style={{ color: currentTheme.text }}
-                      >
-                        الاستمرار بالموقع المعتمد ({prayerState.location?.cityNameAr || "بلبيس، الشرقية"})
-                      </button>
-                    </motion.div>
-                  )}
-
-                  {/* ── حالة الاكتمال والاحتفال ── */}
-                  {currentStep === "completed" && (
-                    <motion.div
-                      key="step-completed"
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -15 }}
-                      transition={{ duration: 0.22 }}
-                      className="flex flex-col items-center text-center py-4 px-2 w-full"
-                    >
-                      <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center border shadow-xs mb-4"
-                        style={{
-                          backgroundColor: "rgba(34, 197, 94, 0.18)",
-                          borderColor: "rgba(34, 197, 94, 0.4)",
-                          color: "#16a34a",
-                        }}
-                      >
-                        <Sparkles className="w-6 h-6 text-green-600 animate-bounce" />
-                      </div>
-
-                      <h3
-                        className="font-zain-xbold text-lg mb-1.5"
-                        style={{ color: currentTheme.text }}
-                      >
-                        اكتملت التهيئة بنجاح
-                      </h3>
-
-                      <p
-                        className="font-zain-reg text-sm opacity-80 mb-6 max-w-xs leading-relaxed"
-                        style={{ color: currentTheme.secondary }}
-                      >
-                        تم ضبط منبهات الأذان وجدولة مواقيت الصلاة بدقة متناهية.
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={handleFinishOnboarding}
-                        className="w-full h-11 rounded-full font-zain-bold text-sm shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-                        style={{
-                          backgroundColor: currentTheme.accent,
-                          color: currentTheme.isDark ? "#111" : "#fff",
-                        }}
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>ابدأ استخدام دَارُ الحِكَايَاتِ</span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* زر تخطي مؤقتاً في أسفل البطاقة */}
-              {currentStep !== "completed" && (
-                <div className="flex justify-center pt-1 pb-1">
-                  <button
-                    type="button"
-                    onClick={handleDismiss}
-                    className="text-xs font-zain-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
-                    style={{ color: currentTheme.text }}
-                  >
-                    تخطي التهيئة مؤقتاً (يمكنك ضبطها لاحقاً من الإعدادات)
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {visible && (
+        <PermissionSetupDialog
+          theme={currentTheme}
+          step={step}
+          busy={busy}
+          settings={settings}
+          message={message}
+          savedCity={
+            validLocation(saved)
+              ? saved.cityNameAr || saved.cityName
+              : undefined
+          }
+          onActivate={activate}
+          onDismiss={dismiss}
+          onUseSaved={() =>
+            void run((token) =>
+              acceptLocation(latest.current.prayerState.location!, token),
+            )
+          }
+        />
+      )}
     </>
   );
 };
-
 export default PermissionsGuard;

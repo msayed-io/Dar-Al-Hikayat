@@ -118,3 +118,49 @@
   font-style: normal;
   font-display: swap;
 }
+
+@font-face { font-family: 'Cairo'; src: url('/fonts/editor/Cairo-Variable.ttf') format('truetype'); font-weight: 200 1000; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-ExtraLight.ttf') format('truetype'); font-weight: 275; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-Light.ttf') format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-ExtraBold.ttf') format('truetype'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Tajawal'; src: url('/fonts/editor/Tajawal-Black.ttf') format('truetype'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Almarai'; src: url('/fonts/editor/Almarai-Light.ttf') format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Almarai'; src: url('/fonts/editor/Almarai-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Almarai'; src: url('/fonts/editor/Almarai-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Almarai'; src: url('/fonts/editor/Almarai-ExtraBold.ttf') format('truetype'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Alexandria'; src: url('/fonts/editor/Alexandria-Variable.ttf') format('truetype'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Readex Pro'; src: url('/fonts/editor/ReadexPro-Variable.ttf') format('truetype'); font-weight: 160 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'El Messiri'; src: url('/fonts/editor/ElMessiri-Variable.ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Changa'; src: url('/fonts/editor/Changa-Variable.ttf') format('truetype'); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Harmattan'; src: url('/fonts/editor/Harmattan-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Harmattan'; src: url('/fonts/editor/Harmattan-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Harmattan'; src: url('/fonts/editor/Harmattan-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Harmattan'; src: url('/fonts/editor/Harmattan-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-ExtraLight.ttf') format('truetype'); font-weight: 200; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-Light.ttf') format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lateef'; src: url('/fonts/editor/Lateef-ExtraBold.ttf') format('truetype'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Markazi Text'; src: url('/fonts/editor/MarkaziText-Variable.ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Mada'; src: url('/fonts/editor/Mada-Variable.ttf') format('truetype'); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Vazirmatn'; src: url('/fonts/editor/Vazirmatn-Variable.ttf') format('truetype'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Kufam'; src: url('/fonts/editor/Kufam-Variable.ttf') format('truetype'); font-weight: 400 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lalezar'; src: url('/fonts/editor/Lalezar-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Reem Kufi'; src: url('/fonts/editor/ReemKufi-Variable.ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Rakkas'; src: url('/fonts/editor/Rakkas-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Lemonada'; src: url('/fonts/editor/Lemonada-Variable.ttf') format('truetype'); font-weight: 300 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Mirza'; src: url('/fonts/editor/Mirza-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Mirza'; src: url('/fonts/editor/Mirza-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Mirza'; src: url('/fonts/editor/Mirza-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Mirza'; src: url('/fonts/editor/Mirza-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Gulzar'; src: url('/fonts/editor/Gulzar-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Noto Kufi Arabic'; src: url('/fonts/editor/NotoKufiArabic-Variable.ttf') format('truetype'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Marhey'; src: url('/fonts/editor/Marhey-Variable.ttf') format('truetype'); font-weight: 300 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Katibeh'; src: url('/fonts/editor/Katibeh-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Baloo Bhaijaan 2'; src: url('/fonts/editor/BalooBhaijaan2-Variable.ttf') format('truetype'); font-weight: 400 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Qahiri'; src: url('/fonts/editor/Qahiri-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }

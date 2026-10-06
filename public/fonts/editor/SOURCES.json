@@ -204,6 +204,624 @@
         700
       ],
       "axes": {}
+    },
+    {
+      "file": "Cairo-Variable.ttf",
+      "originalFilename": "Cairo[slnt,wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf",
+      "sha256": "667c987182391c91f4e57a2f455b1794fb5e3ee6ca4ef3383e86bb690fa9c964",
+      "bytes": 599548,
+      "weightRange": [
+        200.0,
+        1000.0
+      ],
+      "axes": {
+        "wght": [
+          200.0,
+          1000.0
+        ],
+        "slnt": [
+          -11.0,
+          11.0
+        ]
+      }
+    },
+    {
+      "file": "Tajawal-ExtraLight.ttf",
+      "originalFilename": "Tajawal-ExtraLight.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-ExtraLight.ttf",
+      "sha256": "a12ffbfaaec30ab8142edc60fa4727b104a90eb54c6a200a76988a1ec2ec11dc",
+      "bytes": 55784,
+      "weightRange": [
+        275,
+        275
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Tajawal-Light.ttf",
+      "originalFilename": "Tajawal-Light.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-Light.ttf",
+      "sha256": "ab26ed3e0c5af2c71b469b5780decff8088d290ab91aa29b07321580136e813a",
+      "bytes": 61864,
+      "weightRange": [
+        300,
+        300
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Tajawal-Regular.ttf",
+      "originalFilename": "Tajawal-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-Regular.ttf",
+      "sha256": "6882892da3e03527d5db2bbab3b48bde6ef2e878a43f522d1a4eebda90010a19",
+      "bytes": 60364,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Tajawal-Medium.ttf",
+      "originalFilename": "Tajawal-Medium.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-Medium.ttf",
+      "sha256": "1ff8bd943a261c9dd7906bdb1993cab87b6d925a7fb5f848cdb51ed301531090",
+      "bytes": 62280,
+      "weightRange": [
+        500,
+        500
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Tajawal-Bold.ttf",
+      "originalFilename": "Tajawal-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-Bold.ttf",
+      "sha256": "0342ab6b74b6bd1b4b5bf7beda45a9734a2b3147a31e8a3a45b6a3417a52d9d7",
+      "bytes": 59988,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Tajawal-ExtraBold.ttf",
+      "originalFilename": "Tajawal-ExtraBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-ExtraBold.ttf",
+      "sha256": "3d1298b747c22579f9e1bdeb0d4165064cb17f7e66145e2f43f9deb12ad7a2cf",
+      "bytes": 59648,
+      "weightRange": [
+        800,
+        800
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Tajawal-Black.ttf",
+      "originalFilename": "Tajawal-Black.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/tajawal/Tajawal-Black.ttf",
+      "sha256": "da582a579d3200869535dc994d2349608a8582042f8776b3679b157015db287c",
+      "bytes": 59028,
+      "weightRange": [
+        900,
+        900
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Almarai-Light.ttf",
+      "originalFilename": "Almarai-Light.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/almarai/Almarai-Light.ttf",
+      "sha256": "a57bca270340202a28899f7488ee76ed9b93115b89d7a81db92d68e29993da5a",
+      "bytes": 149480,
+      "weightRange": [
+        300,
+        300
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Almarai-Regular.ttf",
+      "originalFilename": "Almarai-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/almarai/Almarai-Regular.ttf",
+      "sha256": "5b5cad33c8e5922083728d271cdcda91f96ba291f1307eccc4f4ef732dc19622",
+      "bytes": 152824,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Almarai-Bold.ttf",
+      "originalFilename": "Almarai-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/almarai/Almarai-Bold.ttf",
+      "sha256": "06401391b5b39fbcf2bc0c6a6e03faf992435e7b011183a1861737e913af8613",
+      "bytes": 156672,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Almarai-ExtraBold.ttf",
+      "originalFilename": "Almarai-ExtraBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/almarai/Almarai-ExtraBold.ttf",
+      "sha256": "9f8f72f1cb06db787a5b32e314a109267e53c505c9f9ab0dad5aa8ff8b219a07",
+      "bytes": 168292,
+      "weightRange": [
+        800,
+        800
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Alexandria-Variable.ttf",
+      "originalFilename": "Alexandria[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/alexandria/Alexandria%5Bwght%5D.ttf",
+      "sha256": "db8ae03b62d55a65aa4e04307878df8c00d6e5388e4800635cbe0e22b6411b64",
+      "bytes": 332488,
+      "weightRange": [
+        100.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          100.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "ReadexPro-Variable.ttf",
+      "originalFilename": "ReadexPro[HEXP,wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/readexpro/ReadexPro%5BHEXP%2Cwght%5D.ttf",
+      "sha256": "268bba7e1e8f3b14d798b3fb0e40ebaa3fc39308c9ac0020e2faf6df181cc30e",
+      "bytes": 278544,
+      "weightRange": [
+        160.0,
+        700.0
+      ],
+      "axes": {
+        "wght": [
+          160.0,
+          700.0
+        ],
+        "HEXP": [
+          0.0,
+          100.0
+        ]
+      }
+    },
+    {
+      "file": "ElMessiri-Variable.ttf",
+      "originalFilename": "ElMessiri[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/elmessiri/ElMessiri%5Bwght%5D.ttf",
+      "sha256": "5d58d5259d2accccba39cffe12e1226e88b6afc5150e3605eb2a9c2fe06ccab0",
+      "bytes": 138664,
+      "weightRange": [
+        400.0,
+        700.0
+      ],
+      "axes": {
+        "wght": [
+          400.0,
+          700.0
+        ]
+      }
+    },
+    {
+      "file": "Changa-Variable.ttf",
+      "originalFilename": "Changa[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/changa/Changa%5Bwght%5D.ttf",
+      "sha256": "7c4f7a14d4b70ac8816ea8df3a0b127aee4c5f5af7239aca2afecc84ddc7f4d3",
+      "bytes": 132140,
+      "weightRange": [
+        200.0,
+        800.0
+      ],
+      "axes": {
+        "wght": [
+          200.0,
+          800.0
+        ]
+      }
+    },
+    {
+      "file": "Harmattan-Regular.ttf",
+      "originalFilename": "Harmattan-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/harmattan/Harmattan-Regular.ttf",
+      "sha256": "5fbaafc51ad21663729b168afaff5f28d3e3087f1fc736ada32d7cd99674c0e0",
+      "bytes": 573500,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Harmattan-Medium.ttf",
+      "originalFilename": "Harmattan-Medium.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/harmattan/Harmattan-Medium.ttf",
+      "sha256": "e83a209c87145152dcc4df18ffdd50aad8407fb563135392e168c896e932d2d5",
+      "bytes": 579456,
+      "weightRange": [
+        500,
+        500
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Harmattan-SemiBold.ttf",
+      "originalFilename": "Harmattan-SemiBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/harmattan/Harmattan-SemiBold.ttf",
+      "sha256": "83479450450a50da78412f2f48b274883095a23a01d6bf36db54e769cb09b11d",
+      "bytes": 561880,
+      "weightRange": [
+        600,
+        600
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Harmattan-Bold.ttf",
+      "originalFilename": "Harmattan-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/harmattan/Harmattan-Bold.ttf",
+      "sha256": "eb9de49ecb72d34e14c768bea6f9a7831f6bd2c15b062fcc2bb17b0ac967bc67",
+      "bytes": 559624,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-ExtraLight.ttf",
+      "originalFilename": "Lateef-ExtraLight.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-ExtraLight.ttf",
+      "sha256": "d22920471ea9305e50b18674a285975cd9856059dd1dccb088becb101090c328",
+      "bytes": 240832,
+      "weightRange": [
+        200,
+        200
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-Light.ttf",
+      "originalFilename": "Lateef-Light.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-Light.ttf",
+      "sha256": "f5c18f8c66cc30a61cc009f86b31aeecc4d81804fe4ef847cef4d2288a1e6723",
+      "bytes": 239892,
+      "weightRange": [
+        300,
+        300
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-Regular.ttf",
+      "originalFilename": "Lateef-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-Regular.ttf",
+      "sha256": "fcbd9e0227a4d7238880defa5fd74c012d69351150709e559a8577446145c2fc",
+      "bytes": 241092,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-Medium.ttf",
+      "originalFilename": "Lateef-Medium.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-Medium.ttf",
+      "sha256": "b08e71723c6bdcc7855a1384ced2cc459f0fbbc65dfa0dfa0a94b9983d484ef1",
+      "bytes": 242052,
+      "weightRange": [
+        500,
+        500
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-SemiBold.ttf",
+      "originalFilename": "Lateef-SemiBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-SemiBold.ttf",
+      "sha256": "ac0ba34269c19062340d942c5ad4ecc41ab8b9d21df92973372a7e1d7a421ff2",
+      "bytes": 242260,
+      "weightRange": [
+        600,
+        600
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-Bold.ttf",
+      "originalFilename": "Lateef-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-Bold.ttf",
+      "sha256": "eee405eeb4e81491b0b659fb40dc016765292022d74406c616f72501e160afe2",
+      "bytes": 243260,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lateef-ExtraBold.ttf",
+      "originalFilename": "Lateef-ExtraBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lateef/Lateef-ExtraBold.ttf",
+      "sha256": "ee6406b63af32993054b1f7e2d6ff0fd7c91c409b0d4818bb1d686f709f0cdff",
+      "bytes": 244116,
+      "weightRange": [
+        800,
+        800
+      ],
+      "axes": {}
+    },
+    {
+      "file": "MarkaziText-Variable.ttf",
+      "originalFilename": "MarkaziText[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/markazitext/MarkaziText%5Bwght%5D.ttf",
+      "sha256": "424b7331681160ff2a4b209bfc356ea9564d429a7daea43ee4dc28de8ff4f9fe",
+      "bytes": 296896,
+      "weightRange": [
+        400.0,
+        700.0
+      ],
+      "axes": {
+        "wght": [
+          400.0,
+          700.0
+        ]
+      }
+    },
+    {
+      "file": "Mada-Variable.ttf",
+      "originalFilename": "Mada[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/mada/Mada%5Bwght%5D.ttf",
+      "sha256": "bf4d193ee78cea2fd8bdc9e64e5cb7e8a19ff76ab74f97a9a4a0e80f8f4cefde",
+      "bytes": 181408,
+      "weightRange": [
+        200.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          200.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "Vazirmatn-Variable.ttf",
+      "originalFilename": "Vazirmatn[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/vazirmatn/Vazirmatn%5Bwght%5D.ttf",
+      "sha256": "696249a2c74b39ffdef55de4df2809c5b639d3ff80d618d8160a095d2fd49dca",
+      "bytes": 241328,
+      "weightRange": [
+        100.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          100.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "Kufam-Variable.ttf",
+      "originalFilename": "Kufam[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/kufam/Kufam%5Bwght%5D.ttf",
+      "sha256": "f17a89b518c833de289598d0662bb9a07d09cc7d75b7079a15f1305f624bbcda",
+      "bytes": 428544,
+      "weightRange": [
+        400.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          400.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "Lalezar-Regular.ttf",
+      "originalFilename": "Lalezar-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lalezar/Lalezar-Regular.ttf",
+      "sha256": "7b80807bc831f141de0f7dcf6816412bf0c548968d548c5156ca388733390ea9",
+      "bytes": 290016,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "ReemKufi-Variable.ttf",
+      "originalFilename": "ReemKufi[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/reemkufi/ReemKufi%5Bwght%5D.ttf",
+      "sha256": "33ead1986cd48c138c4d906c9e5a6341877268461f97623409a2014de1cd4aa4",
+      "bytes": 127152,
+      "weightRange": [
+        400.0,
+        700.0
+      ],
+      "axes": {
+        "wght": [
+          400.0,
+          700.0
+        ]
+      }
+    },
+    {
+      "file": "Rakkas-Regular.ttf",
+      "originalFilename": "Rakkas-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/rakkas/Rakkas-Regular.ttf",
+      "sha256": "54278882e4774c14d50c3b555f127d0fe586366d5b787316ebbcbd8108829e60",
+      "bytes": 146824,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Lemonada-Variable.ttf",
+      "originalFilename": "Lemonada[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/lemonada/Lemonada%5Bwght%5D.ttf",
+      "sha256": "84134e9e1da7d593839073157980a4d38296d2be10b61469a8f3169204959ad9",
+      "bytes": 189204,
+      "weightRange": [
+        300.0,
+        700.0
+      ],
+      "axes": {
+        "wght": [
+          300.0,
+          700.0
+        ]
+      }
+    },
+    {
+      "file": "Mirza-Regular.ttf",
+      "originalFilename": "Mirza-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/mirza/Mirza-Regular.ttf",
+      "sha256": "5b1ac6cb285ca3492e313a53d5252b9784bf7607f2835a2d44cb3cbad0168539",
+      "bytes": 177820,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Mirza-Medium.ttf",
+      "originalFilename": "Mirza-Medium.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/mirza/Mirza-Medium.ttf",
+      "sha256": "423532407cc832ef84cc8f08a3359f26b50e721c8aa0e00221e4215cc83440b3",
+      "bytes": 177352,
+      "weightRange": [
+        500,
+        500
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Mirza-SemiBold.ttf",
+      "originalFilename": "Mirza-SemiBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/mirza/Mirza-SemiBold.ttf",
+      "sha256": "4225215d0df4ad389c4ac29d48fddc531703776591ade64c23f6f995669d4078",
+      "bytes": 177188,
+      "weightRange": [
+        600,
+        600
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Mirza-Bold.ttf",
+      "originalFilename": "Mirza-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/mirza/Mirza-Bold.ttf",
+      "sha256": "306b412a39d9f93ca840c13ca62300eb5c7712e2afa94bd7ef2272b51131be6d",
+      "bytes": 177052,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Gulzar-Regular.ttf",
+      "originalFilename": "Gulzar-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/gulzar/Gulzar-Regular.ttf",
+      "sha256": "246337973ac64e8b70fe611405dcf32a395a8885c4497dc45dbc4975d3ac0831",
+      "bytes": 963496,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "NotoKufiArabic-Variable.ttf",
+      "originalFilename": "NotoKufiArabic[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/notokufiarabic/NotoKufiArabic%5Bwght%5D.ttf",
+      "sha256": "494f6b61469d7a02a2d63f0fc4930bb007388d8cfe551de5eb98354e100889f3",
+      "bytes": 434204,
+      "weightRange": [
+        100.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          100.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "Marhey-Variable.ttf",
+      "originalFilename": "Marhey[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/marhey/Marhey%5Bwght%5D.ttf",
+      "sha256": "19c30686157ec965797fae8c8feb7bb142b082217227562d1a809c067df447e9",
+      "bytes": 198704,
+      "weightRange": [
+        300.0,
+        700.0
+      ],
+      "axes": {
+        "wght": [
+          300.0,
+          700.0
+        ]
+      }
+    },
+    {
+      "file": "Katibeh-Regular.ttf",
+      "originalFilename": "Katibeh-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/katibeh/Katibeh-Regular.ttf",
+      "sha256": "334eeadb58eb442734fe7dea87412cbbd8c3fd00294252723aadf19a850cf11f",
+      "bytes": 189124,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "BalooBhaijaan2-Variable.ttf",
+      "originalFilename": "BalooBhaijaan2[wght].ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/baloobhaijaan2/BalooBhaijaan2%5Bwght%5D.ttf",
+      "sha256": "3e9f07fbc796c0ddcb3e6e0aa26f9c86741d9f5b7f5cb72f4ed3c06e55a19336",
+      "bytes": 285508,
+      "weightRange": [
+        400.0,
+        800.0
+      ],
+      "axes": {
+        "wght": [
+          400.0,
+          800.0
+        ]
+      }
+    },
+    {
+      "file": "Qahiri-Regular.ttf",
+      "originalFilename": "Qahiri-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/qahiri/Qahiri-Regular.ttf",
+      "sha256": "9c4d8cfba7b663dad7eeeeb52a625749f3e1f5ec472a0a6333e1684a2f43dbdf",
+      "bytes": 40728,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
     }
   ]
 }
