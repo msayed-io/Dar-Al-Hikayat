@@ -822,6 +822,284 @@
         400
       ],
       "axes": {}
+    },
+    {
+      "file": "Fustat-Variable.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/fustat/Fustat%5Bwght%5D.ttf",
+      "sha256": "ba09d90e6180e79334aadd42ea1ed0e97a405fadcd34412c1d02a6b8f679d402",
+      "bytes": 172620,
+      "weightRange": [
+        200.0,
+        800.0
+      ],
+      "axes": {
+        "wght": [
+          200.0,
+          800.0
+        ]
+      }
+    },
+    {
+      "file": "Zain-ExtraLight.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/Zain-ExtraLight.ttf",
+      "sha256": "0fed2aeaa4a13676ee9a8b518804d4ce904a0b812a85bcbf35ea657cd2d308ac",
+      "bytes": 180536,
+      "weightRange": [
+        200,
+        200
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Zain-Light.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/Zain-Light.ttf",
+      "sha256": "21ac8d8c63f1d037d7922a7e1343ad07d9fc60cc922f5c267d12cd75d93f1037",
+      "bytes": 189212,
+      "weightRange": [
+        300,
+        300
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Zain-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/Zain-Regular.ttf",
+      "sha256": "2a2b8af3804039c7f500c43f581a4145012728bc3109ef15d48371700f5e1f63",
+      "bytes": 188468,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Zain-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/Zain-Bold.ttf",
+      "sha256": "4dc98e7b1a9cac93bde1907271472ba9cf43ae5212e942cafe59a6d341f052e3",
+      "bytes": 189816,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Zain-ExtraBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/Zain-ExtraBold.ttf",
+      "sha256": "1f28878c4fd73456c1b2fc0fe334767f397c51cd227376b30dc9412732e74abf",
+      "bytes": 190584,
+      "weightRange": [
+        800,
+        800
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Zain-Black.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/Zain-Black.ttf",
+      "sha256": "fb9146db13654b0e75003e8db55508167782d70bb64d85c0b4a0e689f016939f",
+      "bytes": 193168,
+      "weightRange": [
+        900,
+        900
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Rubik-Variable.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/rubik/Rubik%5Bwght%5D.ttf",
+      "sha256": "1b3a7437ba2af80e465e773ed60c5036d1ba6ace492d89046dbcf18fb31e4e88",
+      "bytes": 359804,
+      "weightRange": [
+        300.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          300.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "AlanSans-Variable.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/alansans/AlanSans%5Bwght%5D.ttf",
+      "sha256": "96e93ac16fd488698a88489e297a5de00b2c5dbd8f20c298ebd4d3acc4421b2a",
+      "bytes": 198132,
+      "weightRange": [
+        300.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          300.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "PlaypenSansArabic-Variable.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/playpensansarabic/PlaypenSansArabic%5Bwght%5D.ttf",
+      "sha256": "31122f11b6aa8a36a283f95797663a575afffbe2d52b69e496f3a2440942a226",
+      "bytes": 758132,
+      "weightRange": [
+        100.0,
+        800.0
+      ],
+      "axes": {
+        "wght": [
+          100.0,
+          800.0
+        ]
+      }
+    },
+    {
+      "file": "Estedad-Variable.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/estedad/Estedad%5Bwght%5D.ttf",
+      "sha256": "6e745beeeb0cae5eea7f38d3132597089548a622d87997b58944e5b1edfec5a1",
+      "bytes": 328340,
+      "weightRange": [
+        100.0,
+        900.0
+      ],
+      "axes": {
+        "wght": [
+          100.0,
+          900.0
+        ]
+      }
+    },
+    {
+      "file": "Ruwudu-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/ruwudu/Ruwudu-Regular.ttf",
+      "sha256": "ed5b134e7f389eecfdabc6bbbf9605177fa8b5b9984c8b24edbec908623d2c3b",
+      "bytes": 121440,
+      "weightRange": [
+        400,
+        400
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Ruwudu-Medium.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/ruwudu/Ruwudu-Medium.ttf",
+      "sha256": "11688c54f825b293e6554c44a645ffa863a04331f3abee3dee18711a01719a8e",
+      "bytes": 122416,
+      "weightRange": [
+        500,
+        500
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Ruwudu-SemiBold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/ruwudu/Ruwudu-SemiBold.ttf",
+      "sha256": "13f4e5c44f184bf9432cc4f4121e24853a3b81026a4223d113042710e361041d",
+      "bytes": 122892,
+      "weightRange": [
+        600,
+        600
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Ruwudu-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/ruwudu/Ruwudu-Bold.ttf",
+      "sha256": "7f7611d534aea674b960e0b586d1f594f3975b4db3fff5f55c1b92484a34cf78",
+      "bytes": 123240,
+      "weightRange": [
+        700,
+        700
+      ],
+      "axes": {}
+    },
+    {
+      "file": "Mikhak-Variable.ttf",
+      "url": "https://raw.githubusercontent.com/aminabedi68/Mikhak/9dea055eb3dfc752879442224460c6e5d6ebe232/fonts/Variable/Mikhak%5BDSTY%2CKSHD%2Cwght%5D.ttf",
+      "sha256": "9a089b44b53b54cc005e318505db179d0ff591e7114fa4b875c673e73d6e88bc",
+      "bytes": 197852,
+      "weightRange": [
+        100.0,
+        900.0
+      ],
+      "axes": {
+        "DSTY": [
+          0.0,
+          2.899993896484375
+        ],
+        "wght": [
+          100.0,
+          900.0
+        ],
+        "KSHD": [
+          100.0,
+          200.0
+        ]
+      }
+    }
+  ],
+  "licenses": [
+    {
+      "family": "fustat",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/fustat/OFL.txt",
+      "sha256": "197945947b2b8a0b9fc5622d9136d5f83c423f7f2e900c10bfb8b8cde8a45c47",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "zain",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/zain/OFL.txt",
+      "sha256": "ccbcfbce2bc74fe58aa2d4fa0cf32c8f7facd95decc2a8f72cd49653a0d039da",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "rubik",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/rubik/OFL.txt",
+      "sha256": "472cbe7c25441df63e9c7864b43eb3c0f4b3df950c66a76224e6cfe1eae843fb",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "alansans",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/alansans/OFL.txt",
+      "sha256": "06f10277275c9263ab3de42df06607bc983332fd6f8a67130ed7058151b8f512",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "playpensansarabic",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/playpensansarabic/OFL.txt",
+      "sha256": "59440310cc2c539b53c835306f74ac8c01f1ece58bf4c65e556fca275b80a730",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "estedad",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/estedad/OFL.txt",
+      "sha256": "0417da48fc44780476e074f02f8400028ee704b3e222be5855fa6d960b9200ca",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "ruwudu",
+      "url": "https://raw.githubusercontent.com/google/fonts/7085eb89a950e85db5b166b7a58d414544b4140c/ofl/ruwudu/OFL.txt",
+      "sha256": "2abc42812053bb5fd07d5f49c98311fef1471c2ff108c372abbbd44cdd4c7759",
+      "repository": "https://github.com/google/fonts",
+      "revision": "7085eb89a950e85db5b166b7a58d414544b4140c"
+    },
+    {
+      "family": "mikhak",
+      "url": "https://raw.githubusercontent.com/aminabedi68/Mikhak/9dea055eb3dfc752879442224460c6e5d6ebe232/OFL.txt",
+      "sha256": "071f566f77f4d56b39c15c9f685bc8806b04a1a9543ad6c5f3806497996d046f",
+      "repository": "https://github.com/aminabedi68/Mikhak",
+      "revision": "9dea055eb3dfc752879442224460c6e5d6ebe232"
+    }
+  ],
+  "additionalRepositories": [
+    {
+      "repository": "https://github.com/aminabedi68/Mikhak",
+      "revision": "9dea055eb3dfc752879442224460c6e5d6ebe232"
     }
   ]
 }

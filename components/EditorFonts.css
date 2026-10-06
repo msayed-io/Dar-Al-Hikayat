@@ -1,4 +1,4 @@
-/* Original, unmodified Google Fonts. See editor/SOURCES.json and OFL files. */
+/* Original, unmodified upstream fonts. See editor/SOURCES.json and OFL files. */
 @font-face {
   font-family: "Amiri";
   src: url("/fonts/editor/Amiri-Regular.ttf") format("truetype");
@@ -164,3 +164,133 @@
 @font-face { font-family: 'Katibeh'; src: url('/fonts/editor/Katibeh-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Baloo Bhaijaan 2'; src: url('/fonts/editor/BalooBhaijaan2-Variable.ttf') format('truetype'); font-weight: 400 800; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Qahiri'; src: url('/fonts/editor/Qahiri-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+
+
+/* Curated reading / handwriting expansion. Original licensed binaries. */
+@font-face {
+  font-family: "Fustat";
+  src: url("/fonts/editor/Fustat-Variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Dar Editor Zain";
+  src: url("/fonts/editor/Zain-ExtraLight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Dar Editor Zain";
+  src: url("/fonts/editor/Zain-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Dar Editor Zain";
+  src: url("/fonts/editor/Zain-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Dar Editor Zain";
+  src: url("/fonts/editor/Zain-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Dar Editor Zain";
+  src: url("/fonts/editor/Zain-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Dar Editor Zain";
+  src: url("/fonts/editor/Zain-Black.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/editor/Rubik-Variable.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alan Sans";
+  src: url("/fonts/editor/AlanSans-Variable.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Playpen Sans Arabic";
+  src: url("/fonts/editor/PlaypenSansArabic-Variable.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Estedad";
+  src: url("/fonts/editor/Estedad-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Ruwudu";
+  src: url("/fonts/editor/Ruwudu-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Ruwudu";
+  src: url("/fonts/editor/Ruwudu-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Ruwudu";
+  src: url("/fonts/editor/Ruwudu-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Ruwudu";
+  src: url("/fonts/editor/Ruwudu-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Mikhak";
+  src: url("/fonts/editor/Mikhak-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}

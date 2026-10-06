@@ -43,7 +43,7 @@ it("uses a nonmodal lock-style shell, local list fade, and real font weights wit
     false,
   );
   await click('[aria-label="الرجوع إلى الخطوط"]');
-  expect(document.querySelectorAll(".editor-font-choice")).toHaveLength(31);
+  expect(document.querySelectorAll(".editor-font-choice")).toHaveLength(39);
   expect(close).not.toHaveBeenCalled();
   await click(".editor-font-actions button");
   expect(apply).toHaveBeenLastCalledWith(

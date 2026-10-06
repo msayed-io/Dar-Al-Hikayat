@@ -1,10 +1,10 @@
 # Editor font library
 
-Thirty bundled Arabic families (24 added in this expansion), plus the existing UI font as the editor's default option: 31 choices. The new fonts do not change application UI typography. All font files are bundled locally; no Google API key, runtime CDN, or network download is required. The collection combines reading, contemporary sans, calligraphic and display styles; decorative faces are not recommendations for long-form body text. It is not a mirror of the entire Google catalog.
+Thirty-eight bundled Arabic families, plus the existing UI font as the editor's default option: 39 choices. The new fonts do not change application UI typography. All font files are bundled locally; no Google API key, runtime CDN, or network download is required. The collection combines reading, contemporary sans, calligraphic and display styles; decorative faces are not recommendations for long-form body text. It is not a mirror of the entire Google catalog.
 
 ## Provenance
 
-`public/fonts/editor/SOURCES.json` pins the upstream google/fonts commit, source URLs, SHA-256, byte sizes, and actual weight axes. Each family includes its OFL licence. Font binaries are unmodified; two local variable-font filenames are URL-safe aliases. Total font binary size: 17,238,948 bytes across 62 files; this expansion adds 11,218,120 bytes in 45 files. `tests/editor-font-assets.test.ts` verifies integrity and catalog weights. Variable faces expose their real endpoints and standard 100-step weights within their real range (including Readex Pro 160 and Cairo 1000); static faces expose only bundled weights (Tajawal ExtraLight has the actual OS/2 weight 275, not an invented 200). No synthesized weights in previews or font-formatted text.
+`public/fonts/editor/SOURCES.json` pins upstream google/fonts and the additional Mikhak repository commit, source URLs, SHA-256, byte sizes, and actual weight axes. New family licence files also have pinned URLs and SHA-256 hashes. Each family includes its OFL licence. Font binaries are unmodified; two local variable-font filenames are URL-safe aliases. Total font binary size: 20,875,600 bytes across 78 files. The latest curated expansion adds 3,636,652 bytes in 16 original TTFs. `tests/editor-font-assets.test.ts` verifies integrity and catalog weights. Variable faces expose their real endpoints and standard 100-step weights within their real range (including Readex Pro 160 and Cairo 1000); static faces expose only bundled weights (Tajawal ExtraLight has the actual OS/2 weight 275, not an invented 200). No synthesized weights in previews or font-formatted text.
 
 ## Interaction and persistence
 
@@ -35,3 +35,24 @@ Root-cause reproduction in Chromium with unsupported `dvh` simulated in the styl
 Restored `EditorFontSheet.css` from commit `102a330` (v1.0.122), applying only shell height/viewport limits and legacy-unit fallbacks. Removed the v1.0.123 inner flex-fill and percentage-height changes. Capsule styles, spacing, floating controls, original magnetic masks and blur strengths were taken directly from that reference, not recreated.
 
 Pixel-comparison QA: 18 PNG-exact comparisons against the original stylesheet (three themes × top/middle/end scroll × modern/unsupported-dvh simulation). All match, including the areas under the floating capsules. Six size/scroll stress cases also pass with 5031 rows, two-weight detail/back, short landscape and stationary editor. These are Chromium tests, not physical Android WebView verification. TypeScript, 302 unit tests/36 files and the production web build pass.
+
+## Eight-family quality-first expansion
+
+No paid fonts or duplicate weight-as-family entries. The approved font-sheet CSS, capsules, dimensions and editor selection lifecycle are untouched. Font preview/formatting/loading use an optional browser-only alias for Zain, which otherwise collides with legacy UI declarations. Browser-family lookup maps that alias back to Zain for reopening and Word export, while bare legacy `Zain` still resolves to the editor default rather than falsely selecting the new font. All files are local and unmodified. Mikhak is pinned separately to `9dea055eb3dfc752879442224460c6e5d6ebe232`; its non-weight axes remain at their original defaults. Only upright faces are offered by the current weight-only picker; Zain/Rubik italic files are not advertised or bundled.
+
+| Family | Actual offered weights |
+| --- | --- |
+| Fustat | 200, 300, 400, 500, 600, 700, 800 |
+| Zain | 200, 300, 400, 700, 800, 900 — no invented 500/600 |
+| Rubik | 300, 400, 500, 600, 700, 800, 900 |
+| Alan Sans | 300, 400, 500, 600, 700, 800, 900 |
+| Playpen Sans Arabic | 100, 200, 300, 400, 500, 600, 700, 800 |
+| Estedad | 100, 200, 300, 400, 500, 600, 700, 800, 900 |
+| Ruwudu | 400, 500, 600, 700 |
+| Mikhak | 100, 200, 300, 400, 500, 600, 700, 800, 900 |
+
+`tests/editor-font-binary-weights.test.ts` independently decodes SFNT `OS/2` and `fvar` tables for **every shipped family**, comparing the actual weights to both catalog and manifest. `scripts/verify-curated-font-shaping.py` (requires Python `fonttools` and `uharfbuzz`) checks base Arabic letters, marks, punctuation, joining substitutions and three HarfBuzz samples at every offered new weight (57 weight choices). It is an offline reproducible QA command, not an extra app dependency. Font selection is a visual preference; these tests establish glyph/shaping availability, not perfect typography in every Arabic passage.
+
+Chromium checks load all 209 advertised weights across 39 choices, apply each of the 57 new weights to the exact selected word without editable focus, and exercise apply-all. Eighteen original-style pixel comparisons and six fixed-height/large-list cases pass with the expanded list (5039 stress rows). Physical Android shaping and DOCX receiving-app behaviour still require device/application testing.
+
+Final curated-expansion checks: TypeScript, 306 tests/37 files and production build pass. The three pre-existing `Zain`→Thmanyah UI faces remain unchanged; the six new Zain faces use `Dar Editor Zain`. DOCX alias resolution is tested independently.

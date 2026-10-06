@@ -21,3 +21,12 @@ it("Word retains body paragraphs, mixed font families and explicit nonbold Arabi
   expect(xml).toContain("<w:bCs/>");
   expect(xml).toContain('<w:bCs w:val="false"/>');
 });
+
+it("exports the editor-only Zain alias as the real installed Word family", async () => {
+  const paragraphs = htmlToDocxParagraphs('<p style="font-family: &quot;Dar Editor Zain&quot;; font-weight:700">رحمة</p>', { fontSize: 18 });
+  const buffer = await Packer.toBuffer(new Document({ sections: [{ children: paragraphs }] }));
+  const zip = await JSZip.loadAsync(buffer);
+  const xml = await zip.file("word/document.xml")!.async("string");
+  expect(xml).toContain('w:cs="Zain"');
+  expect(xml).not.toContain("Dar Editor Zain");
+});

@@ -4,6 +4,7 @@ import {
   EDITOR_FONTS,
   WEIGHT_LABELS,
   loadEditorFont,
+  editorFontCssFamily,
   type EditorFont,
 } from "../lib/editor-fonts";
 import {
@@ -196,7 +197,7 @@ export default function EditorFontSheet({
                 >
                   <span
                     className="editor-font-preview"
-                    style={{ fontFamily: `"${detail.family}"`, fontWeight: w }}
+                    style={{ fontFamily: `"${editorFontCssFamily(detail)}"`, fontWeight: w }}
                   >
                     {WEIGHT_LABELS[w]}
                   </span>
@@ -221,7 +222,7 @@ export default function EditorFontSheet({
                     <span
                       className="editor-font-preview"
                       style={{
-                        fontFamily: `"${font.family}"`,
+                        fontFamily: `"${editorFontCssFamily(font)}"`,
                         fontWeight: 400,
                       }}
                     >

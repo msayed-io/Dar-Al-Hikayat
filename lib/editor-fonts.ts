@@ -2,6 +2,8 @@
 export interface EditorFont {
   id: string;
   family: string;
+  /** Optional browser-only alias; exports retain the canonical family name. */
+  cssFamily?: string;
   label: string;
   weights: number[];
   files: string[];
@@ -268,6 +270,63 @@ export const EDITOR_FONTS: EditorFont[] = [
     weights: [400],
     files: ["Qahiri-Regular.ttf"],
   },
+  {
+    id: "fustat",
+    family: "Fustat",
+    label: "فسطاط",
+    weights: [200, 300, 400, 500, 600, 700, 800],
+    files: ["Fustat-Variable.ttf"],
+  },
+  {
+    id: "zain",
+    family: "Zain",
+    cssFamily: "Dar Editor Zain",
+    label: "زين",
+    weights: [200, 300, 400, 700, 800, 900],
+    files: ["Zain-ExtraLight.ttf", "Zain-Light.ttf", "Zain-Regular.ttf", "Zain-Bold.ttf", "Zain-ExtraBold.ttf", "Zain-Black.ttf"],
+  },
+  {
+    id: "rubik",
+    family: "Rubik",
+    label: "روبيك",
+    weights: [300, 400, 500, 600, 700, 800, 900],
+    files: ["Rubik-Variable.ttf"],
+  },
+  {
+    id: "alansans",
+    family: "Alan Sans",
+    label: "آلان سانس",
+    weights: [300, 400, 500, 600, 700, 800, 900],
+    files: ["AlanSans-Variable.ttf"],
+  },
+  {
+    id: "playpensansarabic",
+    family: "Playpen Sans Arabic",
+    label: "بلاي بن عربي",
+    weights: [100, 200, 300, 400, 500, 600, 700, 800],
+    files: ["PlaypenSansArabic-Variable.ttf"],
+  },
+  {
+    id: "estedad",
+    family: "Estedad",
+    label: "استعداد",
+    weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+    files: ["Estedad-Variable.ttf"],
+  },
+  {
+    id: "ruwudu",
+    family: "Ruwudu",
+    label: "روودو",
+    weights: [400, 500, 600, 700],
+    files: ["Ruwudu-Regular.ttf", "Ruwudu-Medium.ttf", "Ruwudu-SemiBold.ttf", "Ruwudu-Bold.ttf"],
+  },
+  {
+    id: "mikhak",
+    family: "Mikhak",
+    label: "ميخك",
+    weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+    files: ["Mikhak-Variable.ttf"],
+  },
 ];
 export const WEIGHT_LABELS: Record<number, string> = {
   160: "رفيع",
@@ -283,10 +342,13 @@ export const WEIGHT_LABELS: Record<number, string> = {
   800: "عريض جدًا",
   900: "ثقيل",
 };
-export const findEditorFont = (family: string) =>
-  EDITOR_FONTS.find(
-    (f) => f.family === family.replace(/["']/g, "").split(",")[0].trim(),
-  );
+export const editorFontCssFamily = (font: EditorFont) => font.cssFamily || font.family;
+export const findEditorFont = (family: string) => {
+  const name = family.replace(/["']/g, "").split(",")[0].trim();
+  // A canonical name with an explicit CSS alias may belong to legacy UI.
+  // Match browser names only; return the canonical family for export.
+  return EDITOR_FONTS.find(f => editorFontCssFamily(f) === name);
+};
 export async function loadEditorFont(
   font: EditorFont,
   weight: number,
@@ -295,7 +357,7 @@ export async function loadEditorFont(
     throw new Error("Unsupported font weight");
   if (typeof document !== "undefined" && document.fonts) {
     const faces = await document.fonts.load(
-      `${weight} 20px "${font.family}"`,
+      `${weight} 20px "${editorFontCssFamily(font)}"`,
       "رحمة",
     );
     if (!faces.length) throw new Error("Font unavailable");

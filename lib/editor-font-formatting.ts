@@ -1,5 +1,5 @@
 import { ensureBlockIdsInElement } from "./editor-block-system";
-import type { EditorFont } from "./editor-fonts";
+import { editorFontCssFamily, type EditorFont } from "./editor-fonts";
 
 /** Text offsets, not live Range clones: survive normalization and preview changes. */
 export interface FontTarget {
@@ -84,7 +84,7 @@ function styleFont(element: HTMLElement, font: EditorFont, weight: number) {
   element.dataset.editorFont = font.id;
   element.style.setProperty(
     "font-family",
-    `"${font.family}", serif`,
+    `"${editorFontCssFamily(font)}", serif`,
     "important",
   );
   element.style.setProperty("font-weight", String(weight), "important");
