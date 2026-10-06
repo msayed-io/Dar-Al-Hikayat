@@ -1,0 +1,311 @@
+
+ RUN  v5.0.3 /home/user/dar_repo
+
+ ✓ tests/remote-editing.test.ts (27 tests) 223ms
+stdout | tests/storage-safety.test.ts > Storage Safety & Golden Rule Verification Tests > 3. Round-Trip Fidelity: Stories with --, lines ending in ;, quotes, emojis and multiline are preserved 100% byte-for-byte
+Migration check: Loading legacy notes for migration...
+
+stderr | tests/storage-safety.test.ts > Storage Safety & Golden Rule Verification Tests > 3. Round-Trip Fidelity: Stories with --, lines ending in ;, quotes, emojis and multiline are preserved 100% byte-for-byte
+Migration error: Error: No available storage method found.
+    at /var/tmp/dar-tools/node_modules/localforage/dist/localforage.js:2762:25
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+stderr | tests/storage-safety.test.ts > Storage Safety & Golden Rule Verification Tests > (F) FTS Deletion Isolation: Even if FTS deletion throws an error, stories and bodies are safely deleted
+FTS deletion warning (non-fatal): Error: Simulated FTS table corruption or lock error
+    at Object.run (/home/user/dar_repo/tests/storage-safety.test.ts:202:17)
+    at StorageServiceManager.deleteStories (/home/user/dar_repo/lib/storage-service.ts:539:25)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at /home/user/dar_repo/tests/storage-safety.test.ts:220:7
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:20
+
+ ✓ tests/storage-safety.test.ts (9 tests) 54ms
+ ✓ tests/launcher-icon.test.ts (2 tests) 1426ms
+   ✓ launcher task isolation (2)
+     ✓ executes the production Java policy against a recording PackageManager, including both API paths 1327ms
+stderr | tests/permissions-guard.test.tsx > shows exact-settings failures instead of claiming success
+Permission setup action failed Error: settings unavailable
+    at /home/user/dar_repo/tests/permissions-guard.test.tsx:175:33
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:1628:35
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:26
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3321:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3316:10)
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3301:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3259:10)
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3882:64
+
+ ✓ tests/permissions-guard.test.tsx (15 tests) 527ms
+ ✓ tests/remote-mouse.test.ts (18 tests) 171ms
+Not implemented: Window's alert() method
+Not implemented: Window's alert() method
+ ✓ tests/handwriting-editor-integration.test.tsx (14 tests) 1773ms
+   ✓ Handwriting → persistence → reading/home (12)
+     ✓ a new empty handwriting document exits straight to home 308ms
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 1. استبدال نص موجود مرة واحدة
+[BlockAuditLog:REPLACE] status=SUCCESS blockId=b_1 {
+  id: 'b_85cbe4c7',
+  timestamp: 1791306110282,
+  type: 'REPLACE',
+  blockId: 'b_1',
+  details: { targetText: 'البيت', newText: 'المدرسة', matchType: 'EXACT' },
+  status: 'SUCCESS'
+}
+
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 6. عدة عمليات متتالية ناجحة (إدراج قبل وبعد، واستبدال وحذف)
+[BlockAuditLog:REPLACE] status=SUCCESS blockId=b_1 {
+  id: 'b_6465fe1c',
+  timestamp: 1791306110349,
+  type: 'REPLACE',
+  blockId: 'b_1',
+  details: { targetText: 'الفقرة', newText: 'النص', matchType: 'EXACT' },
+  status: 'SUCCESS'
+}
+
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 7. فشل في منتصف دفعة العمليات
+[BlockAuditLog:REPLACE] status=SUCCESS blockId=b_1 {
+  id: 'b_7373daa5',
+  timestamp: 1791306110362,
+  type: 'REPLACE',
+  blockId: 'b_1',
+  details: { targetText: 'الفقرة', newText: 'النص', matchType: 'EXACT' },
+  status: 'SUCCESS'
+}
+
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 8. مطابقة النص العربي رغم التشكيل والمسافات الزائدة
+[BlockAuditLog:REPLACE] status=SUCCESS blockId=b_1 {
+  id: 'b_8e3ac2a0',
+  timestamp: 1791306110371,
+  type: 'REPLACE',
+  blockId: 'b_1',
+  details: {
+    targetText: 'وذهب إلى البيت',
+    newText: 'عاد',
+    matchType: 'NORMALIZED',
+    rawStart: 0,
+    rawEnd: 24
+  },
+  status: 'SUCCESS'
+}
+
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 9. دمج فقرتين متجاورتين بنجاح (MERGE)
+[BlockAuditLog:MERGE] status=SUCCESS blockId=b_1 {
+  id: 'b_2cf04403',
+  timestamp: 1791306110386,
+  type: 'MERGE',
+  blockId: 'b_1',
+  details: { removedBlockId: 'b_2', inputBlockA: 'b_1', inputBlockB: 'b_2' },
+  status: 'SUCCESS'
+}
+
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 11. نقل فقرة إلى بعد فقرة أخرى بنجاح (MOVE)
+[BlockAuditLog:MOVE] status=SUCCESS blockId=b_1 {
+  id: 'b_06101f0c',
+  timestamp: 1791306110410,
+  type: 'MOVE',
+  blockId: 'b_1',
+  details: { anchorBlockId: 'b_3', position: 'after' },
+  status: 'SUCCESS'
+}
+
+stdout | tests/editor.test.ts > Editor Block System - validateBatchOperations > 13. شطر فقرة بنجاح عند نص محدد (SPLIT)
+[BlockAuditLog:SPLIT] status=SUCCESS blockId=b_1 {
+  id: 'b_b576e3c8',
+  timestamp: 1791306110432,
+  type: 'SPLIT',
+  blockId: 'b_1',
+  details: { splitAfterText: 'كانت ليلة هادئة.', newBlockId: 'b_83c81f30' },
+  status: 'SUCCESS'
+}
+
+ ✓ tests/editor.test.ts (15 tests) 303ms
+ ✓ tests/remote-input-editor.test.tsx (7 tests) 1460ms
+   ✓ remote letters stay in order through first-block normalization and later typing 639ms
+ ✓ tests/handwriting-ux-lifecycle.test.tsx (16 tests) 651ms
+   ✓ Handwriting document controls (not inking geometry) (9)
+     ✓ edits the controlled title with the same input interaction as the editor 338ms
+ ✓ tests/tashkeel-text.test.ts (17 tests) 8ms
+ ✓ tests/typing-groups.test.ts (16 tests) 9ms
+ ✓ tests/handwriting-eraser.test.ts (9 tests) 9ms
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > stays hidden until the phone right-clicks
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > stays hidden until the phone right-clicks
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > opens at the click point published by the pointer overlay
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > opens at the click point published by the pointer overlay
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > clamps the card inside the viewport when the click is near an edge
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > clamps the card inside the viewport when the click is near an edge
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > routes each of the four actions to the editor and closes
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > routes each of the four actions to the editor and closes
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > routes cut, paste and select-all as well
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > routes cut, paste and select-all as well
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > also opens on a right-button remote click streamed through the bus
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > also opens on a right-button remote click streamed through the bus
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > closes on a remote press outside the card but not on one inside it
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > closes on a remote press outside the card but not on one inside it
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > dismisses on the explicit dismiss event and on an outside left click
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | tests/remote-context-menu.test.tsx > Remote context menu > dismisses on the explicit dismiss event and on an outside left click
+The current testing environment is not configured to support act(...)
+
+ ✓ tests/remote-context-menu.test.tsx (8 tests) 167ms
+ ✓ tests/remote-mouse-cursor.test.tsx (6 tests) 145ms
+ ✓ tests/editor-font-integration.test.tsx (4 tests) 1335ms
+   ✓ opens from existing selection capsule, applies only selection, and saves its HTML formatting 599ms
+   ✓ all-font application is one undo step and redo restores it 308ms
+ ✓ tests/editor-font-formatting.test.ts (10 tests) 112ms
+ ✓ tests/handwriting-canvas-resize.test.tsx (4 tests) 202ms
+ ✓ tests/remote-mouse-caret.test.ts (8 tests) 181ms
+ ✓ tests/remote-pairing-modal.test.tsx (10 tests) 234ms
+ ✓ tests/soft-keyboard-guard.test.ts (9 tests) 307ms
+ ✓ tests/remote-keyboard-round2.test.ts (15 tests) 9ms
+ ✓ tests/remote-keyboard-protocol.test.ts (7 tests) 8ms
+stdout | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > restores snapshot correctly on undoDiacritizeJob
+[BlockAuditLog:BATCH_ROLLBACK] status=SUCCESS blockId=undo_diacritize {
+  id: 'b_996e3971',
+  timestamp: 1791306126036,
+  type: 'BATCH_ROLLBACK',
+  blockId: 'undo_diacritize',
+  status: 'SUCCESS',
+  details: { jobId: 'job_test_123', timestamp: 1791306126035 }
+}
+
+stderr | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > correctly reports FAILED with honest reason when both AI attempts throw HTTP 500
+Capacitor Preferences load error, falling back to local: [DOMException [SecurityError]: localStorage is not available for opaque origins]
+Error reading keys from localStorage: ReferenceError: localStorage is not defined
+    at getManagedKeys (/home/user/dar_repo/lib/api-key-repository.ts:81:22)
+    at loadManagedKeysAsync (/home/user/dar_repo/lib/api-key-repository.ts:144:10)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at getActiveCandidates (/home/user/dar_repo/lib/smart-key-rotator.ts:158:19)
+    at executeWithSmartRotation (/home/user/dar_repo/lib/smart-key-rotator.ts:197:22)
+    at callDiacritizeAI (/home/user/dar_repo/lib/tashkeel-pipeline.ts:209:10)
+    at runDiacritizeJob (/home/user/dar_repo/lib/tashkeel-pipeline.ts:368:23)
+    at /home/user/dar_repo/tests/tashkeel-pipeline.test.ts:77:17
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:20
+
+stderr | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > correctly reports FAILED with honest reason when both AI attempts throw HTTP 500
+[Tashkeel Batch Error]: Error: خطأ استجابة الخادم: 500
+    at /home/user/dar_repo/lib/tashkeel-pipeline.ts:236:15
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at executeWithSmartRotation (/home/user/dar_repo/lib/smart-key-rotator.ts:233:24)
+    at callDiacritizeAI (/home/user/dar_repo/lib/tashkeel-pipeline.ts:209:10)
+    at runDiacritizeJob (/home/user/dar_repo/lib/tashkeel-pipeline.ts:368:23)
+    at /home/user/dar_repo/tests/tashkeel-pipeline.test.ts:77:17
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:20
+
+stderr | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > correctly reports FAILED with honest reason when both AI attempts throw HTTP 500
+Capacitor Preferences load error, falling back to local: [DOMException [SecurityError]: localStorage is not available for opaque origins]
+
+stderr | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > correctly reports FAILED with honest reason when both AI attempts throw HTTP 500
+[Tashkeel Retry Error]: Error: خطأ استجابة الخادم: 500
+    at /home/user/dar_repo/lib/tashkeel-pipeline.ts:236:15
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at executeWithSmartRotation (/home/user/dar_repo/lib/smart-key-rotator.ts:233:24)
+    at callDiacritizeAI (/home/user/dar_repo/lib/tashkeel-pipeline.ts:209:10)
+    at runDiacritizeJob (/home/user/dar_repo/lib/tashkeel-pipeline.ts:401:31)
+    at /home/user/dar_repo/tests/tashkeel-pipeline.test.ts:77:17
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:20
+
+stderr | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > reports SUCCESS with invariant skip reason when model responds 200 but text fails invariant
+Capacitor Preferences load error, falling back to local: [DOMException [SecurityError]: localStorage is not available for opaque origins]
+
+stderr | tests/tashkeel-pipeline.test.ts > Tashkeel Pipeline Snapshots & Cancellation > reports SUCCESS with invariant skip reason when model responds 200 but text fails invariant
+Capacitor Preferences load error, falling back to local: [DOMException [SecurityError]: localStorage is not available for opaque origins]
+
+ ✓ tests/tashkeel-pipeline.test.ts (5 tests) 166ms
+ ✓ tests/handwriting-preview.test.tsx (10 tests) 21ms
+ ✓ tests/assistant-visual-states.test.tsx (3 tests) 2572ms
+   ✓ welcomes the writer without the empty-state icon or quick prompts and rotates on reopening 1297ms
+   ✓ shows the new indicator while consulting, replaces it on first text, and rotates on new chat 1230ms
+ ✓ tests/remote-modal-lifecycle.test.tsx (3 tests) 776ms
+   ✓ auto-closes on first pairing, but repeated status and PING cannot dismiss reopened controls 438ms
+ ✓ tests/editor-font-binary-weights.test.ts (3 tests) 134ms
+stderr | tests/prayer-permission-bridge.test.ts > reports settings launch failures and successes instead of silent void
+Open notification settings error: Error: No activity
+    at /home/user/dar_repo/tests/prayer-permission-bridge.test.ts:47:5
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:1628:35
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:26
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3321:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3316:10)
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3301:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3259:10)
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3882:64
+
+stderr | tests/prayer-permission-bridge.test.ts > reports settings launch failures and successes instead of silent void
+Open app settings error: Error: No activity
+    at /home/user/dar_repo/tests/prayer-permission-bridge.test.ts:49:49
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:1628:35
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:2783:26
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3321:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3316:10)
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3301:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3259:10)
+    at file:///var/tmp/dar-tools/node_modules/vitest/dist/chunks/run.BTlFXlnv.js:3882:64
+
+ ✓ tests/prayer-permission-bridge.test.ts (6 tests) 16ms
+ ✓ tests/editor-font-sheet.test.tsx (3 tests) 518ms
+   ✓ uses a nonmodal lock-style shell, local list fade, and real font weights with back navigation 357ms
+ ✓ tests/splash-logo.test.tsx (4 tests) 182ms
+ ✓ tests/editor-block-caret.test.ts (8 tests) 25ms
+ ✓ tests/thinking-indicator.test.tsx (4 tests) 69ms
+ ✓ tests/editor-visual-controls.test.tsx (4 tests) 460ms
+ ✓ tests/editor-font-sheet-sizing.test.ts (3 tests) 4ms
+ ✓ tests/editor-font-assets.test.ts (1 test) 55ms
+ ✓ tests/editor-font-export.test.ts (2 tests) 96ms
+ ✓ tests/floating-capsule.test.ts (1 test) 4ms
+
+ Test Files  37 passed (37)
+      Tests  306 passed (306)
+   Start at  17:01:39
+   Duration  41.11s (environment 41%, tests 39%, import 15%, transform 5%)
+
+    Isolate  37 workers spawned · ~511ms startup each (spawn + environment, per file)
+             at least ~18.40s faster with isolate: false — reuses workers across files instead of one per file

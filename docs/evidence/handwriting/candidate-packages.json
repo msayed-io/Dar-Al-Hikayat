@@ -1,0 +1,53 @@
+[
+  {
+    "name": "perfect-freehand",
+    "version": "1.2.3",
+    "license": "MIT",
+    "engines": null,
+    "dependencies": null,
+    "npmUnpackedBytes": 112085,
+    "registry": "https://registry.npmjs.org/perfect-freehand/1.2.3",
+    "tarballBytes": 31363,
+    "jsFiles": [
+      {
+        "path": "package/dist/cjs/index.js",
+        "bytes": 4638,
+        "gzipBytes": 2065
+      },
+      {
+        "path": "package/dist/esm/index.mjs",
+        "bytes": 4532,
+        "gzipBytes": 1999
+      }
+    ]
+  },
+  {
+    "name": "tesseract.js",
+    "version": "7.0.0",
+    "license": "Apache-2.0",
+    "engines": null,
+    "dependencies": {
+      "bmp-js": "^0.1.0",
+      "is-url": "^1.2.4",
+      "zlibjs": "^0.3.1",
+      "idb-keyval": "^6.2.0",
+      "node-fetch": "^2.6.9",
+      "tesseract.js-core": "^7.0.0",
+      "regenerator-runtime": "^0.13.3",
+      "wasm-feature-detect": "^1.8.0",
+      "opencollective-postinstall": "^2.0.3"
+    },
+    "npmUnpackedBytes": 1411341,
+    "registry": "https://registry.npmjs.org/tesseract.js/7.0.0"
+  },
+  {
+    "name": "tesseract.js-core",
+    "version": "7.0.0",
+    "license": "Apache-2.0",
+    "engines": null,
+    "dependencies": null,
+    "npmUnpackedBytes": 45262431,
+    "registry": "https://registry.npmjs.org/tesseract.js-core/7.0.0",
+    "note": "Actual version resolved by tesseract.js 7.0.0, not the registry latest dist-tag."
+  }
+]

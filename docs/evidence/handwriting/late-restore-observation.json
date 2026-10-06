@@ -1,0 +1,11 @@
+{
+  "initialPixelMismatch": {
+    "changedChannels": 51308,
+    "maxDelta": 255
+  },
+  "afterAdditional500ms": {
+    "inkPixels": 0,
+    "strokes": 31
+  },
+  "scenario": "Off-mounted empty component receives external strokes and edit activation together; separate from preloaded-note opening."
+}

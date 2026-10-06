@@ -1,0 +1,11 @@
+AssertionError [ERR_ASSERTION]: FIRST_PIXEL_MISSING: synchronous pointerdown did not create visible alpha
+    at /home/user/dar_repo/tools/handwriting-baseline/run.cjs:41:13 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+exit_code=1

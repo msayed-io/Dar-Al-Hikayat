@@ -1,0 +1,51 @@
+{
+  "oldSchemaSyntheticFixture": [
+    {
+      "id": "legacy_fixture_curve",
+      "color": "#121A1B",
+      "width": 3.5,
+      "points": [
+        {
+          "x": 80,
+          "y": 180,
+          "pressure": 0.5,
+          "time": 0
+        },
+        {
+          "x": 120,
+          "y": 150,
+          "pressure": 0.5,
+          "time": 16
+        },
+        {
+          "x": 180,
+          "y": 210,
+          "pressure": 0.5,
+          "time": 32
+        }
+      ]
+    },
+    {
+      "id": "legacy_fixture_dot",
+      "color": "#121A1B",
+      "width": 7,
+      "points": [
+        {
+          "x": 200,
+          "y": 180,
+          "pressure": 0.5,
+          "time": 60
+        }
+      ]
+    }
+  ],
+  "actualEditorReadMode": {
+    "alphaPixels": 2205,
+    "width": 780,
+    "height": 1640,
+    "mode": "read"
+  },
+  "chromiumEmulatedTouchFirstPixel": 255,
+  "pageErrors": [],
+  "notAndroid": true
+}

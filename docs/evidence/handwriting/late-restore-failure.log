@@ -1,0 +1,16 @@
+Reload decoded pixel comparison {"changedChannels":51308,"maxDelta":255}
+Late restore after additional 500ms {"inkPixels":0,"strokes":31}
+AssertionError [ERR_ASSERTION]: Reloaded raw RGBA differs
+
+51308 !== 0
+
+    at /home/user/dar_repo/tools/handwriting-baseline/run.cjs:111:20 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 51308,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+exit_code=1

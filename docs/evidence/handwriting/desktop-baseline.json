@@ -1,0 +1,618 @@
+{
+  "baseline": "d8dc095",
+  "environment": "Headless Chromium, synthetic pen, CSS390x820 DPR2; NOT Android",
+  "rounds": [
+    {
+      "round": 1,
+      "first": {
+        "alpha": 255,
+        "cpuObservableInkMs": 0.8999999999068677,
+        "width": 780,
+        "height": 1640,
+        "cssWidth": 390,
+        "touchAction": "none"
+      },
+      "live": {
+        "middle": 255,
+        "endpoint": 0
+      },
+      "ended": {
+        "middle": 255,
+        "endpoint": 255
+      },
+      "tailChangesOnLift": true,
+      "regressions": {
+        "firstPixel": true,
+        "movement": true,
+        "lift": true,
+        "toolSwitch": true,
+        "undoRedo": true,
+        "rapid31Strokes": true,
+        "modeRemount": true,
+        "windowBlurSurrogate": true,
+        "storageServiceWebSaveReload": true
+      },
+      "geometry": {
+        "canvas": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 820,
+          "top": 0,
+          "right": 390,
+          "bottom": 820,
+          "left": 0
+        },
+        "buttons": [
+          {
+            "id": "handwriting-btn-expand",
+            "rect": {
+              "x": 158,
+              "y": 823.2000122070312,
+              "width": 74,
+              "height": 32,
+              "top": 823.2000122070312,
+              "right": 232,
+              "bottom": 855.2000122070312,
+              "left": 158
+            }
+          },
+          {
+            "id": "handwriting-btn-close",
+            "rect": {
+              "x": 93,
+              "y": 769,
+              "width": 18,
+              "height": 18,
+              "top": 769,
+              "right": 111,
+              "bottom": 787,
+              "left": 93
+            }
+          },
+          {
+            "id": "handwriting-btn-options",
+            "rect": {
+              "x": 123,
+              "y": 769,
+              "width": 18,
+              "height": 18,
+              "top": 769,
+              "right": 141,
+              "bottom": 787,
+              "left": 123
+            }
+          },
+          {
+            "id": "handwriting-btn-color",
+            "rect": {
+              "x": 157,
+              "y": 762,
+              "width": 32,
+              "height": 32,
+              "top": 762,
+              "right": 189,
+              "bottom": 794,
+              "left": 157
+            }
+          },
+          {
+            "id": "handwriting-btn-eraser",
+            "rect": {
+              "x": 205,
+              "y": 758,
+              "width": 40,
+              "height": 40,
+              "top": 758,
+              "right": 245,
+              "bottom": 798,
+              "left": 205
+            }
+          },
+          {
+            "id": "handwriting-btn-pen",
+            "rect": {
+              "x": 255,
+              "y": 756,
+              "width": 44,
+              "height": 44,
+              "top": 756,
+              "right": 299,
+              "bottom": 800,
+              "left": 255
+            }
+          }
+        ],
+        "zIndex": "999999",
+        "background": "rgb(234, 230, 210)"
+      },
+      "perf": [
+        {
+          "name": "short",
+          "pointsPerStroke": 16,
+          "strokeCount": 1,
+          "firstCpuInkMs": {
+            "p50": 0.6000000000931323,
+            "p95": 0.6000000000931323,
+            "max": 0.6000000000931323
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.69999999999999,
+            "p95": 16.700000000000045,
+            "max": 16.700000000000045
+          },
+          "handlerMs": {
+            "p50": 0.10000000009313226,
+            "p95": 0.30000000004656613,
+            "max": 0.30000000004656613
+          },
+          "meanRafHz": 60.00857265323618,
+          "heapBefore": 31362404,
+          "heapAfter": 31081012
+        },
+        {
+          "name": "long",
+          "pointsPerStroke": 520,
+          "strokeCount": 1,
+          "firstCpuInkMs": {
+            "p50": 0.10000000009313226,
+            "p95": 0.10000000009313226,
+            "max": 0.10000000009313226
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.699999999999818,
+            "p95": 16.700000000000728,
+            "max": 16.80000000000109
+          },
+          "handlerMs": {
+            "p50": 0,
+            "p95": 0.10000000009313226,
+            "max": 0.6999999999534339
+          },
+          "meanRafHz": 60.00301173417971,
+          "heapBefore": 31493144,
+          "heapAfter": 31891560
+        },
+        {
+          "name": "dozens",
+          "pointsPerStroke": 20,
+          "strokeCount": 40,
+          "firstCpuInkMs": {
+            "p50": 0.19999999995343387,
+            "p95": 0.20000000018626451,
+            "max": 0.20000000018626451
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.69999999999891,
+            "p95": 33.29999999999927,
+            "max": 33.400000000001455
+          },
+          "handlerMs": {
+            "p50": 0,
+            "p95": 0.10000000009313226,
+            "max": 0.19999999995343387
+          },
+          "meanRafHz": 56.99824274192337,
+          "heapBefore": 31585992,
+          "heapAfter": 35818448
+        }
+      ],
+      "pageErrors": [],
+      "consoleWarnings": [
+        "Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently",
+        "Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently"
+      ]
+    },
+    {
+      "round": 2,
+      "first": {
+        "alpha": 255,
+        "cpuObservableInkMs": 1.0999999998603016,
+        "width": 780,
+        "height": 1640,
+        "cssWidth": 390,
+        "touchAction": "none"
+      },
+      "live": {
+        "middle": 255,
+        "endpoint": 0
+      },
+      "ended": {
+        "middle": 255,
+        "endpoint": 255
+      },
+      "tailChangesOnLift": true,
+      "regressions": {
+        "firstPixel": true,
+        "movement": true,
+        "lift": true,
+        "toolSwitch": true,
+        "undoRedo": true,
+        "rapid31Strokes": true,
+        "modeRemount": true,
+        "windowBlurSurrogate": true,
+        "storageServiceWebSaveReload": true
+      },
+      "geometry": {
+        "canvas": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 820,
+          "top": 0,
+          "right": 390,
+          "bottom": 820,
+          "left": 0
+        },
+        "buttons": [
+          {
+            "id": "handwriting-btn-expand",
+            "rect": {
+              "x": 158,
+              "y": 823.2000122070312,
+              "width": 74,
+              "height": 32,
+              "top": 823.2000122070312,
+              "right": 232,
+              "bottom": 855.2000122070312,
+              "left": 158
+            }
+          },
+          {
+            "id": "handwriting-btn-close",
+            "rect": {
+              "x": 93,
+              "y": 769,
+              "width": 18,
+              "height": 18,
+              "top": 769,
+              "right": 111,
+              "bottom": 787,
+              "left": 93
+            }
+          },
+          {
+            "id": "handwriting-btn-options",
+            "rect": {
+              "x": 123,
+              "y": 769,
+              "width": 18,
+              "height": 18,
+              "top": 769,
+              "right": 141,
+              "bottom": 787,
+              "left": 123
+            }
+          },
+          {
+            "id": "handwriting-btn-color",
+            "rect": {
+              "x": 157,
+              "y": 762,
+              "width": 32,
+              "height": 32,
+              "top": 762,
+              "right": 189,
+              "bottom": 794,
+              "left": 157
+            }
+          },
+          {
+            "id": "handwriting-btn-eraser",
+            "rect": {
+              "x": 205,
+              "y": 758,
+              "width": 40,
+              "height": 40,
+              "top": 758,
+              "right": 245,
+              "bottom": 798,
+              "left": 205
+            }
+          },
+          {
+            "id": "handwriting-btn-pen",
+            "rect": {
+              "x": 255,
+              "y": 756,
+              "width": 44,
+              "height": 44,
+              "top": 756,
+              "right": 299,
+              "bottom": 800,
+              "left": 255
+            }
+          }
+        ],
+        "zIndex": "999999",
+        "background": "rgb(234, 230, 210)"
+      },
+      "perf": [
+        {
+          "name": "short",
+          "pointsPerStroke": 16,
+          "strokeCount": 1,
+          "firstCpuInkMs": {
+            "p50": 0.8999999999068677,
+            "p95": 0.8999999999068677,
+            "max": 0.8999999999068677
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.69999999999999,
+            "p95": 16.700000000000045,
+            "max": 16.700000000000045
+          },
+          "handlerMs": {
+            "p50": 0.10000000009313226,
+            "p95": 0.30000000004656613,
+            "max": 0.30000000004656613
+          },
+          "meanRafHz": 60.0343053173242,
+          "heapBefore": 31068872,
+          "heapAfter": 31573880
+        },
+        {
+          "name": "long",
+          "pointsPerStroke": 520,
+          "strokeCount": 1,
+          "firstCpuInkMs": {
+            "p50": 0.20000000018626451,
+            "p95": 0.20000000018626451,
+            "max": 0.20000000018626451
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.699999999999818,
+            "p95": 16.799999999999955,
+            "max": 16.80000000000109
+          },
+          "handlerMs": {
+            "p50": 0,
+            "p95": 0.10000000009313226,
+            "max": 0.20000000018626451
+          },
+          "meanRafHz": 60.002316691764165,
+          "heapBefore": 31299832,
+          "heapAfter": 31600092
+        },
+        {
+          "name": "dozens",
+          "pointsPerStroke": 20,
+          "strokeCount": 40,
+          "firstCpuInkMs": {
+            "p50": 0.10000000009313226,
+            "p95": 0.20000000018626451,
+            "max": 0.30000000004656613
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.69999999999891,
+            "p95": 33.20000000000073,
+            "max": 33.400000000001455
+          },
+          "handlerMs": {
+            "p50": 0,
+            "p95": 0.10000000009313226,
+            "max": 0.20000000018626451
+          },
+          "meanRafHz": 57.06981465468627,
+          "heapBefore": 31695632,
+          "heapAfter": 35647232
+        }
+      ],
+      "pageErrors": [],
+      "consoleWarnings": [
+        "Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently",
+        "Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently"
+      ]
+    },
+    {
+      "round": 3,
+      "first": {
+        "alpha": 255,
+        "cpuObservableInkMs": 0.8999999999068677,
+        "width": 780,
+        "height": 1640,
+        "cssWidth": 390,
+        "touchAction": "none"
+      },
+      "live": {
+        "middle": 255,
+        "endpoint": 0
+      },
+      "ended": {
+        "middle": 255,
+        "endpoint": 255
+      },
+      "tailChangesOnLift": true,
+      "regressions": {
+        "firstPixel": true,
+        "movement": true,
+        "lift": true,
+        "toolSwitch": true,
+        "undoRedo": true,
+        "rapid31Strokes": true,
+        "modeRemount": true,
+        "windowBlurSurrogate": true,
+        "storageServiceWebSaveReload": true
+      },
+      "geometry": {
+        "canvas": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 820,
+          "top": 0,
+          "right": 390,
+          "bottom": 820,
+          "left": 0
+        },
+        "buttons": [
+          {
+            "id": "handwriting-btn-expand",
+            "rect": {
+              "x": 158,
+              "y": 823.2000122070312,
+              "width": 74,
+              "height": 32,
+              "top": 823.2000122070312,
+              "right": 232,
+              "bottom": 855.2000122070312,
+              "left": 158
+            }
+          },
+          {
+            "id": "handwriting-btn-close",
+            "rect": {
+              "x": 93,
+              "y": 769,
+              "width": 18,
+              "height": 18,
+              "top": 769,
+              "right": 111,
+              "bottom": 787,
+              "left": 93
+            }
+          },
+          {
+            "id": "handwriting-btn-options",
+            "rect": {
+              "x": 123,
+              "y": 769,
+              "width": 18,
+              "height": 18,
+              "top": 769,
+              "right": 141,
+              "bottom": 787,
+              "left": 123
+            }
+          },
+          {
+            "id": "handwriting-btn-color",
+            "rect": {
+              "x": 157,
+              "y": 762,
+              "width": 32,
+              "height": 32,
+              "top": 762,
+              "right": 189,
+              "bottom": 794,
+              "left": 157
+            }
+          },
+          {
+            "id": "handwriting-btn-eraser",
+            "rect": {
+              "x": 205,
+              "y": 758,
+              "width": 40,
+              "height": 40,
+              "top": 758,
+              "right": 245,
+              "bottom": 798,
+              "left": 205
+            }
+          },
+          {
+            "id": "handwriting-btn-pen",
+            "rect": {
+              "x": 255,
+              "y": 756,
+              "width": 44,
+              "height": 44,
+              "top": 756,
+              "right": 299,
+              "bottom": 800,
+              "left": 255
+            }
+          }
+        ],
+        "zIndex": "999999",
+        "background": "rgb(234, 230, 210)"
+      },
+      "perf": [
+        {
+          "name": "short",
+          "pointsPerStroke": 16,
+          "strokeCount": 1,
+          "firstCpuInkMs": {
+            "p50": 1,
+            "p95": 1,
+            "max": 1
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.69999999999999,
+            "p95": 16.700000000000045,
+            "max": 16.700000000000045
+          },
+          "handlerMs": {
+            "p50": 0.10000000009313226,
+            "p95": 0.20000000018626451,
+            "max": 0.20000000018626451
+          },
+          "meanRafHz": 59.9828620394173,
+          "heapBefore": 30924655,
+          "heapAfter": 31412867
+        },
+        {
+          "name": "long",
+          "pointsPerStroke": 520,
+          "strokeCount": 1,
+          "firstCpuInkMs": {
+            "p50": 0.19999999995343387,
+            "p95": 0.19999999995343387,
+            "max": 0.19999999995343387
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.699999999999818,
+            "p95": 16.700000000000728,
+            "max": 16.80000000000109
+          },
+          "handlerMs": {
+            "p50": 0.09999999986030161,
+            "p95": 0.10000000009313226,
+            "max": 0.30000000004656613
+          },
+          "meanRafHz": 60.002316691764165,
+          "heapBefore": 31079891,
+          "heapAfter": 31372835
+        },
+        {
+          "name": "dozens",
+          "pointsPerStroke": 20,
+          "strokeCount": 40,
+          "firstCpuInkMs": {
+            "p50": 0.19999999995343387,
+            "p95": 0.30000000004656613,
+            "max": 0.6999999999534339
+          },
+          "allFirstPixels": true,
+          "frameIntervalMs": {
+            "p50": 16.69999999999891,
+            "p95": 33.20000000000073,
+            "max": 49.899999999999636
+          },
+          "handlerMs": {
+            "p50": 0,
+            "p95": 0.19999999995343387,
+            "max": 0.9000000001396984
+          },
+          "meanRafHz": 56.92685012262899,
+          "heapBefore": 31480963,
+          "heapAfter": 35340239
+        }
+      ],
+      "pageErrors": [],
+      "consoleWarnings": [
+        "Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently",
+        "Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently"
+      ]
+    }
+  ]
+}

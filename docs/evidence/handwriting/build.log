@@ -1,0 +1,37 @@
+
+> dar-alhikayat@3.0.0 build
+> vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs
+
+vite v6.4.4 building for production...
+transforming...
+✓ 2738 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) /home/user/dar_repo/lib/prayer-config.ts is dynamically imported by /home/user/dar_repo/lib/prayer-times.ts but also statically imported by /home/user/dar_repo/lib/prayer-alarms.ts, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/index.html                              3.72 kB │ gzip:   1.35 kB
+dist/assets/index-BvSv2jDM.css              91.11 kB │ gzip:  19.29 kB
+dist/assets/web-D0ReqZti.js                  0.36 kB │ gzip:   0.25 kB
+dist/assets/web-Co88eljt.js                  0.84 kB │ gzip:   0.40 kB
+dist/assets/web-DXp63Rf0.js                  1.25 kB │ gzip:   0.59 kB
+dist/assets/web-BlsrbEEa.js                  2.34 kB │ gzip:   0.68 kB
+dist/assets/web-B2-I6481.js                  2.37 kB │ gzip:   0.93 kB
+dist/assets/web-Ou7sRBMi.js                  8.73 kB │ gzip:   2.97 kB
+dist/assets/web-CHdfNNj5.js                  9.63 kB │ gzip:   1.34 kB
+dist/assets/purify.es-DBIK8olT.js           29.40 kB │ gzip:  11.31 kB
+dist/assets/index.es-BDtjTfWx.js           159.75 kB │ gzip:  53.55 kB
+dist/assets/html2canvas.esm-QH1iLAAe.js    202.38 kB │ gzip:  48.04 kB
+dist/assets/html2pdf-eweax4Cf.js           670.67 kB │ gzip: 197.12 kB
+dist/assets/index-B7GBuaka.js            1,730.82 kB │ gzip: 498.97 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 11.37s
+
+  dist/server.cjs      26.8kb
+  dist/server.cjs.map  59.9kb
+
+⚡ Done in 12ms

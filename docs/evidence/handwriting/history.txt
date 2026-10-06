@@ -1,0 +1,12 @@
+4ed3cbb fix(handwriting): save-then-read flow, exit dialog, editable title, top-ink card preview
+53999ab fix(handwriting): true partial eraser — cut only the swept portion, split strokes at circle boundaries
+d7c9b84 fix(handwriting): size canvas backing store on mount — root cause of giant blurry strokes displaced from the finger
+b886f63 feat(handwriting): isolate handwriting layer with independent theme background and unified editor capsule header
+c814522 feat(handwriting): implement React Portal architecture with 1:1 viewport coordinate mapping and integrated top navigation
+518c59f fix(handwriting): resolve canvas layer visibility, DOM hierarchy, and ink rendering
+5113c86 fix(handwriting): resolve root-cause touch gesture cancellation, window pointer pipeline, and 120fps whole-stroke eraser
+11b0096 fix(handwriting): remove duplicate style prop on handwriting canvas element
+acf2221 fix(handwriting): dual-pipeline touch/pointer input, remove pointer capture cancel bug, and hoist canvas to root editor viewport
+4015748 fix(handwriting): resolve inking failure, eliminate eraser lag, and optimize to 120fps via batched paths and throttled RAF
+1bd9e41 feat: add Liquid Glass theme and optimize handwriting performance
+a470717 feat: add handwriting support and empty note validation

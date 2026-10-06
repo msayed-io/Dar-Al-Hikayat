@@ -1,0 +1,10 @@
+Initial clean TypeScript check: PASS with NODE_OPTIONS=--max-old-space-size=1400.
+Production web build: PASS (build.log).
+Production JS dev-marker scan: PASS.
+Subsequent tsc rerun after build, without the increased heap, aborted at default ~954MB heap.
+No app runtime crash: this was the sandbox TypeScript process.
+Generated dist is moved outside the source tree before the final clean-source check;
+no tsconfig or production code change is made to suppress the tooling failure.
+Production source content changes: 0 lines.
+Final clean-source tsc --noEmit: PASS (heap cap1400MB).
+Log presentation normalized: ANSI color escapes and trailing whitespace removed; assertion outcomes unchanged.

@@ -1,0 +1,11 @@
+{
+  "scope": "Ink-only screenshot crop, physical px (180, 300, 420, 340)",
+  "changedPixels": 824,
+  "differenceBBoxRelativeToCrop": [
+    16,
+    16,
+    224,
+    24
+  ],
+  "conclusion": "Stroke pixels differ at pen-up; no toolbar/header pixels included."
+}

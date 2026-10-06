@@ -1,0 +1,7 @@
+Publication attempted 2026-10-06:
+  git ls-remote https://github.com/msayed-io/Dar-Al-Hikayat.git <branch/tag refs>
+Result: exit128, could not read Username for https://github.com.
+Because the preflight failed, the chained push did not run.
+Authorized credential file and .git/config are absent in the restored workspace;
+GH_TOKEN/GITHUB_TOKEN are not present. No credential value was printed or committed.
+Branch/tag are LOCAL ONLY. No remote head/tag verification or CI dispatch succeeded.
