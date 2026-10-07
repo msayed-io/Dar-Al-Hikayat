@@ -137,6 +137,8 @@
 .bg-\[\#e6dccf\]\/60 { background-color: rgba(230, 220, 207, 0.6) !important; }
 .bg-\[\#e8dfd4\]\/60 { background-color: rgba(232, 223, 212, 0.6) !important; }
 .bg-\[\#a0753e\] { background-color: #a0753e !important; }
+.translate-x-4 { --tw-translate-x: 1rem; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skew(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+.translate-x-5 { --tw-translate-x: 1.25rem; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skew(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
 .bg-\[\#2b1a10\] { background-color: #2b1a10 !important; }
 .bg-\[\#2b1a10\]\/18 { background-color: rgba(43, 26, 16, 0.18) !important; }
 .bg-\[\#2b1a10\]\/20 { background-color: rgba(43, 26, 16, 0.2) !important; }

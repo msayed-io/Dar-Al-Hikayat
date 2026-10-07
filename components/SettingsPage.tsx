@@ -937,23 +937,25 @@ const SettingsPage: React.FC = () => {
               </div>
 
               <button
+                type="button"
+                role="switch"
+                aria-checked={isLocked}
                 onClick={toggleLock}
-                className="w-12 h-6 relative transition-colors duration-300 cursor-pointer flex-shrink-0 border p-0.5"
+                dir="ltr"
+                className="w-12 h-6 relative inline-flex items-center rounded-full transition-colors duration-300 cursor-pointer flex-shrink-0 p-0.5 border focus:outline-none"
                 style={{
-                  backgroundColor: isLocked ? currentTheme.accent : `${currentTheme.border}`,
+                  backgroundColor: isLocked ? currentTheme.accent : (currentTheme.isDark ? "#374151" : "#E5E7EB"),
                   borderColor: isLocked ? currentTheme.accent : currentTheme.border,
-                  borderRadius: "9999px",
                 }}
                 aria-label="تبديل قفل التطبيق"
               >
-                <div
-                  className={`w-5 h-5 bg-white transition-all duration-300 shadow-md flex items-center justify-center ${
-                    isLocked ? "mr-auto ml-0" : "ml-auto mr-0"
+                <span
+                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300 ease-in-out ${
+                    isLocked ? "translate-x-6" : "translate-x-0"
                   }`}
-                  style={{ borderRadius: "50%" }}
                 >
                   {isLocked && <Check className="w-3 h-3 text-[#2C3E30] stroke-[3]" />}
-                </div>
+                </span>
               </button>
             </div>
           </div>
