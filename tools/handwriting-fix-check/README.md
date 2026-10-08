@@ -1,3 +1,11 @@
+# Ink-only rollback notice
+
+At the user’s request, new pen drawing/storage now use the original 228b396 midpoint drawing and legacy replay path. History, shape/hold safeguards, lasso/eraser/highlighter fixes, PDF security and removal of text recognition remain unchanged. The versioned renderer and metadata helpers remain solely for compatibility with existing v1.0.127 saved ink; no saved notes are migrated or rewritten.
+
+The browser runner below documents the previous repair and is historical: its live-versus-lift equality assertions are no longer the requested acceptance criterion for new legacy ink. Use `node tools/handwriting-fix-check/ink-rollback.cjs` with the original228b396 on port3171 and this tree on port3170. It checks identical live/lift pixels and point data for touch/pen in light/dark themes (40 snapshots); existing v1 read compatibility and retained tools are covered by the unit suite. These are desktop synthetic inputs, not a physical-device acceptance test.
+
+---
+
 # Surgical handwriting verification
 
 Base: `228b3963bced16420ced8005f33691a28e56af1d` from main, checked against the remote before edits and again after the checks.

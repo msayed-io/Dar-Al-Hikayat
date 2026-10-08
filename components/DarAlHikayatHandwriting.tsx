@@ -18,7 +18,7 @@ import {
 import { ThemeColors } from "../contexts/AppContext";
 import { hasHandwritingInk, type HandwritingSaveResult } from "../lib/handwriting-document";
 import { isHandwritingFeatureEnabled } from "../lib/handwriting-feature-flags";
-import { renderRecordedInk, drawInkSegment, calculateVelocity, getVelocityAdjustedWidth } from "../lib/handwriting-engine";
+import { renderRecordedInk, calculateVelocity, getVelocityAdjustedWidth } from "../lib/handwriting-engine";
 import { applyDualEraser, EraserMode, computeStrokeBounds } from "../lib/handwriting-eraser-dual";
 import { renderHighlighterStroke, HIGHLIGHTER_CONFIG, HIGHLIGHTER_PALETTE, suppressSystemContextMenu } from "../lib/handwriting-highlighter";
 import {
@@ -340,6 +340,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           if (!stroke.points || stroke.points.length === 0) continue;
           if (stroke.isHighlighter || stroke.tool === "highlighter") continue;
 
+          // Compatibility only for ink already saved by v1.0.127. New ink uses the original renderer.
           if (stroke.renderVersion === 1) {
             renderRecordedInk(ctx, stroke);
             continue;
@@ -839,7 +840,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         return;
       }
 
-      const startPoint: StrokePoint = { x: worldX, y: worldY, pressure, time: performance.now(), inkWidth: selectedThicknessRef.current };
+      const startPoint: StrokePoint = { x: worldX, y: worldY, pressure, time: performance.now() };
       currentPointsRef.current = [startPoint];
       lastPointRef.current = startPoint;
       lastPointWidthRef.current = selectedThicknessRef.current;
@@ -997,7 +998,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             : selectedThicknessRef.current;
 
           lastPointWidthRef.current = dynamicWidth;
-          point.inkWidth = dynamicWidth;
+
+          const midX = (prevPoint.x + worldX) / 2;
+          const midY = (prevPoint.y + worldY) / 2;
 
           const ctx = canvas.getContext("2d");
           if (ctx) {
@@ -1012,8 +1015,18 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
 
-            drawInkSegment(ctx, prevPoint, point, currentPointsRef.current.length > 1
-              ? currentPointsRef.current[currentPointsRef.current.length - 2] : undefined);
+            ctx.beginPath();
+            if (currentPointsRef.current.length <= 1) {
+              ctx.moveTo(prevPoint.x, prevPoint.y);
+              ctx.lineTo(midX, midY);
+            } else {
+              const pBefore = currentPointsRef.current[currentPointsRef.current.length - 2];
+              const prevMidX = (pBefore.x + prevPoint.x) / 2;
+              const prevMidY = (pBefore.y + prevPoint.y) / 2;
+              ctx.moveTo(prevMidX, prevMidY);
+              ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, midX, midY);
+            }
+            ctx.stroke();
             ctx.restore();
           }
         }
@@ -1119,7 +1132,6 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           color: selectedColorRef.current,
           width: selectedThicknessRef.current,
           points: [...currentPointsRef.current],
-          renderVersion: 1,
         };
         // Only a hold completed BEFORE lift may convert; never recognize on lift.
         const held = allowShape && isSmartShapesEnabledRef.current &&

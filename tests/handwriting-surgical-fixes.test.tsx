@@ -43,7 +43,7 @@ describe('Handwriting surgical regression tests', () => {
     await act(async () => ref.current!.undo());
     const original = ref.current!.getStrokes()[0];
     expect(original.points).toEqual(converted.originalPoints);
-    expect(original.renderVersion).toBe(1);
+    expect(original.renderVersion).toBeUndefined();
     expect(original.color).toBe(converted.color);
     expect(original.width).toBe(converted.width);
     await act(async () => ref.current!.redo());
@@ -61,6 +61,17 @@ describe('Handwriting surgical regression tests', () => {
     if (event === 'blur') await act(async () => window.dispatchEvent(new Event('blur')));
     else await pointer(window, event, 290, 260);
     expect(ref.current!.getStrokes()[0].tool).not.toBe('shape');
+  });
+  it('stores new pen samples unchanged in the original format', async () => {
+    const ref = await mount();
+    await pointer('#handwriting-canvas-layer', 'pointerdown', 100, 200);
+    await pointer(window, 'pointermove', 150, 220);
+    await pointer(window, 'pointermove', 180, 210);
+    await pointer(window, 'pointerup', 180, 210);
+    const stroke = ref.current!.getStrokes()[0];
+    expect(stroke.renderVersion).toBeUndefined();
+    expect(stroke.points.map(p => [p.x, p.y])).toEqual([[100, 200], [150, 220], [180, 210]]);
+    expect(stroke.points.every(p => p.inkWidth === undefined)).toBe(true);
   });
   it('retains separate undo steps across multiple strokes despite event closures', async () => {
     const ref = await mount();
@@ -81,9 +92,10 @@ describe('Handwriting surgical regression tests', () => {
     expect((document.getElementById('handwriting-btn-highlighter') as HTMLButtonElement).disabled).toBe(true);
     await circle(); await wait(481); await pointer(window, 'pointerup', 290, 260);
     expect(ref.current!.getStrokes()[0].tool).not.toBe('shape');
-    expect(ref.current!.getStrokes()[0].points.every(p => p.inkWidth === 3.5)).toBe(true);
+    expect(ref.current!.getStrokes()[0].renderVersion).toBeUndefined();
+    expect(ref.current!.getStrokes()[0].points.every(p => p.inkWidth === undefined)).toBe(true);
   });
-  it('replays the same sequence of drawing operations, including segment widths and no extra tail', () => {
+  it('retains read compatibility for already-saved v1 ink, including recorded widths', () => {
     const operations: unknown[][] = [];
     const ctx = new Proxy({} as CanvasRenderingContext2D, {
       set(t, key, value) { operations.push(['set', key, value]); return true; },
