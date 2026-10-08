@@ -114,3 +114,58 @@ export function renderStrokePath(
   ctx.lineTo(lastPt.x, lastPt.y);
   ctx.stroke();
 }
+
+/** Identical primitive for live ink and persisted v1 replay. Caller owns transforms. */
+export function drawInkSegment(ctx: CanvasRenderingContext2D, previous: StrokePoint,
+  point: StrokePoint, before?: StrokePoint): void {
+  ctx.beginPath();
+  const x = (previous.x + point.x) / 2, y = (previous.y + point.y) / 2;
+  if (!before) {
+    ctx.moveTo(previous.x, previous.y);
+    ctx.lineTo(x, y);
+  } else {
+    ctx.moveTo((before.x + previous.x) / 2, (before.y + previous.y) / 2);
+    ctx.quadraticCurveTo(previous.x, previous.y, x, y);
+  }
+  ctx.stroke();
+}
+
+function recordedWidth(point: StrokePoint, fallback: number): number {
+  return Number.isFinite(point.inkWidth) && point.inkWidth! > 0 ? point.inkWidth! : fallback;
+}
+
+/** Replays recorded segment widths, without recalculating speed after transforms. */
+export function renderRecordedInk(ctx: CanvasRenderingContext2D, stroke: Stroke): void {
+  const points = stroke.points;
+  if (!points.length) return;
+  ctx.fillStyle = ctx.strokeStyle = stroke.color;
+  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.arc(points[0].x, points[0].y, recordedWidth(points[0], stroke.width) / 2, 0, Math.PI * 2);
+  ctx.fill();
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineWidth = recordedWidth(points[i], stroke.width);
+    drawInkSegment(ctx, points[i - 1], points[i], i > 1 ? points[i - 2] : undefined);
+  }
+}
+
+/** Same v1 geometry for vector-only previews; legacy previews remain unchanged. */
+export function getRecordedInkPaths(stroke: Stroke): Array<{
+  id: string; color: string; width: number; dot?: { x: number; y: number }; path?: string;
+}> {
+  if (!stroke.points.length) return [];
+  const first = stroke.points[0];
+  const paths: ReturnType<typeof getRecordedInkPaths> = [{
+    id: `${stroke.id}_dot`, color: stroke.color, width: recordedWidth(first, stroke.width),
+    dot: { x: first.x, y: first.y },
+  }];
+  for (let i = 1; i < stroke.points.length; i++) {
+    const a = stroke.points[i - 1], b = stroke.points[i], before = stroke.points[i - 2];
+    const end = `${(a.x + b.x) / 2} ${(a.y + b.y) / 2}`;
+    paths.push({ id: `${stroke.id}_${i}`, color: stroke.color, width: recordedWidth(b, stroke.width),
+      path: before
+        ? `M ${(before.x + a.x) / 2} ${(before.y + a.y) / 2} Q ${a.x} ${a.y} ${end}`
+        : `M ${a.x} ${a.y} L ${end}` });
+  }
+  return paths;
+}

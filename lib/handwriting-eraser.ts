@@ -64,6 +64,8 @@ const lerpPoint = (a: StrokePoint, b: StrokePoint, t: number): StrokePoint => ({
   y: a.y + (b.y - a.y) * t,
   pressure: a.pressure + (b.pressure - a.pressure) * t,
   time: a.time + (b.time - a.time) * t,
+  ...(a.inkWidth !== undefined && b.inkWidth !== undefined
+    ? { inkWidth: a.inkWidth + (b.inkWidth - a.inkWidth) * t } : {}),
 });
 
 const arcLength = (points: StrokePoint[]): number => {
@@ -173,6 +175,7 @@ export function eraseStrokePortion(
   });
 
   return kept.map((points, index) => ({
+    ...stroke,
     id: makeFragmentId(stroke.id, index),
     color: stroke.color,
     width: stroke.width,

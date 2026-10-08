@@ -21,8 +21,6 @@ export const HANDWRITING_FEATURE_FLAGS = {
   /** التعرف التلقائي على الأشكال الهندسية مع التوقف المؤقت (المرحلة 5) */
   SMART_SHAPE_RECOGNITION: true,
 
-  /** التعرف المحلي على النصوص العربية بدون إنترنت (المرحلة 6) */
-  OFFLINE_INK_TO_TEXT: true,
 } as const;
 
 export type HandwritingFeatureKey = keyof typeof HANDWRITING_FEATURE_FLAGS;

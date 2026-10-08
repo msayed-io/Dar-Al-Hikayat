@@ -18,7 +18,7 @@ import {
 import { ThemeColors } from "../contexts/AppContext";
 import { hasHandwritingInk, type HandwritingSaveResult } from "../lib/handwriting-document";
 import { isHandwritingFeatureEnabled } from "../lib/handwriting-feature-flags";
-import { renderStrokePath, calculateVelocity, getVelocityAdjustedWidth } from "../lib/handwriting-engine";
+import { renderRecordedInk, drawInkSegment, calculateVelocity, getVelocityAdjustedWidth } from "../lib/handwriting-engine";
 import { applyDualEraser, EraserMode, computeStrokeBounds } from "../lib/handwriting-eraser-dual";
 import { renderHighlighterStroke, HIGHLIGHTER_CONFIG, HIGHLIGHTER_PALETTE, suppressSystemContextMenu } from "../lib/handwriting-highlighter";
 import {
@@ -36,6 +36,7 @@ export interface StrokePoint {
   y: number;
   pressure: number;
   time: number;
+  inkWidth?: number;
 }
 
 export interface Stroke {
@@ -48,6 +49,7 @@ export interface Stroke {
   opacity?: number;
   shapeType?: DetectedShapeType;
   originalPoints?: StrokePoint[];
+  renderVersion?: 1;
 }
 
 export interface HandwritingHandle {
@@ -189,6 +191,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const [strokes, setStrokes] = useState<Stroke[]>(initialStrokes);
     const [history, setHistory] = useState<Stroke[][]>([initialStrokes]);
     const [historyIndex, setHistoryIndex] = useState<number>(0);
+    const historyRef = useRef({ entries: history, index: historyIndex });
+    historyRef.current = { entries: history, index: historyIndex };
 
     // Infinite Canvas Vertical Pan State & Refs
     const [panY, setPanY] = useState<number>(0);
@@ -222,11 +226,25 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const scaleAnchorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
     const transformStartRef = useRef<{ clientX: number; clientY: number; worldX: number; worldY: number } | null>(null);
     const preTransformStrokesRef = useRef<Stroke[] | null>(null);
+    const pendingTransformRef = useRef<(() => void) | null>(null);
+    const applyingTransformRef = useRef(false);
+    const flushPendingTransform = () => {
+      const pending = pendingTransformRef.current;
+      pendingTransformRef.current = null;
+      if (!pending) return;
+      applyingTransformRef.current = true;
+      try { pending(); } finally { applyingTransformRef.current = false; }
+    };
 
     // Smart Shapes refs
     const shapeHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const candidateShapeRef = useRef<Stroke | null>(null);
     const isSmartShapesEnabledRef = useRef<boolean>(true);
+    useEffect(() => () => {
+      if (shapeHoldTimerRef.current) clearTimeout(shapeHoldTimerRef.current);
+      shapeHoldTimerRef.current = null;
+      candidateShapeRef.current = null;
+    }, [isActive]);
 
     // Throttled redraw RAF
     const redrawRafIdRef = useRef<number | null>(null);
@@ -272,7 +290,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     // High-performance batched canvas redraw
     const redrawAll = useCallback(
-      (strokesToDraw: Stroke[], currentPanY: number = panYRef.current) => {
+      (strokesToDraw: Stroke[], currentPanY: number = panYRef.current, includeSelection = true) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -322,6 +340,11 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           if (!stroke.points || stroke.points.length === 0) continue;
           if (stroke.isHighlighter || stroke.tool === "highlighter") continue;
 
+          if (stroke.renderVersion === 1) {
+            renderRecordedInk(ctx, stroke);
+            continue;
+          }
+
           ctx.strokeStyle = stroke.color;
           ctx.fillStyle = stroke.color;
           ctx.lineCap = "round";
@@ -353,7 +376,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         }
 
         // Pass 3: Lasso loop in-progress
-        if (lassoLoopRef.current.length > 1) {
+        if (includeSelection && lassoLoopRef.current.length > 1) {
           ctx.save();
           ctx.strokeStyle = theme.accent;
           ctx.lineWidth = 1.5;
@@ -369,7 +392,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
         // Pass 4: Lasso Selection Box overlay (uses real-time box from ref or state)
         const activeBox = currentSelectionBoxRef.current || selectionBox;
-        if (activeBox && selectedStrokeIdsRef.current.length > 0) {
+        if (includeSelection && activeBox && selectedStrokeIdsRef.current.length > 0) {
           ctx.save();
           ctx.strokeStyle = theme.accent;
           ctx.lineWidth = 1.8;
@@ -406,6 +429,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const scheduleRedraw = useCallback(() => {
       if (redrawRafIdRef.current !== null) return;
       redrawRafIdRef.current = requestAnimationFrame(() => {
+        flushPendingTransform();
         redrawRafIdRef.current = null;
         redrawAll(strokesRef.current, panYRef.current);
       });
@@ -413,6 +437,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     useEffect(() => {
       return () => {
+        pendingTransformRef.current = null;
         if (redrawRafIdRef.current !== null) {
           cancelAnimationFrame(redrawRafIdRef.current);
           redrawRafIdRef.current = null;
@@ -563,8 +588,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     const generateDataUrl = useCallback(() => {
       const canvas = canvasRef.current;
       if (!canvas || !hasHandwritingInk(strokesRef.current)) return "";
-      redrawAll(strokesRef.current, panYRef.current);
-      return canvas.toDataURL("image/png");
+      redrawAll(strokesRef.current, panYRef.current, false);
+      try { return canvas.toDataURL("image/png"); }
+      finally { redrawAll(strokesRef.current, panYRef.current); }
     }, [redrawAll]);
 
     const onStrokesChangeRef = useRef(onStrokesChange);
@@ -581,11 +607,14 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     }, [historyIndex, history.length, onUndoChange]);
 
     // History push
-    const recordHistory = (newStrokes: Stroke[]) => {
-      const nextHistory = history.slice(0, historyIndex + 1);
+    const recordHistory = (newStrokes: Stroke[], beforeConversion?: Stroke[]) => {
+      const nextHistory = historyRef.current.entries.slice(0, historyRef.current.index + 1);
+      if (beforeConversion) nextHistory.push(beforeConversion);
       nextHistory.push(newStrokes);
-      if (nextHistory.length > 50) nextHistory.shift();
+      while (nextHistory.length > 50) nextHistory.shift();
       const newIdx = nextHistory.length - 1;
+      historyRef.current = { entries: nextHistory, index: newIdx };
+      strokeBoundsRef.current.clear();
       lastInternalStrokesRef.current = newStrokes;
       setHistory(nextHistory);
       setHistoryIndex(newIdx);
@@ -604,8 +633,11 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         const previousStrokes = history[nextIndex];
         lastInternalStrokesRef.current = previousStrokes;
         strokesRef.current = previousStrokes;
+        strokeBoundsRef.current.clear();
         setStrokes(previousStrokes);
         setSelectedStrokeIds([]);
+        selectedStrokeIdsRef.current = [];
+        currentSelectionBoxRef.current = null;
         setSelectionBox(null);
         redrawAll(previousStrokes, panYRef.current);
         notifyChange(previousStrokes, isPageRuled);
@@ -623,8 +655,11 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         const nextStrokes = history[nextIndex];
         lastInternalStrokesRef.current = nextStrokes;
         strokesRef.current = nextStrokes;
+        strokeBoundsRef.current.clear();
         setStrokes(nextStrokes);
         setSelectedStrokeIds([]);
+        selectedStrokeIdsRef.current = [];
+        currentSelectionBoxRef.current = null;
         setSelectionBox(null);
         redrawAll(nextStrokes, panYRef.current);
         notifyChange(nextStrokes, isPageRuled);
@@ -654,6 +689,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     // Clear all strokes
     const handleClearAll = useCallback(() => {
+      selectedStrokeIdsRef.current = [];
+      currentSelectionBoxRef.current = null;
       recordHistory([]);
       strokesRef.current = [];
       redrawAll([], panYRef.current);
@@ -668,6 +705,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       setStrokes([]);
       setHistory([[]]);
       setHistoryIndex(0);
+      historyRef.current = { entries: [[]], index: 0 };
+      selectedStrokeIdsRef.current = [];
+      currentSelectionBoxRef.current = null;
       strokesRef.current = [];
       lastInternalStrokesRef.current = [];
       strokeBoundsRef.current.clear();
@@ -691,7 +731,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     // Dual Vector Eraser integration
     const eraseAtPoint = (worldX: number, worldY: number, radius = 28) => {
-      const mode = eraserModeRef.current;
+      const mode = isHandwritingFeatureEnabled("DUAL_VECTOR_ERASER") ? eraserModeRef.current : "partial";
       const { nextStrokes, modified } = applyDualEraser(
         strokesRef.current,
         worldX,
@@ -799,7 +839,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         return;
       }
 
-      const startPoint: StrokePoint = { x: worldX, y: worldY, pressure, time: performance.now() };
+      const startPoint: StrokePoint = { x: worldX, y: worldY, pressure, time: performance.now(), inkWidth: selectedThicknessRef.current };
       currentPointsRef.current = [startPoint];
       lastPointRef.current = startPoint;
       lastPointWidthRef.current = selectedThicknessRef.current;
@@ -807,7 +847,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       if (activeToolRef.current === "eraser") {
         eraseAtPoint(worldX, worldY);
       } else if (activeToolRef.current === "highlighter") {
-        scheduleRedraw();
+        redrawAll(strokesRef.current, panYRef.current);
       } else {
         // Pen: instant first pixel dot
         const ctx = canvas.getContext("2d");
@@ -825,7 +865,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         }
 
         // Hold-to-Shape timer init
-        if (isSmartShapesEnabledRef.current) {
+        if (isSmartShapesEnabledRef.current && isHandwritingFeatureEnabled("SMART_SHAPE_RECOGNITION")) {
           if (shapeHoldTimerRef.current) clearTimeout(shapeHoldTimerRef.current);
           shapeHoldTimerRef.current = setTimeout(() => {
             if (isDrawingRef.current && currentPointsRef.current.length >= 12) {
@@ -858,6 +898,12 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       // Handle Lasso transforms during move
       const baseBox = baseSelectionBoxRef.current || currentSelectionBoxRef.current || selectionBox;
       if (isTransformingRef.current && transformStartRef.current && preTransformStrokesRef.current && baseBox) {
+        // Coalesce pointer/coalesced samples: clone selected geometry once per frame.
+        if (!applyingTransformRef.current) {
+          pendingTransformRef.current = () => moveDrawing(clientX, clientY, pressure);
+          scheduleRedraw();
+          return;
+        }
         const dx = worldX - transformStartRef.current.worldX;
         const dy = worldY - transformStartRef.current.worldY;
 
@@ -951,9 +997,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             : selectedThicknessRef.current;
 
           lastPointWidthRef.current = dynamicWidth;
-
-          const midX = (prevPoint.x + worldX) / 2;
-          const midY = (prevPoint.y + worldY) / 2;
+          point.inkWidth = dynamicWidth;
 
           const ctx = canvas.getContext("2d");
           if (ctx) {
@@ -968,18 +1012,8 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
 
-            ctx.beginPath();
-            if (currentPointsRef.current.length <= 1) {
-              ctx.moveTo(prevPoint.x, prevPoint.y);
-              ctx.lineTo(midX, midY);
-            } else {
-              const pBefore = currentPointsRef.current[currentPointsRef.current.length - 2];
-              const prevMidX = (pBefore.x + prevPoint.x) / 2;
-              const prevMidY = (pBefore.y + prevPoint.y) / 2;
-              ctx.moveTo(prevMidX, prevMidY);
-              ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, midX, midY);
-            }
-            ctx.stroke();
+            drawInkSegment(ctx, prevPoint, point, currentPointsRef.current.length > 1
+              ? currentPointsRef.current[currentPointsRef.current.length - 2] : undefined);
             ctx.restore();
           }
         }
@@ -987,8 +1021,10 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         currentPointsRef.current.push(point);
         lastPointRef.current = point;
 
+        // Any resumed movement invalidates a previously held candidate.
+        candidateShapeRef.current = null;
         // Reset hold timer if hand continues to move actively
-        if (isSmartShapesEnabledRef.current && shapeHoldTimerRef.current) {
+        if (isSmartShapesEnabledRef.current && isHandwritingFeatureEnabled("SMART_SHAPE_RECOGNITION") && shapeHoldTimerRef.current) {
           clearTimeout(shapeHoldTimerRef.current);
           shapeHoldTimerRef.current = setTimeout(() => {
             if (isDrawingRef.current && currentPointsRef.current.length >= 12) {
@@ -1008,8 +1044,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       }
     };
 
-    const finishDrawing = () => {
+    const finishDrawing = (allowShape = true) => {
       if (!isDrawingRef.current) return;
+      flushPendingTransform();
       isDrawingRef.current = false;
 
       if (shapeHoldTimerRef.current) {
@@ -1077,31 +1114,21 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         notifyChange(updated, isPageRuled);
         redrawAll(updated, panYRef.current);
       } else if (activeToolRef.current === "pen" && currentPointsRef.current.length > 0) {
-        let finalStroke: Stroke;
-
-        if (candidateShapeRef.current) {
-          finalStroke = candidateShapeRef.current;
-        } else if (isSmartShapesEnabledRef.current && currentPointsRef.current.length >= 12) {
-          const detection = detectSmartShape(currentPointsRef.current);
-          const rawStroke: Stroke = {
-            id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            color: selectedColorRef.current,
-            width: selectedThicknessRef.current,
-            points: [...currentPointsRef.current],
-          };
-          finalStroke = detection.isShape ? convertStrokeToShape(rawStroke, detection) : rawStroke;
-        } else {
-          finalStroke = {
-            id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            color: selectedColorRef.current,
-            width: selectedThicknessRef.current,
-            points: [...currentPointsRef.current],
-          };
-        }
-
+        const rawStroke: Stroke = {
+          id: `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          color: selectedColorRef.current,
+          width: selectedThicknessRef.current,
+          points: [...currentPointsRef.current],
+          renderVersion: 1,
+        };
+        // Only a hold completed BEFORE lift may convert; never recognize on lift.
+        const held = allowShape && isSmartShapesEnabledRef.current &&
+          isHandwritingFeatureEnabled("SMART_SHAPE_RECOGNITION") && candidateShapeRef.current;
+        const finalStroke = held ? { ...held, id: rawStroke.id } : rawStroke;
+        const beforeConversion = held ? [...strokesRef.current, rawStroke] : undefined;
         const updated = [...strokesRef.current, finalStroke];
         strokesRef.current = updated;
-        recordHistory(updated);
+        recordHistory(updated, beforeConversion);
         redrawAll(updated, panYRef.current);
       }
 
@@ -1230,7 +1257,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           isPanning = false;
           if (isDrawing || isDrawingRef.current) {
             isDrawing = false;
-            finishDrawing();
+            finishDrawing(e.type === "pointerup");
           }
         }
       };
@@ -1240,7 +1267,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
         isPanning = false;
         if (isDrawing || isDrawingRef.current) {
           isDrawing = false;
-          finishDrawing();
+          finishDrawing(false);
         }
       };
 
@@ -2034,6 +2061,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
                     {/* Mode Toggle: Whole Stroke Eraser */}
                     <button
+                      disabled={!isHandwritingFeatureEnabled("DUAL_VECTOR_ERASER")}
                       onClick={() => {
                         setEraserMode("stroke");
                         eraserModeRef.current = "stroke";
@@ -2112,6 +2140,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
                   {/* Button 3: Lasso Tool */}
                   <button
                     id="handwriting-btn-lasso"
+                    disabled={!isHandwritingFeatureEnabled("LASSO_TOOL")}
                     onClick={() => {
                       setActiveTool("lasso");
                       activeToolRef.current = "lasso";
@@ -2159,6 +2188,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
                   {/* Button 5: Highlighter Marker Tool */}
                   <button
                     id="handwriting-btn-highlighter"
+                    disabled={!isHandwritingFeatureEnabled("HIGHLIGHTER_TOOL")}
                     onClick={() => {
                       setActiveTool("highlighter");
                       activeToolRef.current = "highlighter";

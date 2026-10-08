@@ -1,3 +1,4 @@
+import { getRecordedInkPaths } from "./handwriting-engine";
 import type { Stroke } from "../components/DarAlHikayatHandwriting";
 
 export type HandwritingSaveResult = "saved" | "empty" | "failed" | "busy";
@@ -32,7 +33,10 @@ export interface HandwritingPreviewGeometry {
 export function getHandwritingPreview(strokes: readonly Stroke[]): HandwritingPreviewGeometry | null {
   const bounds = strokes.map((stroke) => {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    const width = Number.isFinite(stroke.width) && stroke.width > 0 ? stroke.width : 3.5;
+    const baseWidth = Number.isFinite(stroke.width) && stroke.width > 0 ? stroke.width : 3.5;
+    const width = stroke.renderVersion === 1
+      ? stroke.points.reduce((w, p) => Number.isFinite(p.inkWidth) ? Math.max(w, p.inkWidth!) : w, baseWidth)
+      : baseWidth;
     for (const point of stroke.points || []) {
       if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
       minX = Math.min(minX, point.x - width / 2);
@@ -57,7 +61,8 @@ export function getHandwritingPreview(strokes: readonly Stroke[]): HandwritingPr
     viewBox: `${x} ${top} ${width} ${height}`,
     top,
     height,
-    strokes: visible.map(({ stroke, width }) => {
+    strokes: visible.flatMap<HandwritingPreviewStroke>(({ stroke, width }) => {
+      if (stroke.renderVersion === 1) return getRecordedInkPaths(stroke);
       const points = stroke.points.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
       const first = points[0];
       if (points.length === 1) {

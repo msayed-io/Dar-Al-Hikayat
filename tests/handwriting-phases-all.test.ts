@@ -4,7 +4,6 @@ import { applyDualEraser, strokeTouchesCircle, computeStrokeBounds } from "../li
 import { HIGHLIGHTER_CONFIG, HIGHLIGHTER_PALETTE, renderHighlighterStroke } from "../lib/handwriting-highlighter";
 import { isPointInPolygon, findStrokesInsideLasso, computeSelectionBox, transformSelectedStrokes } from "../lib/handwriting-lasso";
 import { detectSmartShape, convertStrokeToShape, SHAPE_CONFIG } from "../lib/handwriting-shapes";
-import { recognizeHandwritingOffline } from "../lib/handwriting-ocr";
 import { HANDWRITING_FEATURE_FLAGS, isHandwritingFeatureEnabled } from "../lib/handwriting-feature-flags";
 import type { Stroke, StrokePoint } from "../components/DarAlHikayatHandwriting";
 
@@ -206,35 +205,12 @@ describe("Phase 5: Smart Shape Classifier (Hold-to-Shape & Arabic Safety)", () =
   });
 });
 
-describe("Phase 6: Offline Arabic Ink-to-Text OCR", () => {
-  it("recognizes Arabic handwriting strokes completely offline without network", async () => {
-    const sampleStrokes: Stroke[] = [
-      {
-        id: "word1",
-        color: "#FFF",
-        width: 3.5,
-        points: [
-          { x: 200, y: 100, pressure: 0.5, time: 0 },
-          { x: 150, y: 110, pressure: 0.5, time: 10 },
-          { x: 100, y: 105, pressure: 0.5, time: 20 },
-        ],
-      },
-    ];
-
-    const result = await recognizeHandwritingOffline(sampleStrokes);
-    expect(result.text).toBeTruthy();
-    expect(result.confidence).toBeGreaterThan(0.7);
-    expect(result.wordCount).toBeGreaterThan(0);
-  });
-});
-
 describe("Phase 7: Feature Flags & Invariants", () => {
-  it("all 7 phase feature flags are active by default", () => {
+  it("remaining feature flags are active by default", () => {
     expect(isHandwritingFeatureEnabled("SMOOTH_GRAPHICS_ENGINE")).toBe(true);
     expect(isHandwritingFeatureEnabled("DUAL_VECTOR_ERASER")).toBe(true);
     expect(isHandwritingFeatureEnabled("HIGHLIGHTER_TOOL")).toBe(true);
     expect(isHandwritingFeatureEnabled("LASSO_TOOL")).toBe(true);
     expect(isHandwritingFeatureEnabled("SMART_SHAPE_RECOGNITION")).toBe(true);
-    expect(isHandwritingFeatureEnabled("OFFLINE_INK_TO_TEXT")).toBe(true);
   });
 });

@@ -337,6 +337,7 @@ export function convertStrokeToShape(stroke: Stroke, detection: ShapeDetectionRe
   return {
     ...stroke,
     tool: "shape",
+    renderVersion: undefined,
     shapeType: detection.shapeType,
     originalPoints: [...stroke.points],
     points: detection.generatedPoints,

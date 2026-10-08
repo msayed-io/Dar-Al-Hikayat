@@ -277,6 +277,7 @@ export function transformSelectedStrokes(
         y: originY + (p.y - originY) * scale + dy,
         pressure: p.pressure,
         time: p.time,
+        ...(p.inkWidth !== undefined ? { inkWidth: p.inkWidth * scale } : {}),
       };
     }
 

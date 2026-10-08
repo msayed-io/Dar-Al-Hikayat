@@ -11,7 +11,6 @@
 - `lib/handwriting-highlighter.ts`: محرك التظليل الاحترافي بدمج الألوان والشفافية وحظر كبسولات النظام.
 - `lib/handwriting-lasso.ts`: خوارزمية التحديد باللاسو والتحويل المتناسب والتحريك.
 - `lib/handwriting-shapes.ts`: مصنف الأشكال الذكي (Hold-to-Shape) مع حماية الحروف والأرقام العربية.
-- `lib/handwriting-ocr.ts`: محرك التعرف المحلي على النصوص العربية بدون إنترنت عبر Web Worker.
 - `lib/handwriting-feature-flags.ts`: مفاتيح الإيقاف والتشغيل الثابتة في الكود للتراجع الفوري.
 
 ## 2. تدفق البيانات من حدث اللمس حتى ظهور البكسل (The Hot Path)
