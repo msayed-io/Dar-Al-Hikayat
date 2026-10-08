@@ -2,11 +2,11 @@
 
 Base: `228b3963bced16420ced8005f33691a28e56af1d` from main, checked against the remote before edits and again after the checks.
 
-This is a separate Vite development entry, not imported by the app, with a DEV guard. No new application dependency, model, canvas layer, CSS change, or toolbar redesign is introduced.
+This is a separate Vite development entry, not imported by the app, with a DEV guard. The handwriting-only commit introduces no application dependency, model, canvas layer, CSS change, or toolbar redesign. A separately authorized PDF/dependency security follow-up is documented below.
 
 ## Reproduce
 
-Use Node22, project dependencies, React19 type declarations, and Playwright Chromium in an external tooling directory. Neither application package.json nor a lockfile is changed by these repairs. In the recorded run, the tooling directory was `/var/tmp/dar-fix-tools`, and `node_modules` was a symlink to it.
+Use Node22, project dependencies, React19 type declarations, and Playwright Chromium in an external tooling directory. The handwriting-only commit did not change dependencies. For the final security follow-up, install the committed manifest and bun.lock with `bun install --frozen-lockfile` (recorded Bun 1.4.2). The final application node_modules symlink targeted `/var/tmp/dar-locked/node_modules`; external Playwright/Node tooling stayed in `/var/tmp/dar-fix-tools`. Set NODE_PATH to the external tooling node_modules when running the CJS browser scripts.
 
 1. Serve the repaired tree with Vite on port3170.
 2. Extract `git archive 228b396` into a temporary directory, add the same external node_modules symlink, and copy only this development entry's index.html/main.tsx into its tools/handwriting-fix-check directory. Serve that original tree on port3171.
@@ -40,4 +40,22 @@ The current highlighter blending appearance is intentionally retained, not repla
 
 ## Limits / release decision
 
-CPU readback/handler measurements are desktop diagnostics, not input-to-photon or Android FPS. Physical stylus, Android WebView/backgrounding/SQLite, long-session native memory and release APK are unverified. The complete app dependency audit is not clean: the resolved unchanged application manifest includes advisories in existing PDF/build-tool dependencies. These repairs do not upgrade unrelated dependencies. No claim of a vulnerability-free application or unconditional release acceptance is made.
+CPU readback/handler measurements are desktop diagnostics, not input-to-photon or Android FPS. Physical stylus, Android WebView/backgrounding/SQLite, long-session native memory and release APK are unverified. The original audit found existing critical PDF and moderate build-tool advisories. The separately authorized follow-up now passes the project Bun lockfile audit and external npm audit with zero known advisories at the time of checking. This is not a general security certification. No claim of a vulnerability-free application or unconditional release acceptance is made.
+
+
+## Authorized PDF/dependency follow-up
+
+- Pin html2pdf.js 0.14.0 and DOMPurify 3.4.16; bun.lock resolves jsPDF 4.2.1.
+- Import `html2pdf.js/src/index.js`, not its default prebuilt distribution: the latter embeds jsPDF 4.0.0 and DOMPurify 3.3.1 despite a clean external dependency audit. The package is pinned because this is a source entry, not a future-version compatibility promise.
+- Sanitize the parsed body before attaching it to the live DOM. A benign invalid data-image/onerror marker executed before the repair and does not execute after it. No user data or remote exfiltration endpoint is used.
+- Pin Capacitor CLI 8.4.1 to avoid the xcode → vulnerable uuid chain without a forced transitive major override. Core/Android remain at resolved 8.5.3. `cap sync android` passed in a disposable copy; native compilation/device behavior remains unverified.
+- Include upstream PDF dependency license notices in public/licenses. No application CSS, font files, Android source, or workflow is modified.
+- Final checks: clean frozen install; typecheck; 332 tests in 40 files × 3; real Canvas × 3; web build; shipped PDF version inspection; genuine PDF pixel comparison. Existing build chunk-size warning remains.
+
+### PDF reproduction
+
+`pdf.cjs` exports synthetic Arabic short, rich/highlight/font, and four-page fixtures through the genuine application function. It loads the real EditorFonts.css and verifies Amiri 400/700 faces load rather than silently relying on fallback fonts. Use `PDF_SIDE=before|after`, `PDF_CASE=short|rich|long`, and optional `HW_EVIDENCE`. Run sides separately on memory-constrained hosts.
+
+The original tree must use a separately installed html2pdf.js 0.10.3 default distribution, via a temporary baseline-only Vite alias. Sharing upgraded dependencies without this alias is not an old-versus-new PDF comparison. The final rich-font outputs, and every page of the other fixtures, matched exactly after rasterization with PyMuPDF. PDF Producer changed from jsPDF 3.0.4 to 4.2.1. This is sample-based desktop verification, not a claim about all fonts/documents or Android PDF export.
+
+`tests/pdf-security.test.ts` guards sanitization before live insertion, Arabic/font/highlight preservation, and cleanup on failure. Its library is mocked; the browser exports and raster comparison provide the independent real-library evidence.

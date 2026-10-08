@@ -2,6 +2,7 @@
  * تصدير الحكاية إلى PDF — مطابق حرفيًا لمنطق النسخة الإنتاجية:
  * قالب HTML فاخر RTL + طبقة تحميل + html2pdf بدقة A4 مضاعفة.
  */
+import DOMPurify from "dompurify";
 import type { NoteStyles } from "../contexts/AppContext";
 
 /** بناء محتوى الحكاية بتنسيق HTML قابل للطباعة (نفس قالب الإنتاج مع الحفاظ التام على التظليل) */
@@ -240,13 +241,15 @@ export async function exportStoryToPdf(
     renderHost.appendChild(styleEl);
 
     const contentEl = document.createElement("div");
-    contentEl.innerHTML = parsed.body.innerHTML;
+    // Sanitize BEFORE attaching note HTML to the live document.
+    contentEl.innerHTML = DOMPurify.sanitize(parsed.body.innerHTML, { USE_PROFILES: { html: true } });
     renderHost.appendChild(contentEl);
 
     await document.fonts.ready;
     await new Promise((r) => setTimeout(r, 1500));
 
-    const html2pdf = (await import("html2pdf.js")).default;
+    // Use source modules: the prebuilt bundle vendors an older jsPDF internally.
+    const html2pdf = (await import("html2pdf.js/src/index.js")).default;
 
     return await html2pdf()
       .set({

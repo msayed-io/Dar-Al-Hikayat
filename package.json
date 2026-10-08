@@ -15,7 +15,7 @@
     "@capacitor-community/sqlite": "^8.1.1",
     "@capacitor/android": "^8.3.1",
     "@capacitor/app": "^8.0.0",
-    "@capacitor/cli": "^8.3.1",
+    "@capacitor/cli": "8.4.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/filesystem": "^8.0.0",
     "@capacitor/geolocation": "^8.0.0",
@@ -29,7 +29,7 @@
     "adhan": "^4.4.3",
     "docx": "8.5.0",
     "express": "^5.2.1",
-    "html2pdf.js": "^0.10.3",
+    "html2pdf.js": "0.14.0",
     "leaflet": "^1.9.4",
     "localforage": "^1.10.0",
     "lucide-react": "^0.563.0",
@@ -38,7 +38,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "dompurify": "3.4.16"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
