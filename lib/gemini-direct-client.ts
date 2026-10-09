@@ -208,6 +208,7 @@ export async function validateGeminiKeyDirectly(
 }
 
 export interface DirectGeminiGenerateParams {
+  includeResponseMetadata?: boolean;
   apiKey: string;
   model?: string;
   systemInstruction?: string;
@@ -223,6 +224,7 @@ export interface DirectGeminiGenerateParams {
     maxOutputTokens?: number;
     thinkingLevel?: ThinkingLevelName;
     responseMimeType?: string;
+    responseSchema?: Record<string, any>;
   };
   signal?: AbortSignal;
 }
@@ -238,6 +240,7 @@ export async function generateGeminiDirectly(
   rawParts?: any[];
   functionCalls: Array<{ name: string; args: any }>;
   model: string;
+  finishReason?: string;
 }> {
   const cleanKey = sanitizeApiKey(params.apiKey);
   if (!cleanKey) {
@@ -363,6 +366,7 @@ export async function generateGeminiDirectly(
         rawParts: parts,
         functionCalls,
         model: currentModel,
+        ...(params.includeResponseMetadata ? { finishReason: candidate?.finishReason } : {}),
       };
     } catch (err: any) {
       if (isInternalTimeout) err.isTimeout = true;

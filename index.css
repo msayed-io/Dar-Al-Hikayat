@@ -908,3 +908,9 @@ textarea::-webkit-scrollbar {
 .dar-editor-tools { gap: clamp(4px, 1vw, 8px); }
 .dar-editor-tools > div { min-width: 0; }
 .dar-editor-tools > div > button { width: min(48px, 100%); height: auto; aspect-ratio: 1; }
+
+/* Execution uses the existing thinking beam once; terminal labels have no shimmer class. */
+.dar-thinking-shimmer.agent-shimmer-once::before {
+  animation-iteration-count: 1;
+  animation-fill-mode: none;
+}

@@ -1,3 +1,5 @@
+import { describeExecution } from '../lib/agent-step-presentation';
+import type { AnalysisDiagnostic } from '../lib/analysis-response-contract';
 import { captureParagraphReferences, displayParagraphReferences, referencedParagraphIds, retainReferencedParagraphs, type ParagraphReferences } from '../lib/paragraph-reference-display';
 import { detectAnalysisCalls, isAnalysisTool, formatAnalysisReports, recoverInterruptedAnalysis, type AnalysisReport } from "../lib/literary-analysis";
 import ThinkingIndicator from "./ThinkingIndicator";
@@ -58,6 +60,7 @@ import { cancelDiacritizeJob, undoDiacritizeJob } from "../lib/tashkeel-pipeline
 export type Message = {
   paragraphReferences?: ParagraphReferences;
   analysisReports?: AnalysisReport[];
+  analysisDiagnostic?: AnalysisDiagnostic;
   id: string;
   role: "user" | "assistant" | "system_ephemeral" | "agent_steps";
   content: string;
@@ -75,6 +78,8 @@ export type Message = {
     totalMutations: number;
     completed: boolean;
     failed?: boolean;
+    awaitingClarification?: boolean;
+    skipped?: boolean;
     error?: string;
   };
   diacritizeJobId?: string;
@@ -679,40 +684,21 @@ interface AgentStepsMessageCardProps {
   key?: React.Key;
   message: Message;
   theme: any;
+  live: boolean;
 }
 
-function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
+export function AgentStepsMessageCard({ message, theme, live }: AgentStepsMessageCardProps) {
   const steps = message.steps || [];
   const result = message.agentResult;
-  const isExecuting = !result?.completed && !result?.failed;
-  const hasActiveDiacritize = isExecuting && steps.some((s) => s.toolName === "diacritize_scope" && (s.status === "active" || s.status === "waiting"));
+  const view = describeExecution(steps, result, live);
+  const isExecuting = view.running;
+  const [beamActive, setBeamActive] = useState(false);
+  useEffect(() => { if (view.running) setBeamActive(true); else if (!view.busy) setBeamActive(false); }, [view.running, view.busy]);
+  const showBeam = beamActive && view.running;
+  const hasActiveDiacritize = view.running && steps.some((s) => s.toolName === "diacritize_scope" && (s.status === "active" || s.status === "waiting"));
   const checkboxId = `agent-tree-toggle-${message.id}`;
 
-  const stepCount = steps.length || 1;
-  const stepCountLabel = steps.length > 0 && steps.every(s => isAnalysisTool(s.toolName))
-    ? `${stepCount} فحص للقراءة فقط`
-    : stepCount === 1
-      ? "خطوة جراحية واحدة"
-      : stepCount === 2
-      ? "خطوتين جراحيتين"
-      : stepCount <= 10
-      ? `${stepCount} خطوات جراحية`
-      : `${stepCount} خطوة جراحية`;
-
-  const headerLabel = isExecuting
-    ? `جارٍ تنفيذ ${stepCountLabel}...`
-    : result?.completed
-    ? `تم تنفيذ ${stepCountLabel}`
-    : result?.failed
-    ? `تعذر تنفيذ ${stepCountLabel}`
-    : `تنفيذ ${stepCountLabel}`;
-
-  // Two background layers: Moving specular beam + Luxurious metallic base
-  const shimmerBeam =
-    "linear-gradient(110deg, transparent 28%, rgba(255, 255, 255, 0.98) 50%, transparent 72%)";
-  const metallicBase = theme.isDark
-    ? "linear-gradient(90deg, #9ca3af 0%, #f3f4f6 50%, #9ca3af 100%)"
-    : "linear-gradient(90deg, #4b5563 0%, #111827 50%, #4b5563 100%)";
+  const headerLabel = view.header;
 
   const treeStrokeColor = theme.isDark
     ? "rgba(255, 255, 255, 0.22)"
@@ -764,21 +750,15 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
           }}
         />
 
-        {/* Shimmering Text with 2 layers (Metallic Base + Moving Specular Beam) */}
         <span
-          className="agent-text-shimmer text-xs font-zain-bold tracking-wide select-none"
-          style={{
-            display: "inline-block",
-            whiteSpace: "nowrap",
-            backgroundImage: `${shimmerBeam}, ${metallicBase}`,
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            color: "transparent",
-          }}
-        >
-          {headerLabel}
-        </span>
+          key={showBeam ? 'running' : 'static'}
+          className={`${showBeam ? 'dar-thinking-shimmer agent-shimmer-once ' : ''}text-xs font-zain-bold tracking-wide select-none`}
+          data-text={headerLabel}
+          onAnimationEnd={() => setBeamActive(false)}
+          style={{ display: 'inline-block', whiteSpace: 'nowrap', color: showBeam ? undefined : theme.text,
+            '--dar-shimmer-base': `color-mix(in srgb, ${theme.text} 50%, transparent)`,
+            '--dar-shimmer-highlight': theme.text } as React.CSSProperties}
+        >{headerLabel}</span>
 
         {/* Pure CSS rotating chevron via .agent-tree-chevron */}
         <ChevronDown
@@ -800,7 +780,7 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
               {/* Step items */}
               {steps.map((step, idx) => {
                 const isStepDone = step.status === "completed";
-                const isStepActive = step.status === "active";
+                const isStepActive = view.running && step.status === "active";
                 const isStepFailed = step.status === "failed";
 
                 return (
@@ -859,9 +839,9 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
                             ? "#ef4444"
                             : theme.text,
                         }}
-                        title={step.stepNote}
+                        title={view.rows[idx]}
                       >
-                        {step.stepNote}
+                        {view.rows[idx]}
                       </span>
                     </div>
                   </div>
@@ -889,23 +869,18 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
 
                 {/* Final status indicator */}
                 <div className="flex items-center gap-1.5 pr-1 min-w-0 flex-1">
-                  {result?.completed ? (
+                  {view.state === "completed" ? (
                     <div className="flex items-center gap-1.5 text-[12px] font-zain-bold text-emerald-500">
                       <Check size={13} strokeWidth={2.5} className="shrink-0" />
-                      <span>مكتمل</span>
+                      <span>{view.terminal}</span>
                       <span className="text-[10px] font-sans opacity-60 font-zain-reg">
                         (Done)
                       </span>
                     </div>
-                  ) : result?.failed ? (
+                  ) : !view.busy ? (
                     <div className="flex items-center gap-1.5 text-[12px] font-zain-bold text-rose-500">
                       <AlertCircle size={13} strokeWidth={2} className="shrink-0" />
-                      <span>تعذر الإكمال</span>
-                      {result.error && (
-                        <span className="text-[11px] font-zain-reg opacity-80 truncate">
-                          ({result.error})
-                        </span>
-                      )}
+                      <span>{view.terminal}</span>
                     </div>
                   ) : (
                     <div
@@ -913,8 +888,8 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
                       style={{ color: theme.accent }}
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
-                        <span>جارٍ التنفيذ...</span>
+                        {view.running ? <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" /> : <span className="w-2 h-2 rounded-full border border-current opacity-60 shrink-0" />}
+                        <span>{view.terminal}</span>
                       </div>
                       {hasActiveDiacritize && (
                         <button
@@ -1013,6 +988,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const presentMessageText = (message: Message, content: string, markdown = false) => displayParagraphReferences(content, message.paragraphReferences, { markdown, currentFallback: currentReferenceFallback });
   const [pendingAgentRequest, setPendingAgentRequest] = useState<PendingAgentRequest | null>(null);
   const [isAgentExecuting, setIsAgentExecuting] = useState(false);
+  const [executionMessageId, setExecutionMessageId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const analysisRunRef = useRef<{ controller: AbortController; story: typeof storyId } | null>(null);
@@ -1478,7 +1454,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     analysisRunRef.current?.controller.abort(); analysisRunRef.current = run;
     const current = () => analysisRunRef.current === run && analysisStoryRef.current === run.story && !run.controller.signal.aborted;
     const stepsId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setIsLoading(true); setIsAgentExecuting(true);
+    setIsLoading(true); setIsAgentExecuting(true); setExecutionMessageId(stepsId);
     setMessages(prev => [...prev, { id: stepsId + '-intro', role: 'assistant', content: 'سأفحص النص وأعرض الملاحظات وأدلتها للقراءة فقط؛ لن أغيّر أي كلمة.', timestamp: new Date(), isAgent: false },
       { id: stepsId, role: 'agent_steps', content: '', timestamp: new Date(), steps: calls.map((c, i) => ({ id: stepsId + i, toolName: c.name, blockId: (c.args as any).target || 'reference', stepNote: (c.args as any).step_note, status: 'waiting' })) }]);
     try {
@@ -1493,8 +1469,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       if (!current()) return;
       setMessages(prev => [...prev.map(m => m.id === stepsId ? { ...m, steps: result.executedSteps,
         agentResult: { totalMutations: 0, completed: result.success, failed: !result.success, error: result.error } } : m),
-        { id: stepsId + '-report', role: 'assistant', content: [result.analysisReports?.length ? formatAnalysisReports(result.analysisReports) : '', result.error ? `تعذر إكمال الفحص: ${result.error}` : 'اكتمل التقرير دون تعديل النص.'].filter(Boolean).join('\n\n'),
-          analysisReports: result.analysisReports, timestamp: new Date(), isAgent: false }]);
+        { id: stepsId + '-report', role: 'assistant', content: [result.analysisReports?.length ? formatAnalysisReports(result.analysisReports) : '', result.error ? `تعذر إكمال الفحص: ${result.error}` : ''].filter(Boolean).join('\n\n'),
+          analysisReports: result.analysisReports, analysisDiagnostic: result.analysisDiagnostic, timestamp: new Date(), isAgent: false }]);
     } catch {
       if (current()) setMessages(prev => [...prev.map(m => m.id === stepsId ? { ...m, agentResult: { totalMutations: 0, completed: false, failed: true, error: 'تعذر التحليل.' } } : m),
         { id: stepsId + '-error', role: 'assistant', content: 'تعذر إكمال التحليل؛ لم يتغير النص. يمكنك إعادة المحاولة.', timestamp: new Date() }]);
@@ -1662,6 +1638,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           );
 
         const stepsMsgId = (Date.now() + 2).toString();
+        setExecutionMessageId(stepsMsgId);
         const initialSteps: AgentStepItem[] = decision.functionCalls.map(
           (fc, idx) => ({
             id: `step-${idx}-${Date.now()}`,
@@ -1705,7 +1682,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === stepsMsgId
-                  ? { ...m, steps: [...updatedSteps] }
+                  ? { ...m, steps: updatedSteps.map(step => ({ ...step })) }
                   : m
               )
             );
@@ -1741,9 +1718,12 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             m.id === stepsMsgId
               ? {
                   ...m,
+                  steps: planResult.executedSteps.length ? planResult.executedSteps.map(step => ({ ...step })) : m.steps,
                   agentResult: {
+                    awaitingClarification: !!planResult.askWriter,
+                    skipped: !!planResult.duplicate,
                     totalMutations: planResult.totalMutations,
-                    completed: planResult.success && !planResult.duplicate,
+                    completed: planResult.success && !planResult.duplicate && !planResult.askWriter,
                     failed: (!planResult.success && !planResult.askWriter) || planResult.duplicate === true,
                     error: planResult.duplicate ? "تم تخطي التنفيذ لتكرار الطلب." : planResult.error,
                   },
@@ -2775,6 +2755,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     key={m.id}
                     message={{ ...m, steps: m.steps?.map(step => ({ ...step, stepNote: presentMessageText(m, step.stepNote), error: step.error ? presentMessageText(m, step.error) : undefined })), agentResult: m.agentResult ? { ...m.agentResult, error: m.agentResult.error ? presentMessageText(m, m.agentResult.error) : undefined } : undefined }}
                     theme={currentTheme}
+                    live={isAgentExecuting && executionMessageId === m.id}
                   />
                 );
               }

@@ -63,7 +63,17 @@ describe('readonly analysis execution', () => {
   it('does not swallow provider errors or malformed JSON', async () => {
     (fetch as any).mockResolvedValueOnce({ ok: false, status: 500 }).mockResolvedValueOnce({ ok: true, json: async () => ({ text: 'not JSON' }) });
     expect((await send([call('pacing_and_emotion_analyzer')]).result).success).toBe(false);
-    expect((await send([call('pacing_and_emotion_analyzer')]).result).success).toBe(false);
+    const malformed = await send([call('pacing_and_emotion_analyzer')]).result;
+    expect(malformed.success).toBe(false);
+    expect(malformed.analysisDiagnostic?.code).toBe('JSON_INVALID');
+  });
+  it('rejects a provider response cut off by the output limit even when its partial text is valid JSON', async () => {
+    (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ text: JSON.stringify(raw), finishReason: 'MAX_TOKENS', model: 'fixture-model' }) });
+    const result = await send([call('pacing_and_emotion_analyzer')]).result;
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('بلغ رد النموذج حد المخرجات');
+    expect(result.analysisDiagnostic).toMatchObject({ code: 'INCOMPLETE_RESPONSE', finishReason: 'MAX_TOKENS', model: 'fixture-model' });
+    expect(result.analysisReports).toEqual([]);
   });
   it('does not undo user typing that happened while awaiting analysis', async () => {
     let resolve: any; (fetch as any).mockImplementation(() => new Promise(r => { resolve = r; }));
@@ -89,7 +99,7 @@ describe('readonly analysis execution', () => {
   it('computes transparent approximate metrics and formats sources/evidence', () => {
     expect(pacingMetrics('قالت: «أنا هنا».')).toMatchObject({ words: 3, quotedDialogueWords: 2, approximateDialoguePercent: 67 });
     const report: any = { tool: 'plot_hole_detector', scope: 'الفصل', ...raw, limitations: ['ليس حكماً قطعياً'], model: 'fixture' };
-    const markdown = formatAnalysisReports([report]); expect(markdown).toContain('دون تغيير النص'); expect(markdown).toContain('عينا سلمى خضراوان.'); expect(markdown).not.toContain('b\\_one');
+    const markdown = formatAnalysisReports([report]); expect(markdown).not.toContain('النطاق:'); expect(markdown).not.toContain('الموضع:'); expect(markdown).not.toContain('ملاحظة:'); expect(markdown).toContain('عينا سلمى خضراوان.'); expect(markdown).not.toContain('b\\_one');
   });
 });
 describe('model and executive contracts', () => {

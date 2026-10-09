@@ -1,3 +1,4 @@
+import type { AnalysisDiagnostic } from './analysis-response-contract';
 /**
  * نظام الوكيل الأدبي التنفيذي (Agentic Editing System) — دَارُ الحِكَايَاتِ
  * الربط المعماري الجراحي مع منظومة الأقفال والفقرات والتدقيق
@@ -164,6 +165,7 @@ export interface PendingAgentRequest {
 }
 
 export interface AgentExecutionResult {
+  analysisDiagnostic?: AnalysisDiagnostic;
   analysisReports?: AnalysisReport[];
   success: boolean;
   executedSteps: AgentStepItem[];

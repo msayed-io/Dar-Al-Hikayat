@@ -465,7 +465,7 @@ async function startServer() {
   // Non-streaming generate content route with model fallback
   app.post("/api/gemini/generate", async (req, res) => {
     try {
-      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel, responseMimeType, maxOutputTokens } = req.body;
+      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel, responseMimeType, maxOutputTokens, responseSchema, includeResponseMetadata } = req.body;
       const resolvedKey = resolveApiKey(apiKey);
 
       if (!resolvedKey) {
@@ -504,6 +504,7 @@ async function startServer() {
           if (responseMimeType) {
             config.responseMimeType = responseMimeType;
           }
+          if (responseMimeType === "application/json" && responseSchema && typeof responseSchema === "object" && !Array.isArray(responseSchema)) config.responseSchema = responseSchema;
           if (thinkingLevel === "LOW" || thinkingLevel === "MEDIUM" || thinkingLevel === "HIGH") {
             config.thinkingConfig = { thinkingLevel, includeThoughts: true };
           }
@@ -573,6 +574,7 @@ async function startServer() {
             thought: responseThought,
             rawParts,
             functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
+            ...(includeResponseMetadata === true ? { finishReason: response.candidates?.[0]?.finishReason } : {}),
             model: currentModel,
           });
         } catch (err: any) {
