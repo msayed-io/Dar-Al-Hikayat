@@ -208,8 +208,6 @@ export async function validateGeminiKeyDirectly(
 }
 
 export interface DirectGeminiGenerateParams {
-  /** Optional grounding for read-only reference reports; old function tools unchanged. */
-  useGoogleSearch?: boolean;
   apiKey: string;
   model?: string;
   systemInstruction?: string;
@@ -240,7 +238,6 @@ export async function generateGeminiDirectly(
   rawParts?: any[];
   functionCalls: Array<{ name: string; args: any }>;
   model: string;
-  groundingMetadata?: any;
 }> {
   const cleanKey = sanitizeApiKey(params.apiKey);
   if (!cleanKey) {
@@ -249,7 +246,7 @@ export async function generateGeminiDirectly(
     throw err;
   }
 
-  const modelsToTry = getModelsToTry(params.model).filter(model => !params.useGoogleSearch || !model.startsWith("gemini-1."));
+  const modelsToTry = getModelsToTry(params.model);
   let lastError: any = null;
 
   const bodyPayload: any = {
@@ -262,9 +259,7 @@ export async function generateGeminiDirectly(
     };
   }
 
-  if (params.useGoogleSearch) {
-    bodyPayload.tools = [{ google_search: {} }];
-  } else if (params.tools && params.tools.length > 0) {
+  if (params.tools && params.tools.length > 0) {
     bodyPayload.tools = [
       {
         functionDeclarations: params.tools,
@@ -368,7 +363,6 @@ export async function generateGeminiDirectly(
         rawParts: parts,
         functionCalls,
         model: currentModel,
-        ...(params.useGoogleSearch ? { groundingMetadata: candidate?.groundingMetadata } : {}),
       };
     } catch (err: any) {
       if (isInternalTimeout) err.isTimeout = true;

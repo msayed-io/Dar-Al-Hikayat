@@ -1,0 +1,8 @@
+{
+  "baseline": "0363983",
+  "files": {
+    "lib/editor-block-system.ts": "9d18f7214b43867ffa8aa2b2f5730465cbba0a2d4fcaada7c1a594b4df0d6893",
+    "lib/tashkeel-pipeline.ts": "efb25a2e122801d90af26ad9e3f9f71ea678fc93ea6c96ca230480984febc41d"
+  },
+  "executor": "67195df1e59f8dac334813f049f453078da432593bbaee73c60795be7d6da664"
+}

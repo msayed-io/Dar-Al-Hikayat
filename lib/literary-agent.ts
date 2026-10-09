@@ -145,13 +145,6 @@ export type ExecutiveToolCall =
         target: string;
         step_note: string;
       };
-    }
-  | {
-      name: "historical_and_cultural_reference_agent";
-      args: {
-        query: string;
-        step_note: string;
-      };
     };
 
 export interface AgentStepItem {

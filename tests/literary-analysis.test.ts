@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const transport = vi.hoisted(() => ({ key: '', direct: vi.fn() }));
 vi.mock('../lib/smart-key-rotator', () => ({ executeWithSmartRotation: (fn: any) => fn(transport.key), AllKeysExhaustedError: class extends Error {}, NoActiveKeysConfiguredError: class extends Error {}, isNetworkConnectionError: () => false, isRateLimitError: () => false, isInvalidKeyError: () => false }));
 vi.mock('../lib/gemini-direct-client', () => ({ generateGeminiDirectly: transport.direct, GEMINI_PRIMARY_MODEL: 'model-under-test', buildReasoningConfig: () => ({}) }));
-import { ANALYSIS_TOOLS, captureAnalysisScope, detectAnalysisCalls, formatAnalysisReports, groundedReference, pacingMetrics, parseAnalysisReport, requestAnalysisModel, validAnalysisTarget } from '../lib/literary-analysis';
+import { ANALYSIS_TOOLS, captureAnalysisScope, detectAnalysisCalls, formatAnalysisReports, pacingMetrics, parseAnalysisReport, requestAnalysisModel, validAnalysisTarget } from '../lib/literary-analysis';
 import { executeAgentPlan } from '../lib/literary-agent';
 import { globalAuditLog, acquireAgentEditLock, releaseAgentEditLock, isAgentEditLocked } from '../lib/editor-block-system';
 import { requestExecutiveDecision } from '../lib/ai-assistant-service';
@@ -19,7 +19,7 @@ beforeEach(() => {
 });
 afterEach(() => { releaseAgentEditLock(root); vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('readonly analysis execution', () => {
-  it.each(Object.keys(ANALYSIS_TOOLS).filter(n => n !== 'historical_and_cultural_reference_agent'))('%s actually calls the model and returns validated evidence without a DOM commit', async name => {
+  it.each(Object.keys(ANALYSIS_TOOLS))('%s actually calls the model and returns validated evidence without a DOM commit', async name => {
     const before = root.innerHTML; const nodes = [...root.childNodes]; const audit = vi.spyOn(globalAuditLog, 'record');
     const job = send([call(name as any)]); const result = await job.result;
     expect(fetch).toHaveBeenCalledTimes(1); expect(result.success).toBe(true); expect(result.totalMutations).toBe(0);
@@ -89,36 +89,10 @@ describe('readonly analysis execution', () => {
   it('computes transparent approximate metrics and formats sources/evidence', () => {
     expect(pacingMetrics('قالت: «أنا هنا».')).toMatchObject({ words: 3, quotedDialogueWords: 2, approximateDialoguePercent: 67 });
     const report: any = { tool: 'plot_hole_detector', scope: 'الفصل', ...raw, limitations: ['ليس حكماً قطعياً'], model: 'fixture' };
-    const markdown = formatAnalysisReports([report]); expect(markdown).toContain('دون تغيير النص'); expect(markdown).toContain('عينا سلمى خضراوان.'); expect(markdown).toContain('b\\_one');
+    const markdown = formatAnalysisReports([report]); expect(markdown).toContain('دون تغيير النص'); expect(markdown).toContain('عينا سلمى خضراوان.'); expect(markdown).not.toContain('b\\_one');
   });
 });
-describe('real reference data contract', () => {
-  const grounded = { text: 'تأسست القاهرة سنة 969 ميلادية.', model: 'fixture-grounded', groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.org/history', title: 'مرجع اختباري' } }], groundingSupports: [{ segment: { text: 'تأسست القاهرة سنة 969 ميلادية.' }, groundingChunkIndices: [0] }], searchEntryPoint: { renderedContent: '<div>Google search suggestions fixture</div>' } } };
-  it('makes a grounded request, returns only supported passages and carries search attribution', async () => {
-    (fetch as any).mockResolvedValue({ ok: true, json: async () => grounded });
-    const job = send([call('historical_and_cultural_reference_agent', { query: 'متى تأسست القاهرة؟' })]); const result = await job.result;
-    expect(result.success).toBe(true); expect(job.onCommit).not.toHaveBeenCalled();
-    const body = JSON.parse((fetch as any).mock.calls[0][1].body); expect(body.useGoogleSearch).toBe(true); expect(body.responseMimeType).toBeUndefined(); expect(JSON.stringify(body)).not.toContain('عينا سلمى');
-    expect(result.analysisReports![0].verification).toBe('grounded'); expect(result.analysisReports![0].sources![0].url).toBe('https://example.org/history'); expect(result.analysisReports![0].searchSuggestionsHtml).toContain('Google');
-  });
-  it('does not promote an unsourced or fabricated source to successful verification', async () => {
-    (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ text: 'تم التأكد من المصدر https://invented.example' }) });
-    const result = await send([call('historical_and_cultural_reference_agent', { query: 'تاريخ القاهرة' })]).result;
-    expect(result.success).toBe(false); expect(result.analysisReports![0].verification).toBe('unverified'); expect(result.analysisReports![0].summary).not.toContain('invented');
-    expect(groundedReference({ ...grounded, groundingMetadata: { ...grounded.groundingMetadata, groundingChunks: [{ web: { uri: 'javascript:alert(1)' } }] } }).verification).toBe('unverified');
-    expect(groundedReference({ ...grounded, text: 'نص آخر' }).verification).toBe('unverified');
-  });
-  it('uses the direct path with configured keys, including the search flag and abort signal', async () => {
-    transport.key = 'test-only-key'; transport.direct.mockResolvedValue(grounded);
-    await requestAnalysisModel('تعليمات', 'سؤال', true);
-    expect(fetch).not.toHaveBeenCalled(); expect(transport.direct.mock.calls[0][0]).toMatchObject({ useGoogleSearch: true, apiKey: 'test-only-key' }); expect(transport.direct.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
-  });
-  it('does not treat a search-specific permission or quota failure as a reason to disable old-tool keys', async () => {
-    transport.key = 'test-only-key'; transport.direct.mockRejectedValue(Object.assign(new Error('permission denied'), { status: 403 }));
-    await expect(requestAnalysisModel('تعليمات', 'سؤال', true)).rejects.toMatchObject({ message: expect.stringContaining('لم أغيّر حالة المفتاح') });
-    transport.direct.mockRejectedValue(Object.assign(new Error('quota'), { status: 429 }));
-    await expect(requestAnalysisModel('تعليمات', 'سؤال', true)).rejects.not.toHaveProperty('status', 429);
-  });
+describe('model and executive contracts', () => {
   it('does not present an invalid new tool call as a completed plain-text answer', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: 'تم الفحص', functionCalls: [call('plot_hole_detector', 'wrong-scope')] }) }));
     const result = await requestExecutiveDecision({ contents: [] });
@@ -130,7 +104,7 @@ describe('real reference data contract', () => {
   });
 });
 describe('additive routing', () => {
-  it.each([['راجع استمرارية الشخصيات في الرواية', 'character_continuity_checker'], ['حلل الإيقاع والتوتر', 'pacing_and_emotion_analyzer'], ['اكشف ثغرات الحبكة', 'plot_hole_detector'], ['راجع الصوت الأدبي', 'voice_and_tone_guardian'], ['تحقق من دقة هذه المعلومة التاريخية', 'historical_and_cultural_reference_agent']])('routes %s to %s', (message, name) => {
+  it.each([['راجع استمرارية الشخصيات في الرواية', 'character_continuity_checker'], ['حلل الإيقاع والتوتر', 'pacing_and_emotion_analyzer'], ['اكشف ثغرات الحبكة', 'plot_hole_detector'], ['راجع الصوت الأدبي', 'voice_and_tone_guardian']])('routes %s to %s', (message, name) => {
     expect(detectAnalysisCalls(message)[0].name).toBe(name);
   });
   it('keeps unrelated editing/advice requests on their original route and honors explicit negation', () => {

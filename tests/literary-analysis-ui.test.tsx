@@ -8,7 +8,7 @@ vi.mock('../lib/smart-key-rotator', () => ({ executeWithSmartRotation: (fn: any)
 import Assistant, { loadStoredConversationsFromStorage } from '../components/DarAlHikayatAIAssistant';
 let dom: ReturnType<typeof setupDom>; let root: HTMLElement; const commit = vi.fn();
 const view = (id = 'analysis-story-A') => <Assistant storyId={id} editorRootElement={root} onCommitAgentChanges={commit} storyContext={{ title: 'قصة الاختبار', fullText: root.innerHTML }} onClose={() => {}} />;
-const fixture = { text: JSON.stringify({ summary: 'تقرير الإيقاع التجريبي', findings: [{ title: 'التوازن', detail: 'تفسير أدبي', suggestion: 'اقتراح فقط', evidence: [{ blockId: 'b_one', quote: 'عينا سلمى خضراوان.' }] }] }), model: 'fixture-model' };
+const fixture = { text: JSON.stringify({ summary: 'تقرير الإيقاع التجريبي', storyBible: [], findings: [{ title: 'التوازن', detail: 'تفسير أدبي', suggestion: 'اقتراح فقط', evidence: [{ blockId: 'b_one', quote: 'عينا سلمى خضراوان.' }] }] }), model: 'fixture-model' };
 const settle = () => act(async () => { await new Promise(r => setTimeout(r, 350)); });
 beforeEach(() => {
   dom = setupDom(); localStorage.clear(); app.currentTheme = theme; commit.mockClear();
@@ -39,10 +39,28 @@ it('aborts a pending report on story switch without leaking it to the next story
   expect(dom.host.textContent).not.toContain('تقرير الإيقاع التجريبي'); expect(dom.host.querySelector('textarea')!.disabled).toBe(false); expect(commit).not.toHaveBeenCalled();
   expect(JSON.stringify(loadStoredConversationsFromStorage('dar_alhikayat_ai_convs_story_analysis-story-B'))).not.toContain('تقرير الإيقاع');
 });
-it('displays validated reference links and isolates provider search attribution without allowing scripts', async () => {
-  (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ text: 'نص مرجعي اختباري', groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.org/history', title: 'مرجع' } }], groundingSupports: [{ segment: { text: 'نص مرجعي اختباري' }, groundingChunkIndices: [0] }], searchEntryPoint: { renderedContent: '<div>Google Search</div><script>parent.bad=true</script>' } } }) });
-  await dom.render(view()); await settle(); await send('تحقق من هذه المعلومة التاريخية'); await settle();
-  expect(dom.host.textContent).toContain('نص مرجعي اختباري'); expect(dom.host.querySelector('a[href="https://example.org/history"]')).not.toBeNull();
-  const frame = dom.host.querySelector('iframe')!; expect(frame.getAttribute('sandbox')).not.toContain('allow-scripts'); expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin'); expect(frame.srcdoc).toContain("default-src 'none'");
+
+it.each([
+  ['بص على الشخصيات في النص، صفاتهم وتصرفاتهم ثابتة ولا فيه حاجات بتناقض بعض؟ قولّي بس من غير ما تغيّر حاجة.', 'character_continuity_checker'],
+  ['حاسّة إن فيه حتت بطيئة وحتت جريت مني، شوف إيقاع النص ومشاعر ليلى وقولّي رأيك، من غير ما تعدّل.', 'pacing_and_emotion_analyzer'],
+  ['شوف الأحداث كده، فيه ثغرات في الحبكة أو حاجة حصلت ومش راكبة على اللي قبلها؟ ورّيني مكانها من غير ما تغيّر النص.', 'plot_hole_detector'],
+  ['راجع أسلوب الكلام في النص، حاسّة إن فيه حتة نبرتها مختلفة عن الباقي. إنت شايف إيه؟ قولّي بس ومتعدّلش حاجة.', 'voice_and_tone_guardian'],
+])('routes the actual Egyptian trial prompt through the intended tool: %s', async (prompt, name) => {
+  const before = root.innerHTML; await dom.render(view()); await settle(); await send(prompt); await settle();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const saved = loadStoredConversationsFromStorage('dar_alhikayat_ai_convs_story_analysis-story-A');
+  expect(saved[0].messages.find(m => m.analysisReports?.length)?.analysisReports?.[0].tool).toBe(name);
+  expect(dom.host.textContent).not.toContain('b_one'); expect(root.innerHTML).toBe(before); expect(commit).not.toHaveBeenCalled();
+});
+it('renders paragraph prose but persists raw reference tokens and a stable source snapshot', async () => {
+  (fetch as any).mockResolvedValue({ ok: true, json: async () => ({ ...fixture, text: JSON.stringify({ summary: 'راجعي [b_one]', findings: [] }) }) });
+  await dom.render(view()); await settle(); await send('حلل الإيقاع'); await settle();
+  const saved = loadStoredConversationsFromStorage('dar_alhikayat_ai_convs_story_analysis-story-A');
+  const report = saved[0].messages.find(m => m.analysisReports?.length)!;
+  expect(report.content).toContain('b\\_one'); expect(report.paragraphReferences?.b_one).toBe('عينا سلمى خضراوان.');
+  expect(dom.host.textContent).toContain('عينا سلمى خضراوان.'); expect(dom.host.textContent).not.toContain('b_one');
+  root.innerHTML = '<p data-block-id="b_one">نص جديد مختلف</p>';
+  await dom.render(view()); await settle();
+  expect(dom.host.textContent).toContain('عينا سلمى خضراوان.'); expect(dom.host.textContent).not.toContain('نص جديد مختلف');
   expect(commit).not.toHaveBeenCalled();
 });

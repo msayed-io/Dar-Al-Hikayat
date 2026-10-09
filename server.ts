@@ -465,7 +465,7 @@ async function startServer() {
   // Non-streaming generate content route with model fallback
   app.post("/api/gemini/generate", async (req, res) => {
     try {
-      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel, responseMimeType, useGoogleSearch, maxOutputTokens } = req.body;
+      const { contents, systemInstruction, model, apiKey, tools, temperature, thinkingLevel, responseMimeType, maxOutputTokens } = req.body;
       const resolvedKey = resolveApiKey(apiKey);
 
       if (!resolvedKey) {
@@ -489,7 +489,7 @@ async function startServer() {
         },
       });
 
-      const modelsToTry = getModelsToTry(model).filter(name => useGoogleSearch !== true || !name.startsWith("gemini-1."));
+      const modelsToTry = getModelsToTry(model);
 
       let lastError: any = null;
 
@@ -508,9 +508,7 @@ async function startServer() {
             config.thinkingConfig = { thinkingLevel, includeThoughts: true };
           }
 
-          if (useGoogleSearch === true) {
-            config.tools = [{ googleSearch: {} }];
-          } else if (tools && Array.isArray(tools) && tools.length > 0) {
+          if (tools && Array.isArray(tools) && tools.length > 0) {
             config.tools = [{ functionDeclarations: tools }];
           }
 
@@ -575,7 +573,6 @@ async function startServer() {
             thought: responseThought,
             rawParts,
             functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
-            ...(useGoogleSearch === true ? { groundingMetadata: response.candidates?.[0]?.groundingMetadata } : {}),
             model: currentModel,
           });
         } catch (err: any) {

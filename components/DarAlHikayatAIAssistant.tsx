@@ -1,5 +1,5 @@
+import { captureParagraphReferences, displayParagraphReferences, referencedParagraphIds, retainReferencedParagraphs, type ParagraphReferences } from '../lib/paragraph-reference-display';
 import { detectAnalysisCalls, isAnalysisTool, formatAnalysisReports, recoverInterruptedAnalysis, type AnalysisReport } from "../lib/literary-analysis";
-import { GroundedSearchSuggestions } from "./GroundedSearchSuggestions";
 import ThinkingIndicator from "./ThinkingIndicator";
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -56,6 +56,7 @@ import {
 import { cancelDiacritizeJob, undoDiacritizeJob } from "../lib/tashkeel-pipeline";
 
 export type Message = {
+  paragraphReferences?: ParagraphReferences;
   analysisReports?: AnalysisReport[];
   id: string;
   role: "user" | "assistant" | "system_ephemeral" | "agent_steps";
@@ -993,7 +994,23 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 }: DarAlHikayatAIAssistantProps) {
   const { currentTheme: appContextTheme } = useApp();
   const currentTheme = propTheme || appContextTheme;
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setRawMessages] = useState<Message[]>([]);
+  const referenceSnapshot = useRef<{ story: typeof storyId; values: ParagraphReferences }>({ story: storyId, values: {} });
+  const setMessages = useCallback((action: React.SetStateAction<Message[]>) => {
+    // Arrays restore stored conversations unchanged. Only fresh response updates get source snapshots.
+    if (typeof action !== 'function') { setRawMessages(action); return; }
+    const snapshot = referenceSnapshot.current.story === storyId ? referenceSnapshot.current.values : {};
+    setRawMessages(prev => action(prev).map(message => {
+      if (message.role === 'user') return message;
+      const before = prev.find(m => m.id === message.id);
+      if (before === message || (before && before.content === message.content && before.thought === message.thought && before.steps === message.steps && before.agentResult === message.agentResult)) return message;
+      const prose = [message.content, message.thought, message.agentResult?.error, ...(message.steps || []).map(step => step.stepNote + ' ' + (step.error || ''))].filter(Boolean).join('\n');
+      if (!referencedParagraphIds(prose).length) return message;
+      return { ...message, paragraphReferences: retainReferencedParagraphs(prose, message.paragraphReferences, snapshot) };
+    }));
+  }, [storyId]);
+  const currentReferenceFallback = useMemo(() => captureParagraphReferences(editorRootElement || document.querySelector<HTMLElement>('#story-content'), chapters), [editorRootElement, chapters, storyId, storyContext.fullText, messages.length]);
+  const presentMessageText = (message: Message, content: string, markdown = false) => displayParagraphReferences(content, message.paragraphReferences, { markdown, currentFallback: currentReferenceFallback });
   const [pendingAgentRequest, setPendingAgentRequest] = useState<PendingAgentRequest | null>(null);
   const [isAgentExecuting, setIsAgentExecuting] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -1301,7 +1318,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   );
 
   const handleCopyMsgContent = (msgId: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    const message = messages.find(m => m.id === msgId);
+    navigator.clipboard.writeText(message && message.role !== "user" ? presentMessageText(message, text) : text);
     setCopiedResponseId(msgId);
     setTimeout(() => setCopiedResponseId(null), 2000);
   };
@@ -1433,7 +1451,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     const textSnapshot = (conv.messages || [])
       .map(
         (m) =>
-          `${m.role === "user" ? "الكاتبة رحمة:" : "المحرر الأدبي:"}\n${m.content}`
+          `${m.role === "user" ? "الكاتبة رحمة:" : "المحرر الأدبي:"}\n${m.role === "user" ? m.content : presentMessageText(m, m.content)}`
       )
       .join("\n\n---\n\n");
     const shareUrl = window.location.href;
@@ -1461,7 +1479,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     const current = () => analysisRunRef.current === run && analysisStoryRef.current === run.story && !run.controller.signal.aborted;
     const stepsId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setIsLoading(true); setIsAgentExecuting(true);
-    setMessages(prev => [...prev, { id: stepsId + '-intro', role: 'assistant', content: calls.some(c => c.name === 'historical_and_cultural_reference_agent') ? 'سأبحث عن المعلومة مع مصادرها دون تعديل النص. يستخدم هذا الفحص بحث Google وقد يحتسب من حصته الخاصة بالمفتاح.' : 'سأفحص النص وأعرض الملاحظات وأدلتها للقراءة فقط؛ لن أغيّر أي كلمة.', timestamp: new Date(), isAgent: false },
+    setMessages(prev => [...prev, { id: stepsId + '-intro', role: 'assistant', content: 'سأفحص النص وأعرض الملاحظات وأدلتها للقراءة فقط؛ لن أغيّر أي كلمة.', timestamp: new Date(), isAgent: false },
       { id: stepsId, role: 'agent_steps', content: '', timestamp: new Date(), steps: calls.map((c, i) => ({ id: stepsId + i, toolName: c.name, blockId: (c.args as any).target || 'reference', stepNote: (c.args as any).step_note, status: 'waiting' })) }]);
     try {
       const root = editorRootElement || document.querySelector<HTMLElement>('#story-content');
@@ -1522,6 +1540,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         pendingMentions: mentionsToUse,
         allChaptersSummary: chapters?.map((c, i) => ({ index: i, title: c.title })),
       });
+
+      referenceSnapshot.current = { story: storyId, values: captureParagraphReferences(editorRootElement || document.querySelector<HTMLElement>('#story-content'), chapters) };
 
       const apiHistory = hist
         .filter((m) => !m.ephemeral && (m.role === "user" || m.role === "assistant"))
@@ -1819,6 +1839,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       : -1;
 
     if (replaceUserMessageId && replaceIndex === -1) return;
+    referenceSnapshot.current = { story: storyId, values: captureParagraphReferences(editorRootElement || document.querySelector<HTMLElement>('#story-content'), chapters) };
 
     // Process and validate attached mentions for prompt context
     let mentionsContext = "";
@@ -1930,6 +1951,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
     try {
       let accumulated = "";
+      let capturedResponseReferences = false;
       let detectedExec = false;
       const apiHistory = historyMessages
         .filter((m) => !m.ephemeral && (m.role === "user" || m.role === "assistant"))
@@ -1952,6 +1974,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         trimmed,
         storyContext,
         (chunkObj) => {
+          if (!capturedResponseReferences) {
+            capturedResponseReferences = true;
+            if (analysisStoryRef.current === storyId) {
+              const prepared = captureParagraphReferences(editorRootElement || document.querySelector<HTMLElement>('#story-content'), chapters);
+              // Existing IDs retain request-time text even if the writer types while waiting.
+              const original = referenceSnapshot.current.story === storyId ? referenceSnapshot.current.values : {};
+              referenceSnapshot.current = { story: storyId, values: { ...prepared, ...original } };
+            }
+          }
           accumulated += chunkObj.text;
           accumulatedThought += chunkObj.thought;
           if (chunkObj.rawParts.length > 0) finalRawParts = chunkObj.rawParts;
@@ -2742,7 +2773,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 return (
                   <AgentStepsMessageCard
                     key={m.id}
-                    message={m}
+                    message={{ ...m, steps: m.steps?.map(step => ({ ...step, stepNote: presentMessageText(m, step.stepNote), error: step.error ? presentMessageText(m, step.error) : undefined })), agentResult: m.agentResult ? { ...m.agentResult, error: m.agentResult.error ? presentMessageText(m, m.agentResult.error) : undefined } : undefined }}
                     theme={currentTheme}
                   />
                 );
@@ -2845,7 +2876,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                                   backgroundColor: currentTheme.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
                                 }}
                               >
-                                {m.thought ? m.thought : "تم التفكير وتحليل السياق بواسطة نموذج Gemini الذكي."}
+                                {m.thought ? presentMessageText(m, m.thought) : "تم التفكير وتحليل السياق بواسطة نموذج Gemini الذكي."}
                               </div>
                             )}
                           </div>
@@ -2982,7 +3013,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                       >
                         <div>
                           <MarkdownRenderer
-                            content={m.content}
+                            content={presentMessageText(m, m.content, true)}
                             animate={m.isNew && !m.isStreaming}
                             theme={currentTheme}
                             onComplete={() => {
@@ -2996,7 +3027,6 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             }}
                           />
                         </div>
-                        {m.analysisReports?.map((report, index) => report.searchSuggestionsHtml ? <GroundedSearchSuggestions key={index} html={report.searchSuggestionsHtml} /> : null)}
                         {m.diacritizeJobId && (
                           <div
                             dir="rtl"
@@ -3429,7 +3459,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/5"
                             style={{ borderRadius: 6, paddingLeft: 6, paddingRight: 6, fontFamily: "monospace" }}
                           >
-                            {activeFullTextMention.blockId}
+                            النص المحدد
                           </code>
                         </span>
                         <span>

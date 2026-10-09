@@ -390,24 +390,7 @@ export const AGENTIC_TOOL_DECLARATIONS = [
       required: ["target", "step_note"],
     },
   },
-  {
-    name: "historical_and_cultural_reference_agent",
-    description: "التحقق من دقة المصطلحات التراثية والتاريخية والثقافية لضمان أصالة العمل الأدبي.",
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        query: {
-          type: "STRING",
-          description: "المصطلح أو الموضوع التراثي/التاريخي المراد التحقق منه (إجباري)",
-        },
-        step_note: {
-          type: "STRING",
-          description: "سطر وصفي عربي موجز مولّد يصف البحث المرجعي والتراثي (إجباري)",
-        },
-      },
-      required: ["query", "step_note"],
-    },
-  },
+
 ];
 
 export type AIMessage = {
@@ -1188,21 +1171,6 @@ export async function requestExecutiveDecision({
               name,
               args: {
                 target: args.target.trim(),
-                step_note: args.step_note.trim(),
-              },
-            });
-          }
-        } else if (name === "historical_and_cultural_reference_agent") {
-          if (
-            typeof args.query === "string" &&
-            args.query.trim().length > 0 && args.query.length <= 2000 &&
-            typeof args.step_note === "string" &&
-            args.step_note.trim().length > 0
-          ) {
-            validatedCalls.push({
-              name,
-              args: {
-                query: args.query.trim(),
                 step_note: args.step_note.trim(),
               },
             });
