@@ -116,6 +116,41 @@ export type ExecutiveToolCall =
         target: string;
         step_note: string;
       };
+    }
+  | {
+      name: "character_continuity_checker";
+      args: {
+        target: string;
+        step_note: string;
+      };
+    }
+  | {
+      name: "pacing_and_emotion_analyzer";
+      args: {
+        target: string;
+        step_note: string;
+      };
+    }
+  | {
+      name: "plot_hole_detector";
+      args: {
+        target: string;
+        step_note: string;
+      };
+    }
+  | {
+      name: "voice_and_tone_guardian";
+      args: {
+        target: string;
+        step_note: string;
+      };
+    }
+  | {
+      name: "historical_and_cultural_reference_agent";
+      args: {
+        query: string;
+        step_note: string;
+      };
     };
 
 export interface AgentStepItem {
@@ -1194,6 +1229,50 @@ export async function executeAgentPlan({
               error: diacritizeRes.error,
             };
           }
+        } else if (
+          call.name === "character_continuity_checker" ||
+          call.name === "pacing_and_emotion_analyzer" ||
+          call.name === "plot_hole_detector" ||
+          call.name === "voice_and_tone_guardian"
+        ) {
+          stepItems[idx].status = "active";
+          onStepUpdate([...stepItems]);
+          await new Promise((r) => setTimeout(r, 150));
+
+          globalAuditLog.record({
+            type: "REPLACE", // generic audit entry type for analysis
+            blockId: call.args.target,
+            details: {
+              tool: call.name,
+              stepNote: call.args.step_note,
+            },
+            status: "SUCCESS",
+          });
+
+          stepItems[idx].status = "completed";
+          onStepUpdate([...stepItems]);
+          cleanupAgentFx(rootElement);
+          return { status: "SUCCESS", blockId: call.args.target };
+        } else if (call.name === "historical_and_cultural_reference_agent") {
+          stepItems[idx].status = "active";
+          onStepUpdate([...stepItems]);
+          await new Promise((r) => setTimeout(r, 150));
+
+          globalAuditLog.record({
+            type: "REPLACE",
+            blockId: "reference",
+            details: {
+              tool: call.name,
+              query: call.args.query,
+              stepNote: call.args.step_note,
+            },
+            status: "SUCCESS",
+          });
+
+          stepItems[idx].status = "completed";
+          onStepUpdate([...stepItems]);
+          cleanupAgentFx(rootElement);
+          return { status: "SUCCESS", blockId: "reference" };
         }
 
         return { status: "SUCCESS", blockId: "noop" };

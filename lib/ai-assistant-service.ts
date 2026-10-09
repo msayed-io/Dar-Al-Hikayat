@@ -317,6 +317,96 @@ export const AGENTIC_TOOL_DECLARATIONS = [
       required: ["target", "step_note"],
     },
   },
+  {
+    name: "character_continuity_checker",
+    description: "تحليل وتدقيق استمرارية الشخصيات وعالم الحكاية (Story Bible) لفحص الصفات والعلاقات ومنع التناقضات.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        target: {
+          type: "STRING",
+          description: "نطاق التدقيق: إما معرف فقرة b_ أو \"chapter\" للفصل كاملاً (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف فحص استمرارية الشخصيات (إجباري)",
+        },
+      },
+      required: ["target", "step_note"],
+    },
+  },
+  {
+    name: "pacing_and_emotion_analyzer",
+    description: "تحليل الإيقاع والتوتر السردي، نسب الحوار إلى السرد، وتحديد نقاط الركود أو التسارع الدرامي.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        target: {
+          type: "STRING",
+          description: "نطاق التحليل: إما b_ أو \"chapter\" للفصل كاملاً (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف تحليل الإيقاع والتوتر (إجباري)",
+        },
+      },
+      required: ["target", "step_note"],
+    },
+  },
+  {
+    name: "plot_hole_detector",
+    description: "كشف فجوات الحبكة والتناقضات الزمنية أو المكانية عبر فصول الرواية بدقة استراتيجية.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        target: {
+          type: "STRING",
+          description: "نطاق البحث عن الثغرات: \"chapter\" أو معرف محدد (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف كشف فجوات الحبكة (إجباري)",
+        },
+      },
+      required: ["target", "step_note"],
+    },
+  },
+  {
+    name: "voice_and_tone_guardian",
+    description: "فحص ومطابقة الصوت الأدبي والبصمة الأسلوبية للكاتبة رحمة لضمان الاتساق النبرتي والتعبير السردي.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        target: {
+          type: "STRING",
+          description: "نطاق الفحص الأسلوبي: \"chapter\" أو معرف محدد (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف حراسة الصوت الأدبي (إجباري)",
+        },
+      },
+      required: ["target", "step_note"],
+    },
+  },
+  {
+    name: "historical_and_cultural_reference_agent",
+    description: "التحقق من دقة المصطلحات التراثية والتاريخية والثقافية لضمان أصالة العمل الأدبي.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        query: {
+          type: "STRING",
+          description: "المصطلح أو الموضوع التراثي/التاريخي المراد التحقق منه (إجباري)",
+        },
+        step_note: {
+          type: "STRING",
+          description: "سطر وصفي عربي موجز مولّد يصف البحث المرجعي والتراثي (إجباري)",
+        },
+      },
+      required: ["query", "step_note"],
+    },
+  },
 ];
 
 export type AIMessage = {
@@ -1076,6 +1166,43 @@ export async function requestExecutiveDecision({
               name,
               args: {
                 target: args.target.trim(),
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (
+          name === "character_continuity_checker" ||
+          name === "pacing_and_emotion_analyzer" ||
+          name === "plot_hole_detector" ||
+          name === "voice_and_tone_guardian"
+        ) {
+          const isTargetValid =
+            args.target === "chapter" ||
+            (typeof args.target === "string" && args.target.length > 0);
+          if (
+            isTargetValid &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                target: args.target.trim(),
+                step_note: args.step_note.trim(),
+              },
+            });
+          }
+        } else if (name === "historical_and_cultural_reference_agent") {
+          if (
+            typeof args.query === "string" &&
+            args.query.trim().length > 0 &&
+            typeof args.step_note === "string" &&
+            args.step_note.trim().length > 0
+          ) {
+            validatedCalls.push({
+              name,
+              args: {
+                query: args.query.trim(),
                 step_note: args.step_note.trim(),
               },
             });

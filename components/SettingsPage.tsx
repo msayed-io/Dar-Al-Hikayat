@@ -455,9 +455,9 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen relative font-sans transition-colors duration-500 flex flex-col"
+      className="min-h-screen relative font-sans transition-colors duration-500 flex flex-col no-scrollbar"
       dir="rtl"
-      style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
+      style={{ backgroundColor: currentTheme.bg, color: currentTheme.text, scrollbarWidth: "none", msOverflowStyle: "none" }}
     >
       {/* --- Apple Top Vignette Effect (Subtle Ambient Shadow Backdrop) --- */}
       <div
@@ -1178,8 +1178,8 @@ const SettingsPage: React.FC = () => {
 
             {/* قائمة المدن */}
             <div
-              className="overflow-y-auto p-4 flex flex-col gap-3"
-              style={{ maxHeight: "calc(80vh - 130px)" }}
+              className="overflow-y-auto p-4 flex flex-col gap-3 no-scrollbar"
+              style={{ maxHeight: "calc(80vh - 130px)", scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {Object.entries(groupedCities).map(([country, cities]) => (
                 <div key={country}>

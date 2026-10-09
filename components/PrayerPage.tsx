@@ -219,11 +219,13 @@ const PrayerPage: React.FC = () => {
   return (
     <div
       dir="rtl"
-      className="min-h-screen w-full relative overflow-x-hidden font-zain-reg transition-colors duration-500 select-none"
+      className="min-h-screen w-full relative overflow-x-hidden font-zain-reg transition-colors duration-500 select-none no-scrollbar"
       style={{
         backgroundColor: currentTheme.bg,
         color: currentTheme.text,
         paddingBottom: "140px",
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
       }}
     >
       {/* --- ABOUT DAR AL-HIKAYAT OVERLAY --- */}
@@ -309,8 +311,8 @@ const PrayerPage: React.FC = () => {
 
           {/* --- SCROLLABLE CONTENT --- */}
           <div
-            className="w-full h-full overflow-y-auto about-scroll relative z-10 px-4 flex flex-col items-center"
-            style={{ paddingTop: "88px", paddingBottom: "48px" }}
+            className="w-full h-full overflow-y-auto about-scroll relative z-10 px-4 flex flex-col items-center no-scrollbar"
+            style={{ paddingTop: "88px", paddingBottom: "48px", scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             <div className="w-full max-w-2xl mx-auto flex flex-col items-center text-center space-y-12 pb-20 pt-6">
               {/* Intro Card */}
