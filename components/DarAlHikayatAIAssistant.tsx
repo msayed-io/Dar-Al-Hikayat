@@ -15,6 +15,7 @@ import {
   Check,
   Copy,
   Pencil,
+  SquarePen,
   ThumbsUp,
   ThumbsDown,
   MoreVertical,
@@ -86,6 +87,7 @@ export type StoredConversation = {
 type DarAlHikayatAIAssistantProps = {
   onClose: () => void;
   storyContext: StoryContext;
+  storyId?: number | string | null;
   attachedMentions?: AttachedMention[];
   onRemoveMention?: (id: string) => void;
   onClearMentions?: () => void;
@@ -105,6 +107,28 @@ type DarAlHikayatAIAssistantProps = {
     isDark?: boolean;
   };
 };
+
+/**
+ * Minimalist two-lines horizontal menu icon (identical to uploaded design asset)
+ */
+export const TwoLinesMenuIcon = ({ size = 18, color = "currentColor" }: { size?: number; color?: string }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className="shrink-0"
+  >
+    <path
+      d="M5 9.5H19M5 14.5H19"
+      stroke={color}
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 type WelcomeLine = {
   title: string;
@@ -536,7 +560,15 @@ const MarkdownRenderer = ({
   );
 };
 
-const CONVERSATIONS_STORAGE_KEY = "dar_alhikayat_ai_saved_conversations";
+export function getStoryConversationsStorageKey(
+  storyId: number | string | null | undefined,
+  draftSessionId?: string
+): string {
+  if (storyId !== undefined && storyId !== null && String(storyId).trim() !== "") {
+    return `dar_alhikayat_ai_convs_story_${storyId}`;
+  }
+  return `dar_alhikayat_ai_convs_draft_${draftSessionId || "session"}`;
+}
 
 interface UserMessageBubbleProps {
   message: Message;
@@ -905,9 +937,47 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
   );
 }
 
+export const getStoryStorageKey = (id?: number | string | null): string => {
+  if (id !== undefined && id !== null && String(id).trim() !== "") {
+    return `dar_alhikayat_ai_convs_story_${id}`;
+  }
+  return "dar_alhikayat_ai_convs_draft";
+};
+
+export const loadStoredConversationsFromStorage = (storageKey: string): StoredConversation[] => {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item: any) => ({
+        ...item,
+        lastMessageAt: new Date(item.lastMessageAt),
+        pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
+        messages: (item.messages || []).map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        })),
+      }));
+    }
+  } catch (e) {
+    console.error("Failed to parse stored conversations for key:", storageKey, e);
+  }
+  return [];
+};
+
+export const saveStoredConversationsToStorage = (storageKey: string, list: StoredConversation[]) => {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(list));
+  } catch (e) {
+    console.error("Failed to save conversations to storage:", storageKey, e);
+  }
+};
+
 export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssistant({
   onClose,
   storyContext,
+  storyId,
   attachedMentions = [],
   onRemoveMention,
   onClearMentions,
@@ -942,12 +1012,98 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const [isConversationsLoading, setIsConversationsLoading] = useState(true);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [openConversationMenuId, setOpenConversationMenuId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{
+    id: string;
+    top: number;
+    left: number;
+    conversation: StoredConversation;
+  } | null>(null);
+  const drawerRef = useRef<HTMLElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [renameTarget, setRenameTarget] = useState<StoredConversation | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StoredConversation | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [shareResult, setShareResult] = useState<{ conversation: StoredConversation; url: string } | null>(null);
   const [expandedThoughtIds, setExpandedThoughtIds] = useState<Record<string, boolean>>({});
+
+  // Theme-aware, refined styling for the New Conversation button
+  const newChatBtnStyle = useMemo(() => {
+    if (currentTheme.mode === "apple_dark") {
+      return {
+        bg: "rgba(255, 255, 255, 0.08)",
+        hoverBg: "rgba(255, 255, 255, 0.14)",
+        border: "rgba(255, 255, 255, 0.14)",
+        text: "#F5F5F5",
+        iconColor: "#FFFFFF",
+      };
+    }
+    if (currentTheme.mode === "night_whisper") {
+      return {
+        bg: "rgba(159, 163, 101, 0.16)",
+        hoverBg: "rgba(159, 163, 101, 0.24)",
+        border: "rgba(159, 163, 101, 0.32)",
+        text: "#E2DFD2",
+        iconColor: currentTheme.accent,
+      };
+    }
+    return {
+      bg: currentTheme.accent,
+      hoverBg: currentTheme.accent,
+      border: "transparent",
+      text: "#FFFFFF",
+      iconColor: "#FFFFFF",
+    };
+  }, [currentTheme.mode, currentTheme.accent]);
+
+  // Global outside-click and Escape listener for the conversations drawer
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) {
+        setIsDrawerOpen(false);
+        setOpenConversationMenuId(null);
+        setMenuAnchor(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsDrawerOpen(false);
+        setOpenConversationMenuId(null);
+        setMenuAnchor(null);
+      }
+    };
+    window.addEventListener("mousedown", handlePointerDown, true);
+    window.addEventListener("touchstart", handlePointerDown, true);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown, true);
+      window.removeEventListener("touchstart", handlePointerDown, true);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDrawerOpen]);
+
+  // Close floating 3-dots conversation menu on outside click
+  useEffect(() => {
+    if (!menuAnchor) return;
+    const handleMenuClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (menuRef.current && menuRef.current.contains(target)) {
+        return;
+      }
+      if (target.closest('button[aria-label^="إجراءات "]')) {
+        return;
+      }
+      setMenuAnchor(null);
+      setOpenConversationMenuId(null);
+    };
+    window.addEventListener("mousedown", handleMenuClickOutside);
+    window.addEventListener("touchstart", handleMenuClickOutside);
+    return () => {
+      window.removeEventListener("mousedown", handleMenuClickOutside);
+      window.removeEventListener("touchstart", handleMenuClickOutside);
+    };
+  }, [menuAnchor]);
 
   const toggleThought = useCallback((id: string) => {
     setExpandedThoughtIds((prev) => ({
@@ -972,36 +1128,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     return `تم التفكير لمدة ${toArabicDigits(mins)} دقيقة و ${toArabicDigits(remSecs)} ثانية`;
   }, []);
 
-  // Load saved conversations from localStorage
-  const loadStoredConversations = useCallback((): StoredConversation[] => {
-    try {
-      const raw = localStorage.getItem(CONVERSATIONS_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item: any) => ({
-          ...item,
-          lastMessageAt: new Date(item.lastMessageAt),
-          pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
-          messages: (item.messages || []).map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp),
-          })),
-        }));
-      }
-    } catch (e) {
-      console.error("Failed to parse stored conversations", e);
-    }
-    return [];
-  }, []);
+  // Per-story storage key calculation
+  const currentStorageKey = useMemo(() => getStoryStorageKey(storyId), [storyId]);
+  const prevStoryIdRef = useRef<number | string | null | undefined>(storyId);
 
-  const saveStoredConversations = useCallback((list: StoredConversation[]) => {
-    try {
-      localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(list));
-    } catch (e) {
-      console.error("Failed to save conversations to storage", e);
-    }
-  }, []);
+  // Helper callbacks bound to current storage key
+  const saveStoredConversations = useCallback(
+    (list: StoredConversation[]) => {
+      saveStoredConversationsToStorage(currentStorageKey, list);
+    },
+    [currentStorageKey]
+  );
 
   useEffect(() => {
     try {
@@ -1009,15 +1146,51 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     } catch { /* Welcome rotation still works in memory if storage is unavailable. */ }
   }, [welcomeLineIndex]);
 
-  // Initial load of conversations
+  // Load and isolate conversations strictly per-story, handling seamless draft migration upon first save
   useEffect(() => {
+    const prevId = prevStoryIdRef.current;
+    prevStoryIdRef.current = storyId;
+
     setIsConversationsLoading(true);
-    const loaded = loadStoredConversations();
+
+    const hasNewValidId = storyId !== undefined && storyId !== null && String(storyId).trim() !== "";
+    const wasUnsavedDraft = prevId === undefined || prevId === null || prevId === "";
+
+    // Case 1: First save of a draft story - migrate draft conversations into the permanent story key
+    if (wasUnsavedDraft && hasNewValidId) {
+      const targetKey = getStoryStorageKey(storyId);
+      const draftConvs = loadStoredConversationsFromStorage("dar_alhikayat_ai_convs_draft");
+      const existingConvs = loadStoredConversationsFromStorage(targetKey);
+
+      if (draftConvs.length > 0) {
+        const combined = [...draftConvs, ...existingConvs.filter((ec) => !draftConvs.some((dc) => dc.id === ec.id))];
+        saveStoredConversationsToStorage(targetKey, combined);
+        try {
+          localStorage.removeItem("dar_alhikayat_ai_convs_draft");
+        } catch {}
+        setConversations(combined);
+      } else {
+        setConversations(existingConvs);
+      }
+      setIsConversationsLoading(false);
+      return;
+    }
+
+    // Case 2: Switching from one story to a completely different story
+    if (prevId !== storyId) {
+      setMessages([]);
+      setActiveConversationId(null);
+      setInputValue("");
+      setEditingMessageId(null);
+      setIsDrawerOpen(false);
+    }
+
+    const loaded = loadStoredConversationsFromStorage(currentStorageKey);
     setConversations(loaded);
     setIsConversationsLoading(false);
-  }, [loadStoredConversations]);
+  }, [storyId, currentStorageKey]);
 
-  // Auto-sync active conversation messages to storage
+  // Auto-sync active conversation messages to the story's storage
   useEffect(() => {
     if (!activeConversationId || messages.length === 0) return;
     setConversations((prev) => {
@@ -1124,6 +1297,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     setMessages([]);
     setInputValue("");
     setIsDrawerOpen(false);
+    setOpenConversationMenuId(null);
+    setMenuAnchor(null);
     setEditingMessageId(null);
   };
 
@@ -1134,7 +1309,46 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       setActiveConversationId(target.id);
       setMessages(target.messages || []);
       setIsDrawerOpen(false);
+      setOpenConversationMenuId(null);
+      setMenuAnchor(null);
       setEditingMessageId(null);
+    }
+  };
+
+  const handleToggleMenu = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    conversation: StoredConversation
+  ) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (openConversationMenuId === conversation.id) {
+      setOpenConversationMenuId(null);
+      setMenuAnchor(null);
+      return;
+    }
+    const btnRect = event.currentTarget.getBoundingClientRect();
+    const drawerElement = drawerRef.current;
+    if (drawerElement) {
+      const drawerRect = drawerElement.getBoundingClientRect();
+      const menuWidth = 170;
+      let top = btnRect.bottom - drawerRect.top + 4;
+      if (top + 160 > drawerRect.height) {
+        top = Math.max(8, btnRect.top - drawerRect.top - 150);
+      }
+      let left = btnRect.left - drawerRect.left;
+      if (left < 8) {
+        left = 8;
+      }
+      if (left + menuWidth > drawerRect.width - 8) {
+        left = Math.max(8, drawerRect.width - menuWidth - 8);
+      }
+      setMenuAnchor({
+        id: conversation.id,
+        top,
+        left,
+        conversation,
+      });
+      setOpenConversationMenuId(conversation.id);
     }
   };
 
@@ -1155,12 +1369,14 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       return updated;
     });
     setOpenConversationMenuId(null);
+    setMenuAnchor(null);
   };
 
   const openRenameConversation = (conv: StoredConversation) => {
     setRenameTarget(conv);
     setRenameValue(conv.title);
     setOpenConversationMenuId(null);
+    setMenuAnchor(null);
   };
 
   const handleRenameConversation = () => {
@@ -1191,6 +1407,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     setDeleteTarget(null);
     setActionLoading(false);
     setOpenConversationMenuId(null);
+    setMenuAnchor(null);
   };
 
   const handleShareConversation = (conv: StoredConversation) => {
@@ -1209,6 +1426,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       url: shareUrl,
     });
     setOpenConversationMenuId(null);
+    setMenuAnchor(null);
   };
 
   // Auto scroll to bottom
@@ -1618,7 +1836,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       };
       currentConvId = newId;
       setActiveConversationId(newId);
-      setConversations((prev) => [newConv, ...prev]);
+      setConversations((prev) => {
+        const updated = [newConv, ...prev.filter((c) => c.id !== newId)];
+        saveStoredConversations(updated);
+        return updated;
+      });
     }
 
     const isEditIntent =
@@ -1824,25 +2046,47 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none select-none"
         style={{ left: "16px", right: "16px" }}
       >
-        {/* Right Capsule: Dar Al Hikayat AI Title Only */}
-        <div
-          className="pointer-events-auto h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
-          style={{
-            height: "44px",
-            backgroundColor: currentTheme.glass,
-            borderColor: currentTheme.border,
-            boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
-            borderRadius: "9999px",
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Sparkles size={15} style={{ color: currentTheme.accent }} />
-            <span
-              className="font-zain-xbold text-sm tracking-wide leading-none pt-0.5 select-none"
-              style={{ color: currentTheme.text }}
-            >
-              دار الحكايات AI
-            </span>
+        {/* Right Side: Drawer/Archive Button + Title Capsule */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
+            style={{
+              width: "44px",
+              height: "44px",
+              minWidth: "44px",
+              minHeight: "44px",
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+              borderRadius: "50%",
+            }}
+            aria-label="سجل محادثات هذه الحكاية"
+            title="سجل محادثات هذه الحكاية"
+          >
+            <TwoLinesMenuIcon size={18} color={currentTheme.accent} />
+          </button>
+
+          <div
+            className="h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
+            style={{
+              height: "44px",
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+              borderRadius: "9999px",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles size={15} style={{ color: currentTheme.accent }} />
+              <span
+                className="font-zain-xbold text-sm tracking-wide leading-none pt-0.5 select-none"
+                style={{ color: currentTheme.text }}
+              >
+                دار الحكايات AI
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1899,415 +2143,449 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         </div>
       </header>
 
-      {/* ── CONVERSATIONS DRAWER ── */}
-      <AnimatePresence>
-        {isDrawerOpen && (
-          <>
-            <motion.button
-              type="button"
-              aria-label="إغلاق قائمة المحادثات"
-              className="fixed inset-0 z-[55] bg-black/30 backdrop-blur-xs cursor-default"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsDrawerOpen(false)}
-            />
-            <motion.aside
-              dir="rtl"
-              className="fixed inset-y-0 right-0 left-auto z-[60] flex w-[min(300px,calc(100vw-16px))] flex-col overflow-hidden rounded-l-[28px] border-l shadow-2xl backdrop-blur-2xl"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                color: currentTheme.text,
-              }}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-            >
-              <div
-                className="flex h-12 shrink-0 items-center justify-between border-b px-4"
-                style={{ borderColor: currentTheme.border }}
-              >
-                <div className="flex items-center gap-1.5 select-none">
-                  <Sparkles size={14} style={{ color: currentTheme.accent }} />
-                  <span
-                    className="font-zain-xbold text-xs tracking-wide"
-                    style={{ color: currentTheme.text }}
-                  >
-                    المحادثات المحفوظة
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsDrawerOpen(false)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                  style={{ color: currentTheme.secondary }}
-                  aria-label="إغلاق"
+      {/* ── CONVERSATIONS DRAWER (Portaled to document.body for full viewport coverage) ── */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {isDrawerOpen && (
+              <>
+                <motion.div
+                  key="drawer-backdrop"
+                  aria-label="إغلاق قائمة المحادثات"
+                  className="fixed inset-0 z-[65] bg-black/40 backdrop-blur-[2px] cursor-pointer"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.16 }}
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    setOpenConversationMenuId(null);
+                    setMenuAnchor(null);
+                  }}
+                />
+                <motion.aside
+                  ref={drawerRef}
+                  dir="rtl"
+                  className="fixed top-3 bottom-3 right-3 z-[70] flex w-[260px] min-w-[260px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-[24px] border shadow-2xl backdrop-blur-2xl shrink-0"
+                  style={{
+                    backgroundColor: currentTheme.glass,
+                    borderColor: currentTheme.border,
+                    color: currentTheme.text,
+                    boxShadow: `0 16px 48px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px ${currentTheme.border}`,
+                  }}
+                  initial={{ opacity: 0, x: 20, scale: 0.98 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 20, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
                 >
-                  <X size={15} />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={startNewConversation}
-                className="mx-3 mt-3 flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-zain-bold shadow-sm transition-all hover:opacity-90 active:scale-95 text-white cursor-pointer"
-                style={{ backgroundColor: currentTheme.accent }}
-              >
-                <MessageCirclePlus size={15} />
-                <span>محادثة جديدة</span>
-              </button>
-
-              <div className="flex-1 overflow-y-auto px-3 pb-4 pt-3 hide-scrollbar">
-                {isConversationsLoading ? (
-                  <div className="flex items-center justify-center gap-2 py-10 text-xs font-zain-bold">
-                    <span
-                      className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-                      style={{ borderColor: currentTheme.accent, borderTopColor: "transparent" }}
-                    />
-                    <span style={{ color: currentTheme.secondary }}>
-                      جارٍ تحميل المحادثات...
-                    </span>
-                  </div>
-                ) : conversations.length === 0 ? (
+                  {/* Header: Clean, only "محادثات الحكاية" and Close Button */}
                   <div
-                    className="px-4 py-10 text-center text-xs font-zain-bold leading-6"
-                    style={{ color: currentTheme.secondary }}
+                    className="flex h-14 shrink-0 w-full items-center justify-between border-b px-5 select-none"
+                    style={{ borderColor: currentTheme.border }}
                   >
-                    لا توجد محادثات محفوظة بعد.
-                    <br />
-                    ابدأي سؤالًا جديدًا وستظهر هنا.
+                    <div className="flex items-center min-w-0 flex-1 pr-0.5">
+                      <span
+                        className="font-zain-xbold text-sm tracking-wide truncate"
+                        style={{ color: currentTheme.text }}
+                      >
+                        محادثات الحكاية
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDrawerOpen(false);
+                        setOpenConversationMenuId(null);
+                        setMenuAnchor(null);
+                      }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0 ml-1"
+                      style={{ color: currentTheme.secondary }}
+                      aria-label="إغلاق"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {conversations.map((conversation) => (
+
+                  <div
+                    className="flex-1 overflow-y-auto px-2.5 py-2.5 hide-scrollbar w-full min-w-0"
+                    onScroll={() => {
+                      if (menuAnchor) {
+                        setMenuAnchor(null);
+                        setOpenConversationMenuId(null);
+                      }
+                    }}
+                  >
+                    {/* New Chat Button: Native list item at the top of the sidebar list, borderless with subtle hover */}
+                    <button
+                      type="button"
+                      onClick={startNewConversation}
+                      className="flex items-center gap-2.5 w-full px-3.5 py-3 rounded-xl transition-colors select-none cursor-pointer hover:bg-white/5 active:bg-white/10 text-right mb-1"
+                      style={{
+                        color: currentTheme.text,
+                      }}
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: currentTheme.accent }}>
+                          <path d="M4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20H8" />
+                          <path d="M13.5 9.5L17.5 13.5L11 20H7V16L13.5 9.5Z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-zain-bold flex-1 truncate">محادثة جديدة</span>
+                    </button>
+
+                    {isConversationsLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-10 text-xs font-zain-bold">
+                        <span
+                          className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+                          style={{ borderColor: currentTheme.accent, borderTopColor: "transparent" }}
+                        />
+                        <span style={{ color: currentTheme.secondary }}>
+                          جارٍ تحميل المحادثات...
+                        </span>
+                      </div>
+                    ) : conversations.length === 0 ? (
                       <div
-                        key={conversation.id}
-                        className="group relative flex items-center gap-1 rounded-[18px] border px-2.5 py-2 transition-all"
+                        className="w-full px-4 py-12 text-center text-xs font-zain-bold leading-6 select-none"
+                        style={{ color: currentTheme.secondary }}
+                      >
+                        لا توجد محادثات سابقة لهذه الحكاية.
+                        <br />
+                        ابدأي حوارًا جديدًا وسيُحفظ هنا تلقائيًا.
+                      </div>
+                    ) : (
+                      <div className="space-y-1 w-full min-w-0">
+                        {conversations.map((conversation) => (
+                          <div
+                            key={conversation.id}
+                            className="group relative flex items-center justify-between gap-2 w-full px-3.5 py-3 rounded-xl transition-colors select-none cursor-pointer hover:bg-white/5 active:bg-white/10"
+                            style={{
+                              backgroundColor:
+                                conversation.id === activeConversationId
+                                  ? currentTheme.isDark
+                                    ? "rgba(255, 255, 255, 0.08)"
+                                    : `${currentTheme.accent}15`
+                                  : "transparent",
+                            }}
+                            onClick={() => openConversation(conversation.id)}
+                          >
+                            {/* Child 1 in RTL: Sits on the RIGHT (Title) */}
+                            <div className="min-w-0 flex-1 text-right pl-2">
+                              <span
+                                className="block truncate text-sm font-zain-bold leading-normal"
+                                style={{ color: currentTheme.text }}
+                              >
+                                {conversation.pinnedAt && (
+                                  <Pin
+                                    size={12}
+                                    className="inline-block ml-1.5 shrink-0 align-middle"
+                                    style={{ color: currentTheme.accent }}
+                                    aria-label="مثبتة"
+                                  />
+                                )}
+                                {conversation.title}
+                              </span>
+                            </div>
+
+                            {/* Child 2 in RTL: Sits on the LEFT (3-dots icon on the far left opposite the title) */}
+                            <button
+                              type="button"
+                              onClick={(event) => handleToggleMenu(event, conversation)}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                              style={{
+                                color: conversation.pinnedAt
+                                  ? currentTheme.accent
+                                  : currentTheme.secondary,
+                              }}
+                              aria-label={`إجراءات ${conversation.title}`}
+                              title="إجراءات المحادثة"
+                            >
+                              {conversation.pinnedAt ? (
+                                <Pin size={13} fill="currentColor" />
+                              ) : (
+                                <MoreVertical size={16} />
+                              )}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── FLOATING 3-DOTS CONVERSATION MENU (Rendered inside drawer, floating OVER the chat items) ── */}
+                  <AnimatePresence>
+                    {menuAnchor && (
+                      <motion.div
+                        ref={menuRef}
+                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute z-[80] w-[170px] rounded-[18px] shadow-2xl overflow-hidden p-1.5 border backdrop-blur-2xl pointer-events-auto"
                         style={{
-                          backgroundColor:
-                            conversation.id === activeConversationId
-                              ? currentTheme.isDark
-                                ? "rgba(255,255,255,0.08)"
-                                : `${currentTheme.accent}15`
-                              : "transparent",
-                          borderColor:
-                            conversation.id === activeConversationId
-                              ? currentTheme.accent
-                              : "transparent",
+                          top: menuAnchor.top,
+                          left: menuAnchor.left,
+                          backgroundColor: currentTheme.glass,
+                          borderColor: currentTheme.border,
+                          boxShadow: `0 12px 36px -4px rgba(0,0,0,0.5)`,
                         }}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           type="button"
-                          onClick={() => openConversation(conversation.id)}
-                          className="min-w-0 flex-1 text-right cursor-pointer"
+                          onClick={() => {
+                            handleShareConversation(menuAnchor.conversation);
+                          }}
+                          className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                          style={{ color: currentTheme.text }}
                         >
-                          <span
-                            className="flex items-center gap-1.5 truncate text-xs font-zain-bold"
-                            style={{ color: currentTheme.text }}
-                          >
-                            {conversation.pinnedAt && (
-                              <Pin
-                                size={11}
-                                className="shrink-0"
-                                style={{ color: currentTheme.accent }}
-                                aria-label="مثبتة"
-                              />
-                            )}
-                            <span className="truncate">
-                              {conversation.title}
-                            </span>
-                          </span>
-                          <span
-                            className="mt-0.5 block text-[10px] font-zain-reg"
-                            style={{ color: currentTheme.secondary }}
-                          >
-                            {conversation.lastMessageAt.toLocaleDateString(
-                              "ar-EG",
-                              { day: "numeric", month: "short" }
-                            )}
+                          <Share2 size={13} style={{ color: currentTheme.accent }} />
+                          <span>مشاركة المحادثة</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handlePinConversation(menuAnchor.conversation);
+                          }}
+                          className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                          style={{ color: currentTheme.text }}
+                        >
+                          <Pin
+                            size={13}
+                            style={{ color: currentTheme.accent }}
+                            fill={menuAnchor.conversation.pinnedAt ? "currentColor" : "none"}
+                          />
+                          <span>
+                            {menuAnchor.conversation.pinnedAt
+                              ? "إلغاء التثبيت"
+                              : "تثبيت"}
                           </span>
                         </button>
                         <button
                           type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setOpenConversationMenuId((current) =>
-                              current === conversation.id
-                                ? null
-                                : conversation.id
-                            );
+                          onClick={() => {
+                            openRenameConversation(menuAnchor.conversation);
                           }}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                          style={{
-                            color: conversation.pinnedAt
-                              ? currentTheme.accent
-                              : currentTheme.secondary,
-                          }}
-                          aria-label={`إجراءات ${conversation.title}`}
-                          title="إجراءات المحادثة"
+                          className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                          style={{ color: currentTheme.text }}
                         >
-                          {conversation.pinnedAt ? (
-                            <Pin size={13} fill="currentColor" />
-                          ) : (
-                            <MoreVertical size={14} />
-                          )}
+                          <Pencil size={13} style={{ color: currentTheme.accent }} />
+                          <span>إعادة التسمية</span>
                         </button>
-                        <AnimatePresence>
-                          {openConversationMenuId === conversation.id && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                              transition={{ duration: 0.12 }}
-                              className="!absolute left-2 top-10 z-[70] w-[170px] rounded-[18px] shadow-xl overflow-hidden p-1.5 border backdrop-blur-2xl"
-                              style={{
-                                backgroundColor: currentTheme.glass,
-                                borderColor: currentTheme.border,
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleShareConversation(conversation)
-                                }
-                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                                style={{ color: currentTheme.text }}
-                              >
-                                <Share2 size={13} style={{ color: currentTheme.accent }} />
-                                <span>مشاركة المحادثة</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handlePinConversation(conversation)
-                                }
-                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                                style={{ color: currentTheme.text }}
-                              >
-                                <Pin
-                                  size={13}
-                                  style={{ color: currentTheme.accent }}
-                                  fill={conversation.pinnedAt ? "currentColor" : "none"}
-                                />
-                                <span>
-                                  {conversation.pinnedAt
-                                    ? "إلغاء التثبيت"
-                                    : "تثبيت"}
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openRenameConversation(conversation)
-                                }
-                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                                style={{ color: currentTheme.text }}
-                              >
-                                <Pencil size={13} style={{ color: currentTheme.accent }} />
-                                <span>إعادة التسمية</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenConversationMenuId(null);
-                                  setDeleteTarget(conversation);
-                                }}
-                                className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-red-500/10 cursor-pointer text-red-500"
-                              >
-                                <Trash2 size={13} />
-                                <span>حذف</span>
-                              </button>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.aside>
-          </>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const conv = menuAnchor.conversation;
+                            setMenuAnchor(null);
+                            setOpenConversationMenuId(null);
+                            setDeleteTarget(conv);
+                          }}
+                          className="flex h-8 w-full items-center gap-2 rounded-[12px] px-2.5 text-right text-xs font-zain-bold transition hover:bg-red-500/10 cursor-pointer text-red-500"
+                        >
+                          <Trash2 size={13} />
+                          <span>حذف</span>
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.aside>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
 
       {/* ── MODALS (SHARE, RENAME, DELETE) ── */}
-      <AnimatePresence>
-        {shareResult && (
-          <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-xs"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              dir="rtl"
-              className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                color: currentTheme.text,
-              }}
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
-                    تم نسخ نص المحادثة
-                  </p>
-                  <p className="mt-1 text-xs font-zain-reg" style={{ color: currentTheme.secondary }}>
-                    تم نسخ كامل مجريات الحوار الأدبي للحافظة بنجاح.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShareResult(null)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                  style={{ color: currentTheme.secondary }}
-                  aria-label="إغلاق"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShareResult(null)}
-                  className="h-9 flex-1 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 cursor-pointer"
-                  style={{ backgroundColor: currentTheme.accent }}
-                >
-                  تم
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {renameTarget && (
-          <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-xs"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.form
-              dir="rtl"
-              onSubmit={(event) => {
-                event.preventDefault();
-                handleRenameConversation();
-              }}
-              className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                color: currentTheme.text,
-              }}
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            >
-              <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
-                إعادة تسمية المحادثة
-              </p>
-              <input
-                autoFocus
-                value={renameValue}
-                onChange={(event) => setRenameValue(event.target.value)}
-                maxLength={160}
-                className="mt-3.5 h-10 w-full rounded-[16px] px-3.5 text-right text-xs font-zain-bold outline-none border transition-colors"
-                style={{
-                  backgroundColor: currentTheme.isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.7)",
-                  borderColor: currentTheme.border,
-                  color: currentTheme.text,
-                }}
-                aria-label="اسم المحادثة الجديد"
-              />
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRenameTarget(null)}
-                  className="h-9 flex-1 rounded-full border text-xs font-zain-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {shareResult && (
+              <motion.div
+                className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-5 backdrop-blur-xs"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShareResult(null)}
+              >
+                <motion.div
+                  dir="rtl"
+                  className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
                   style={{
+                    backgroundColor: currentTheme.glass,
                     borderColor: currentTheme.border,
-                    color: currentTheme.secondary,
+                    color: currentTheme.text,
                   }}
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={!renameValue.trim() || actionLoading}
-                  className="h-9 flex-1 rounded-full text-xs font-zain-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                  style={{ backgroundColor: currentTheme.accent }}
-                >
-                  حفظ
-                </button>
-              </div>
-            </motion.form>
-          </motion.div>
-        )}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
+                        تم نسخ نص المحادثة
+                      </p>
+                      <p className="mt-1 text-xs font-zain-reg" style={{ color: currentTheme.secondary }}>
+                        تم نسخ كامل مجريات الحوار الأدبي للحافظة بنجاح.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShareResult(null)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                      style={{ color: currentTheme.secondary }}
+                      aria-label="إغلاق"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShareResult(null)}
+                      className="h-9 flex-1 rounded-full text-xs font-zain-bold transition-opacity hover:opacity-90 cursor-pointer"
+                      style={{
+                        backgroundColor: currentTheme.accent,
+                        color: currentTheme.mode === "apple_dark" ? "#000000" : "#FFFFFF",
+                      }}
+                    >
+                      تم
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
 
-        {deleteTarget && (
-          <motion.div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-5 backdrop-blur-xs"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              dir="rtl"
-              className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
-              style={{
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                color: currentTheme.text,
-              }}
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-500 shadow-xs">
-                  <Trash2 size={16} />
-                </div>
-                <div>
-                  <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
-                    حذف المحادثة نهائيًا؟
-                  </p>
-                  <p className="mt-1 text-xs font-zain-reg leading-5" style={{ color: currentTheme.secondary }}>
-                    سيتم حذف المحادثة وجميع رسائلها نهائيًا. لا يمكن التراجع عن هذا الإجراء.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={actionLoading}
-                  className="h-9 flex-1 rounded-full border text-xs font-zain-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                  style={{
-                    borderColor: currentTheme.border,
-                    color: currentTheme.secondary,
+            {renameTarget && (
+              <motion.div
+                className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-5 backdrop-blur-xs"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setRenameTarget(null)}
+              >
+                <motion.form
+                  dir="rtl"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    handleRenameConversation();
                   }}
+                  className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
+                  style={{
+                    backgroundColor: currentTheme.glass,
+                    borderColor: currentTheme.border,
+                    color: currentTheme.text,
+                  }}
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  إلغاء
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteConversation(deleteTarget.id)}
-                  disabled={actionLoading}
-                  className="h-9 flex-1 rounded-full bg-red-600 text-xs font-zain-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-xs"
+                  <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
+                    إعادة تسمية المحادثة
+                  </p>
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(event) => setRenameValue(event.target.value)}
+                    maxLength={160}
+                    className="mt-3.5 h-10 w-full rounded-[16px] px-3.5 text-right text-xs font-zain-bold outline-none border transition-colors"
+                    style={{
+                      backgroundColor: currentTheme.isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.7)",
+                      borderColor: currentTheme.border,
+                      color: currentTheme.text,
+                    }}
+                    aria-label="اسم المحادثة الجديد"
+                  />
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRenameTarget(null)}
+                      className="h-9 flex-1 rounded-full border text-xs font-zain-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                      style={{
+                        borderColor: currentTheme.border,
+                        color: currentTheme.secondary,
+                      }}
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!renameValue.trim() || actionLoading}
+                      className="h-9 flex-1 rounded-full text-xs font-zain-bold transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                      style={{
+                        backgroundColor: currentTheme.accent,
+                        color: currentTheme.mode === "apple_dark" ? "#000000" : "#FFFFFF",
+                      }}
+                    >
+                      حفظ
+                    </button>
+                  </div>
+                </motion.form>
+              </motion.div>
+            )}
+
+            {deleteTarget && (
+              <motion.div
+                className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-5 backdrop-blur-xs"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setDeleteTarget(null)}
+              >
+                <motion.div
+                  dir="rtl"
+                  className="w-full max-w-[340px] rounded-[24px] p-5 border shadow-2xl backdrop-blur-2xl"
+                  style={{
+                    backgroundColor: currentTheme.glass,
+                    borderColor: currentTheme.border,
+                    color: currentTheme.text,
+                  }}
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {actionLoading ? "جارٍ الحذف..." : "حذف نهائي"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-500 shadow-xs">
+                      <Trash2 size={16} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-zain-xbold" style={{ color: currentTheme.text }}>
+                        حذف المحادثة نهائيًا؟
+                      </p>
+                      <p className="mt-1 text-xs font-zain-reg leading-5" style={{ color: currentTheme.secondary }}>
+                        سيتم حذف المحادثة وجميع رسائلها نهائيًا. لا يمكن التراجع عن هذا الإجراء.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(null)}
+                      disabled={actionLoading}
+                      className="h-9 flex-1 rounded-full border text-xs font-zain-bold hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                      style={{
+                        borderColor: currentTheme.border,
+                        color: currentTheme.secondary,
+                      }}
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteConversation(deleteTarget.id)}
+                      disabled={actionLoading}
+                      className="h-9 flex-1 rounded-full bg-red-600 text-xs font-zain-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer shadow-xs"
+                    >
+                      {actionLoading ? "جارٍ الحذف..." : "حذف نهائي"}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {storageError && (

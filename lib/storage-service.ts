@@ -522,6 +522,15 @@ class StorageServiceManager {
     await this.init();
     if (ids.length === 0) return;
 
+    // Clean up per-story AI assistant conversations
+    ids.forEach((id) => {
+      try {
+        localStorage.removeItem(`dar_alhikayat_ai_convs_story_${id}`);
+      } catch (e) {
+        console.warn("Could not remove AI conversations for story", id, e);
+      }
+    });
+
     if (this.isNativeSQLite) {
       const CHUNK_SIZE = 800;
       for (let i = 0; i < ids.length; i += CHUNK_SIZE) {

@@ -4043,6 +4043,7 @@ const DarAlHikayatMaster: React.FC = () => {
             <DarAlHikayatAIAssistant
               onClose={() => setShowAIAssistant(false)}
               storyContext={currentStoryContext}
+              storyId={noteId}
               attachedMentions={attachedMentions}
               onRemoveMention={handleRemoveMention}
               onClearMentions={handleClearMentions}

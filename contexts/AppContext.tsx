@@ -278,6 +278,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
       return prevNotes.filter((note) => !idsToDelete.includes(note.id));
     });
 
+    // Clean up per-story AI conversation history for deleted notes
+    idsToDelete.forEach((id) => {
+      try {
+        localStorage.removeItem(`dar_alhikayat_ai_convs_story_${id}`);
+      } catch {}
+    });
+
     StorageService.deleteStories(idsToDelete).catch((err) => {
       console.error("Failed to delete stories:", err);
       setNotes(prevList);
