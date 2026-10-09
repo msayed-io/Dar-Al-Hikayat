@@ -49,6 +49,7 @@ import { downloadBlob } from "../lib/pdf-export";
 import { ImportResultModal, type FailedImportItem } from "./ImportResultModal";
 import { HandwritingPreview } from "./HandwritingPreview";
 import { hasHandwritingInk } from "../lib/handwriting-document";
+import { CreativityStatsModal } from "./CreativityStatsModal";
 
 const HomePage: React.FC = () => {
   const {
@@ -82,19 +83,6 @@ const HomePage: React.FC = () => {
 
   // --- New Feature State ---
   const [showDashboard, setShowDashboard] = useState(false);
-  const [dashboardStats, setDashboardStats] = useState({
-    words: 0,
-    stories: 0,
-    avg: 0,
-    chars: 0,
-    readingTime: 0,
-    thisMonthWords: 0,
-    thisMonthStories: 0,
-    longestStoryWords: 0,
-    writerLevelTitle: "بَذْرَةُ إِلهَام",
-    nextMilestone: 500,
-    progressPercentage: 0,
-  });
   const [showAbout, setShowAbout] = useState(false); // State for About Page
   const [showBackupUI, setShowBackupUI] = useState(false); // State for Backup/Restore UI
 
@@ -151,92 +139,6 @@ const HomePage: React.FC = () => {
     }
     return notes;
   }, [notes, ftsResults]);
-
-  // --- Dashboard Statistics Calculation (Instant O(N) over Metadata Integers) ---
-  const calculateDashboardStats = () => {
-    const arabicMonths: { [key: string]: number } = {
-      يناير: 0, فبراير: 1, مارس: 2, أبريل: 3, مايو: 4, يونيو: 5,
-      يوليو: 6, أغسطس: 7, سبتمبر: 8, أكتوبر: 9, نوفمبر: 10, ديسمبر: 11,
-    };
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    let totalWords = 0;
-    let totalChars = 0;
-    let longestStoryWords = 0;
-
-    notes.forEach((note) => {
-      const wordCount = note.word_count || 0;
-      const charCount = note.char_count || 0;
-
-      totalWords += wordCount;
-      totalChars += charCount;
-      if (wordCount > longestStoryWords) {
-        longestStoryWords = wordCount;
-      }
-    });
-
-    const totalStories = notes.length;
-    const avgWords = totalStories > 0 ? Math.round(totalWords / totalStories) : 0;
-    const readingTimeMinutes = Math.ceil(totalWords / 200);
-
-    const notesThisMonth = notes.filter((note) => {
-      try {
-        const parts = note.date.split(" ");
-        if (parts.length !== 3) return false;
-        const month = arabicMonths[parts[1]];
-        const year = parseInt(
-          parts[2].replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))),
-        );
-        return month === currentMonth && year === currentYear;
-      } catch {
-        return false;
-      }
-    });
-
-    const wordsThisMonth = notesThisMonth.reduce((sum, note) => sum + (note.word_count || 0), 0);
-    const storiesThisMonth = notesThisMonth.length;
-
-    let levelTitle = "بَذْرَةُ إِلهَام";
-    let nextMilestone = 500;
-
-    if (totalWords >= 50000) {
-      levelTitle = "رَاوِي الدَّار الأَعْظَم";
-      nextMilestone = 100000;
-    } else if (totalWords >= 20000) {
-      levelTitle = "سَارِدُ المَلاحِم";
-      nextMilestone = 50000;
-    } else if (totalWords >= 5000) {
-      levelTitle = "سَاهِرُ القَلَم";
-      nextMilestone = 20000;
-    } else if (totalWords >= 1000) {
-      levelTitle = "حَكَوَاتِيٌّ شَغُوف";
-      nextMilestone = 5000;
-    } else if (totalWords >= 300) {
-      levelTitle = "مُصَمِّمُ الحِكَايَات";
-      nextMilestone = 1000;
-    }
-
-    const progressPercentage = Math.min(
-      100,
-      Math.round((totalWords / nextMilestone) * 100),
-    );
-
-    setDashboardStats({
-      words: totalWords,
-      stories: totalStories,
-      avg: avgWords,
-      chars: totalChars,
-      readingTime: readingTimeMinutes,
-      thisMonthWords: wordsThisMonth,
-      thisMonthStories: storiesThisMonth,
-      longestStoryWords,
-      writerLevelTitle: levelTitle,
-      nextMilestone,
-      progressPercentage,
-    });
-  };
 
   // --- Backup & Restore Logic ---
   const [importStatus, setImportStatus] = useState<{ isImporting: boolean; processed: number; total: number }>({
@@ -356,10 +258,7 @@ const HomePage: React.FC = () => {
   };
 
   const toggleDashboard = () => {
-    if (!showDashboard) {
-      calculateDashboardStats();
-    }
-    setShowDashboard(!showDashboard);
+    setShowDashboard((prev) => !prev);
     setShowMenu(false);
   };
 
@@ -738,157 +637,12 @@ const HomePage: React.FC = () => {
         </div>
       )}
 
-      {/* --- CREATIVITY STATS MODAL (MATCHED EXACTLY TO LOCK STORY DIALOG) --- */}
-      {showDashboard && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowDashboard(false);
-            }
-          }}
-        >
-          <div
-            className="border shadow-2xl text-center animate-in zoom-in-95 duration-200 relative flex flex-col items-center"
-            style={{
-              width: "260px",
-              maxWidth: "calc(100vw - 32px)",
-              borderRadius: "28px",
-              padding: "24px 20px",
-              backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.bg,
-              borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
-              boxShadow: `0 20px 45px -10px ${currentTheme.shadow || "rgba(0,0,0,0.3)"}`,
-            }}
-          >
-            {/* Header Row: Title and Close Button on the exact same level */}
-            <div className="w-full relative flex items-center justify-center mb-1 min-h-[28px]">
-              <h2
-                className="text-base font-zain-xbold leading-none text-center"
-                style={{ color: currentTheme.text }}
-              >
-                إحصائيات الإبداع
-              </h2>
-              <button
-                onClick={() => setShowDashboard(false)}
-                className="absolute left-0 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full border flex items-center justify-center opacity-60 hover:opacity-100 transition-all cursor-pointer"
-                style={{
-                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
-                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}08`,
-                  color: currentTheme.text,
-                }}
-                title="إغلاق"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Description */}
-            <p
-              className="text-xs font-zain-reg mb-4 opacity-70 leading-relaxed text-center px-1"
-              style={{ color: currentTheme.text }}
-            >
-              ملخص أرقام ونبض قلمك في الدار
-            </p>
-
-            {/* Capsule Pills Stack - Matched to password field pills */}
-            <div className="w-full flex flex-col gap-2.5 mb-1">
-              {/* Row 1: إجمالي الكلمات */}
-              <div
-                className="w-full flex items-center justify-between px-3.5 border transition-all"
-                style={{
-                  height: "42px",
-                  borderRadius: "9999px",
-                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
-                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
-                }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <PenTool
-                    className="w-4 h-4 flex-shrink-0 opacity-80"
-                    style={{ color: currentTheme.accent }}
-                    strokeWidth={2}
-                  />
-                  <span
-                    className="font-zain-bold text-xs truncate"
-                    style={{ color: currentTheme.text }}
-                  >
-                    إجمالي الكلمات
-                  </span>
-                </div>
-                <span
-                  className="font-zain-xbold text-sm flex-shrink-0"
-                  style={{ color: currentTheme.accent }}
-                >
-                  {dashboardStats.words.toLocaleString("ar-EG")}
-                </span>
-              </div>
-
-              {/* Row 2: عدد الحكايات */}
-              <div
-                className="w-full flex items-center justify-between px-3.5 border transition-all"
-                style={{
-                  height: "42px",
-                  borderRadius: "9999px",
-                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
-                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
-                }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <BookOpen
-                    className="w-4 h-4 flex-shrink-0 opacity-80"
-                    style={{ color: currentTheme.accent }}
-                    strokeWidth={2}
-                  />
-                  <span
-                    className="font-zain-bold text-xs truncate"
-                    style={{ color: currentTheme.text }}
-                  >
-                    عدد الحكايات
-                  </span>
-                </div>
-                <span
-                  className="font-zain-xbold text-sm flex-shrink-0"
-                  style={{ color: currentTheme.text }}
-                >
-                  {dashboardStats.stories.toLocaleString("ar-EG")}
-                </span>
-              </div>
-
-              {/* Row 3: متوسط الكلمات */}
-              <div
-                className="w-full flex items-center justify-between px-3.5 border transition-all"
-                style={{
-                  height: "42px",
-                  borderRadius: "9999px",
-                  backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : `${currentTheme.accent}0a`,
-                  borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : `${currentTheme.accent}30`,
-                }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <BarChart
-                    className="w-4 h-4 flex-shrink-0 opacity-80"
-                    style={{ color: currentTheme.accent }}
-                    strokeWidth={2}
-                  />
-                  <span
-                    className="font-zain-bold text-xs truncate"
-                    style={{ color: currentTheme.text }}
-                  >
-                    متوسط الكلمات
-                  </span>
-                </div>
-                <span
-                  className="font-zain-xbold text-sm flex-shrink-0"
-                  style={{ color: currentTheme.text }}
-                >
-                  {dashboardStats.avg.toLocaleString("ar-EG")}{" "}
-                  <span className="font-zain-reg text-[11px] opacity-70">كلمة</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* --- CREATIVITY STATS MODAL (NEW 6-ROW DESIGN) --- */}
+      <CreativityStatsModal
+        isOpen={showDashboard}
+        onClose={() => setShowDashboard(false)}
+        notes={notes}
+      />
       {showAbout && (
         <div
           className="fixed inset-0 z-[100] animate-in slide-in-from-bottom duration-700 fade-in overflow-hidden flex flex-col"

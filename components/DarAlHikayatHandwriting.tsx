@@ -14,7 +14,9 @@ import {
   PenTool,
   LassoSelect,
   Scissors,
+  Plus,
 } from "lucide-react";
+import { DarAlHikayatColorPickerSheet } from "./DarAlHikayatColorPickerSheet";
 import { ThemeColors } from "../contexts/AppContext";
 import { hasHandwritingInk, type HandwritingSaveResult } from "../lib/handwriting-document";
 import { isHandwritingFeatureEnabled } from "../lib/handwriting-feature-flags";
@@ -186,6 +188,49 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     // Active popup capsule above bottom bar
     const [activePopup, setActivePopup] = useState<PopupType>("none");
+
+    // Custom Color Picker Sheet States & History
+    const [isColorPickerSheetOpen, setIsColorPickerSheetOpen] = useState<boolean>(false);
+    const isColorPickerSheetOpenRef = useRef<boolean>(false);
+    useEffect(() => {
+      isColorPickerSheetOpenRef.current = isColorPickerSheetOpen;
+    }, [isColorPickerSheetOpen]);
+
+    const [customColors, setCustomColors] = useState<string[]>(() => {
+      try {
+        const stored = localStorage.getItem("dar_al_hikayat_custom_handwriting_colors");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed.slice(0, 6);
+        }
+      } catch {}
+      return [];
+    });
+
+    const handleCustomColorApply = useCallback((hex: string) => {
+      const isHl = activeToolRef.current === "highlighter";
+      if (isHl) {
+        setSelectedHighlighterColor(hex);
+        selectedHighlighterColorRef.current = hex;
+      } else {
+        setSelectedColor(hex);
+        selectedColorRef.current = hex;
+        if (activeToolRef.current === "eraser" || activeToolRef.current === "lasso") {
+          setActiveTool("pen");
+          activeToolRef.current = "pen";
+        }
+      }
+      setCustomColors((prev) => {
+        const filtered = prev.filter((c) => c.toUpperCase() !== hex.toUpperCase());
+        const updated = [hex.toUpperCase(), ...filtered].slice(0, 6);
+        try {
+          localStorage.setItem("dar_al_hikayat_custom_handwriting_colors", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+      setIsColorPickerSheetOpen(false);
+      setActivePopup("none");
+    }, []);
 
     // Strokes & History for Undo/Redo
     const [strokes, setStrokes] = useState<Stroke[]>(initialStrokes);
@@ -768,6 +813,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
     // Core Drawing Helpers
     const startDrawing = (clientX: number, clientY: number, pressure = 0.5) => {
+      if (isColorPickerSheetOpenRef.current) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -887,6 +933,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
     };
 
     const moveDrawing = (clientX: number, clientY: number, pressure = 0.5) => {
+      if (isColorPickerSheetOpenRef.current) return;
       if (!isDrawingRef.current || !isActive) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -1167,6 +1214,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
       const handlePointerDown = (e: PointerEvent) => {
         if (!isActive && !isReadingMode) return;
+        if (isColorPickerSheetOpenRef.current) return;
         e.preventDefault();
 
         activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
@@ -1202,6 +1250,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
 
       const handlePointerMove = (e: PointerEvent) => {
         if (!isActive && !isReadingMode) return;
+        if (isColorPickerSheetOpenRef.current) return;
 
         if (activePointersRef.current.has(e.pointerId)) {
           activePointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
@@ -1663,9 +1712,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
             <div
               className="fixed bottom-0 left-1/2 z-50 select-none pointer-events-none"
               style={{
-                transform: isCollapsed ? "translateX(-50%) translateY(0%)" : "translateX(-50%) translateY(110%)",
-                opacity: isCollapsed ? 1 : 0,
-                pointerEvents: isCollapsed ? "auto" : "none",
+                transform: isCollapsed && !isColorPickerSheetOpen ? "translateX(-50%) translateY(0%)" : "translateX(-50%) translateY(110%)",
+                opacity: isCollapsed && !isColorPickerSheetOpen ? 1 : 0,
+                pointerEvents: isCollapsed && !isColorPickerSheetOpen ? "auto" : "none",
                 transition: "transform 420ms cubic-bezier(0.32, 0.72, 0, 1), opacity 300ms ease-out",
               }}
             >
@@ -1693,9 +1742,9 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
               className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center justify-end pointer-events-none select-none pb-0"
               dir="ltr"
               style={{
-                transform: isCollapsed ? "translateY(110%)" : "translateY(0%)",
-                opacity: isCollapsed ? 0 : 1,
-                pointerEvents: "none",
+                transform: isCollapsed || isColorPickerSheetOpen ? "translateY(110%)" : "translateY(0%)",
+                opacity: isCollapsed || isColorPickerSheetOpen ? 0 : 1,
+                pointerEvents: isCollapsed || isColorPickerSheetOpen ? "none" : undefined,
                 transition: "transform 420ms cubic-bezier(0.32, 0.72, 0, 1), opacity 320ms ease-out",
               }}
             >
@@ -1842,7 +1891,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
                 {activePopup === "color" && (
                   <div
                     id="capsule-color"
-                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 rounded-full py-1 px-1.5 flex items-center gap-1 shadow-xl backdrop-blur-2xl border animate-in fade-in zoom-in-95 duration-200"
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 rounded-full py-1 px-1.5 flex items-center gap-1.5 shadow-xl backdrop-blur-2xl border animate-in fade-in zoom-in-95 duration-200"
                     style={{
                       backgroundColor: barBg,
                       borderColor: barBorder,
@@ -1850,7 +1899,74 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
                       borderRadius: "9999px",
                     }}
                     onClick={(e) => e.stopPropagation()}
+                    dir="ltr"
                   >
+                    {/* Rainbow Circle Button with Dark Center & White Plus (Matches Screenshot_20261007_190033.jpg) */}
+                    <button
+                      id="color-capsule-rainbow-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsColorPickerSheetOpen(true);
+                        setActivePopup("none");
+                      }}
+                      className="relative w-6.5 h-6.5 rounded-full p-[2.5px] flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95 flex-shrink-0 shadow-sm"
+                      style={{
+                        background:
+                          "conic-gradient(from 180deg, #FF0055, #FF5500, #FFAA00, #00CC44, #00BBFF, #2255FF, #8800FF, #FF00AA, #FF0055)",
+                      }}
+                      title="إضافة واختيار لون مخصص"
+                      aria-label="فتح لوحة اختيار الألوان"
+                    >
+                      <div
+                        className="w-full h-full rounded-full flex items-center justify-center"
+                        style={{
+                          backgroundColor: "#16171B",
+                        }}
+                      >
+                        <Plus className="w-3.5 h-3.5 text-white" strokeWidth={2.8} />
+                      </div>
+                    </button>
+
+                    {/* Subtle divider */}
+                    <div className="w-px h-3.5 bg-white/20 mx-0.5" />
+
+                    {/* Recent Custom Colors */}
+                    {customColors.map((hex) => {
+                      const isHl = activeTool === "highlighter";
+                      const currentColor = isHl ? selectedHighlighterColor : selectedColor;
+                      const isSelected = currentColor.toUpperCase() === hex.toUpperCase();
+                      return (
+                        <button
+                          key={`custom-${hex}`}
+                          onClick={() => {
+                            if (isHl) {
+                              setSelectedHighlighterColor(hex);
+                              selectedHighlighterColorRef.current = hex;
+                            } else {
+                              setSelectedColor(hex);
+                              selectedColorRef.current = hex;
+                              if (activeTool === "eraser" || activeTool === "lasso") {
+                                setActiveTool("pen");
+                                activeToolRef.current = "pen";
+                              }
+                            }
+                            setActivePopup("none");
+                          }}
+                          className={`w-6 h-6 rounded-full transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
+                            isSelected ? "scale-110 ring-2 ring-offset-1" : "hover:scale-105 opacity-90 hover:opacity-100"
+                          }`}
+                          style={{
+                            backgroundColor: hex,
+                            // @ts-ignore
+                            "--tw-ring-color": theme.accent,
+                            "--tw-ring-offset-color": theme.bg,
+                          }}
+                          title={`لون مخصص: ${hex}`}
+                        />
+                      );
+                    })}
+
+                    {/* Standard Preset Palette Colors */}
                     {(activeTool === "highlighter" ? HIGHLIGHTER_PALETTE : COLOR_PALETTE).map((c) => {
                       const isHl = activeTool === "highlighter";
                       const currentColor = isHl ? selectedHighlighterColor : selectedColor;
@@ -2348,6 +2464,15 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
                 </div>
               </div>
             </div>
+
+            {/* Custom Color Picker Bottom Sheet (Matches Screenshot_20261007_190121.jpg) */}
+            <DarAlHikayatColorPickerSheet
+              isOpen={isColorPickerSheetOpen}
+              onClose={() => setIsColorPickerSheetOpen(false)}
+              currentColor={activeTool === "highlighter" ? selectedHighlighterColor : selectedColor}
+              onApplyColor={handleCustomColorApply}
+              theme={theme}
+            />
           </>
         )}
       </div>

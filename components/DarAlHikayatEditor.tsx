@@ -86,6 +86,7 @@ import { useApp, NoteStyles } from "../contexts/AppContext";
 import { logoAsset, logoTransparentAsset } from "../lib/logo-assets";
 import { exportStoryToPdf, downloadBlob } from "../lib/pdf-export";
 import { exportStoryToDocx } from "../lib/docx-export";
+import { exportStoryToMarkdown } from "../lib/markdown-export";
 import DarAlHikayatAIAssistant from "./DarAlHikayatAIAssistant";
 import DarAlHikayatHandwriting, { Stroke, HandwritingHandle } from "./DarAlHikayatHandwriting";
 import type { StoryContext } from "../lib/ai-assistant-service";
@@ -710,7 +711,7 @@ const DarAlHikayatMaster: React.FC = () => {
   const [showStatsPanel, setShowStatsPanel] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportFileName, setExportFileName] = useState("");
-  const [exportFormat, setExportFormat] = useState<"pdf" | "docx">("pdf");
+  const [exportFormat, setExportFormat] = useState<"pdf" | "docx" | "markdown">("pdf");
   const [isExporting, setIsExporting] = useState(false);
   const [emptyWarningToast, setEmptyWarningToast] = useState<string | null>(null);
   const emptyToastTimeoutRef = useRef<any>(null);
@@ -2076,6 +2077,41 @@ const DarAlHikayatMaster: React.FC = () => {
     }
   };
 
+  // تصدير Markdown (.md) مع الحفاظ التام على بنية البيانات والتهريب السياقي
+  const handleExportMarkdown = async (fileName?: string) => {
+    const displayTitle = fileName || title || "بدون عنوان";
+    setIsExporting(true);
+    try {
+      let currentChapters = chapters;
+      let currentContent = content;
+
+      if (isNovelMode) {
+        currentChapters = chapters.map((c) => {
+          const el = document.querySelector(`[data-chapter-id="${c.id}"]`);
+          return el instanceof HTMLElement ? { ...c, content: el.innerHTML } : c;
+        });
+        setChapters(currentChapters);
+      } else if (editorRef.current) {
+        currentContent = editorRef.current.innerHTML;
+        setContent(currentContent);
+      }
+
+      await exportStoryToMarkdown({
+        title: displayTitle,
+        content: currentContent,
+        isNovelMode,
+        chapters: currentChapters,
+        createdAt: selectedNote?.created_at,
+        updatedAt: selectedNote?.updated_at || Date.now(),
+      });
+    } catch (error) {
+      console.error("Error exporting Markdown:", error);
+      alert("حدث خطأ أثناء تصدير ملف Markdown.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   /**
    * Word-level undo groups (the Word / Google Docs behaviour): a fast burst of
    * letters extends the current step, while a word boundary, a pause, a
@@ -3176,22 +3212,41 @@ const DarAlHikayatMaster: React.FC = () => {
               className="text-lg font-zain-bold mb-1 tracking-tight leading-tight"
               style={{ color: currentTheme.text }}
             >
-              تصدير الحكاية كـ {exportFormat === "pdf" ? "PDF" : "Word"}
+              تصدير الحكاية كـ{" "}
+              {exportFormat === "pdf"
+                ? "PDF"
+                : exportFormat === "docx"
+                ? "Word"
+                : "Markdown"}
             </h2>
             <p
               className="text-[11px] font-zain-reg mb-5 opacity-70 leading-relaxed max-w-[220px] mx-auto"
               style={{ color: currentTheme.text }}
             >
               اختر اسماً لملف{" "}
-              {exportFormat === "pdf" ? "الـ PDF" : "الوثيقة"}. يمكنك استخدام
-              العنوان الحالي أو تخصيص اسم جديد.
+              {exportFormat === "pdf"
+                ? "الـ PDF"
+                : exportFormat === "docx"
+                ? "الوثيقة"
+                : "الـ Markdown"}
+              . يمكنك استخدام العنوان الحالي أو تخصيص اسم جديد.
             </p>
 
             {/* اختيار تنسيق التصدير (كما في الإنتاج) */}
-            <div className="flex gap-2 mb-4 p-1 rounded-full border" style={{ borderColor: currentTheme.border, backgroundColor: `${currentTheme.accent}05` }}>
+            <div
+              role="radiogroup"
+              aria-label="تنسيق التصدير"
+              className="flex gap-1 mb-4 p-1 rounded-full border"
+              style={{
+                borderColor: currentTheme.border,
+                backgroundColor: `${currentTheme.accent}05`,
+              }}
+            >
               <button
+                role="radio"
+                aria-checked={exportFormat === "pdf"}
                 onClick={() => setExportFormat("pdf")}
-                className={`flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95 ${
+                className={`flex-1 py-2 px-1 rounded-full font-zain-bold text-xs whitespace-nowrap text-center border transition-all active:scale-95 ${
                   exportFormat === "pdf" ? "" : "opacity-60"
                 }`}
                 style={{
@@ -3209,11 +3264,13 @@ const DarAlHikayatMaster: React.FC = () => {
                       : currentTheme.text,
                 }}
               >
-                تصدير PDF
+                PDF
               </button>
               <button
+                role="radio"
+                aria-checked={exportFormat === "docx"}
                 onClick={() => setExportFormat("docx")}
-                className={`flex-1 py-2 rounded-full font-zain-bold text-sm border transition-all active:scale-95 ${
+                className={`flex-1 py-2 px-1 rounded-full font-zain-bold text-xs whitespace-nowrap text-center border transition-all active:scale-95 ${
                   exportFormat === "docx" ? "" : "opacity-60"
                 }`}
                 style={{
@@ -3231,7 +3288,31 @@ const DarAlHikayatMaster: React.FC = () => {
                       : currentTheme.text,
                 }}
               >
-                تصدير Word
+                Word
+              </button>
+              <button
+                role="radio"
+                aria-checked={exportFormat === "markdown"}
+                onClick={() => setExportFormat("markdown")}
+                className={`flex-1 py-2 px-1 rounded-full font-zain-bold text-xs whitespace-nowrap text-center border transition-all active:scale-95 ${
+                  exportFormat === "markdown" ? "" : "opacity-60"
+                }`}
+                style={{
+                  backgroundColor:
+                    exportFormat === "markdown"
+                      ? currentTheme.accent
+                      : "transparent",
+                  borderColor:
+                    exportFormat === "markdown"
+                      ? "transparent"
+                      : "transparent",
+                  color:
+                    exportFormat === "markdown"
+                      ? currentTheme.bg
+                      : currentTheme.text,
+                }}
+              >
+                Markdown
               </button>
             </div>
 
@@ -3265,8 +3346,10 @@ const DarAlHikayatMaster: React.FC = () => {
                 onClick={() => {
                   if (exportFormat === "pdf") {
                     handleExportPDF(exportFileName);
-                  } else {
+                  } else if (exportFormat === "docx") {
                     handleExportDOCX(exportFileName);
+                  } else {
+                    handleExportMarkdown(exportFileName);
                   }
                   setShowExportDialog(false);
                 }}
@@ -3708,7 +3791,7 @@ const DarAlHikayatMaster: React.FC = () => {
                     setExportFileName(title || "بدون عنوان");
                     setShowExportDialog(true);
                   }}
-                  title="تصدير Word"
+                  title="تصدير الحكاية"
                   className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
                   style={{ color: currentTheme.text }}
                 >
