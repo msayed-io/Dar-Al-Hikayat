@@ -68,6 +68,7 @@ export interface AuditLogEntry {
   id: string;
   timestamp: number;
   type:
+    | "ANALYSIS"
     | "REPLACE"
     | "INSERT_AFTER"
     | "INSERT_BEFORE"
@@ -87,7 +88,7 @@ export interface AuditLogEntry {
     | "MENTION_DROPPED";
   blockId: string;
   details: Record<string, any>;
-  status: BlockOperationStatus | "OK" | "VALID" | "HEALED" | "DROPPED";
+  status: BlockOperationStatus | "ANALYSIS_FAILED" | "OK" | "VALID" | "HEALED" | "DROPPED";
   error?: string;
 }
 

@@ -1,0 +1,265 @@
+{
+  "base": "2ae1e9147064fb8fc0961233c905fe7ad043b516",
+  "prompts": {
+    "RAHMA_MOWAFI_SYSTEM_PROMPT": "71c8e23500a98819ffa5d87a919104931b3c850d606dd925696bdad8b575d642",
+    "UNIFIED_AGENT_INSTRUCTION": "3bd5b2ee8feb68153a3cda6cadb47fe12ac481159eaafe574cd02d53d785bbe4"
+  },
+  "oldTools": [
+    {
+      "name": "replace_text",
+      "description": "استبدال نص محدد بدقة جراحية داخل فقرة موجودة بالمحرر، أو حذف عبارة جزئية بجعل new_text فارغة.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "block_id": {
+            "type": "STRING",
+            "description": "معرّف الفقرة المستهدفة ويبدأ بـ b_ (إجباري)"
+          },
+          "target_text": {
+            "type": "STRING",
+            "description": "النص الأصلي المراد استبداله بالحرف من داخل الفقرة (إجباري)"
+          },
+          "new_text": {
+            "type": "STRING",
+            "description": "النص البديل الجديد بعد التحسين، أو نص فارغ للحذف الجزئي (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف التعديل حرفياً لعرضه في خطوات التنفيذ (إجباري)"
+          }
+        },
+        "required": [
+          "block_id",
+          "target_text",
+          "new_text",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "insert_text",
+      "description": "إدراج فقرة جديدة كاملة قبل أو بعد فقرة مرجعية محددة في المحرر.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "anchor_block_id": {
+            "type": "STRING",
+            "description": "معرّف الفقرة المرجعية التي سيتم الإدراج بجوارها (إجباري)"
+          },
+          "position": {
+            "type": "STRING",
+            "enum": [
+              "after",
+              "before"
+            ],
+            "description": "موضع الإدراج: after بعد الفقرة، أو before قبل الفقرة (إجباري)"
+          },
+          "new_text": {
+            "type": "STRING",
+            "description": "نص الفقرة أو الفقرات الجديدة المراد إدراجها (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف الإضافة حرفياً (إجباري)"
+          }
+        },
+        "required": [
+          "anchor_block_id",
+          "position",
+          "new_text",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "delete_text",
+      "description": "حذف فقرة كاملة برمتها من المحرر مع التحقق من عدم كونها الفقرة الوحيدة.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "block_id": {
+            "type": "STRING",
+            "description": "معرّف الفقرة المراد حذفها بالكامل ويبدأ بـ b_ (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف الحذف حرفياً (إجباري)"
+          }
+        },
+        "required": [
+          "block_id",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "ask_writer",
+      "description": "توجيه سؤال استفساري لطيف للكاتبة عند الغموض أو تعدد المواضع أو الخروج عن نطاق الفصل المفتوح.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "question": {
+            "type": "STRING",
+            "description": "السؤال الموجه للكاتبة بالعربية الفصحى (إجباري)"
+          },
+          "reason": {
+            "type": "STRING",
+            "enum": [
+              "SCOPE",
+              "AMBIGUOUS",
+              "NOT_FOUND",
+              "MULTI"
+            ],
+            "description": "سبب الاستفسار: SCOPE تجاوز نطاق الفصل، AMBIGUOUS غموض المعنى، NOT_FOUND تعذر العثور على النص، MULTI تعدد المواضع المحتملة (إجباري)"
+          }
+        },
+        "required": [
+          "question",
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "merge_blocks",
+      "description": "دمج فقرتين متجاورتين في فقرة واحدة متصلة وإزالة الفقرة المدمجة.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "block_id_a": {
+            "type": "STRING",
+            "description": "معرّف الفقرة الأولى ويبدأ بـ b_ (إجباري)"
+          },
+          "block_id_b": {
+            "type": "STRING",
+            "description": "معرّف الفقرة الثانية المجاورة ويبدأ بـ b_ (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف الدمج حرفياً لعرضه في خطوات التنفيذ (إجباري)"
+          }
+        },
+        "required": [
+          "block_id_a",
+          "block_id_b",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "move_block",
+      "description": "نقل فقرة قائمة من موضعها ووضعها قبل أو بعد فقرة مرجعية أخرى.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "block_id": {
+            "type": "STRING",
+            "description": "معرّف الفقرة المراد نقلها ويبدأ بـ b_ (إجباري)"
+          },
+          "anchor_block_id": {
+            "type": "STRING",
+            "description": "معرّف الفقرة المرجعية التي سيتم النقل بجوارها ويبدأ بـ b_ (إجباري)"
+          },
+          "position": {
+            "type": "STRING",
+            "enum": [
+              "after",
+              "before"
+            ],
+            "description": "موضع النقل: after بعد الفقرة المرجعية، أو before قبلها (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف النقل حرفياً لعرضه في خطوات التنفيذ (إجباري)"
+          }
+        },
+        "required": [
+          "block_id",
+          "anchor_block_id",
+          "position",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "split_text",
+      "description": "شطر فقرة إلى فقرتين عند نقطة نصية محددة تظهر مرة واحدة بالفقرة.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "block_id": {
+            "type": "STRING",
+            "description": "معرّف الفقرة المراد شطرها ويبدأ بـ b_ (إجباري)"
+          },
+          "split_after_text": {
+            "type": "STRING",
+            "description": "النص الذي سيتم الشطر بعده مباشرة ويجب أن يظهر مرة واحدة داخل الفقرة (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف الشطر حرفياً لعرضه في خطوات التنفيذ (إجباري)"
+          }
+        },
+        "required": [
+          "block_id",
+          "split_after_text",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "replace_all",
+      "description": "استبدال شامل لكلمة أو اسم متكرر في الفصل المفتوح كله دفعة واحدة. للكلمة/الاسم المتكرر في الفصل كله — لا تستخدمه لموضع واحد.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "target_text": {
+            "type": "STRING",
+            "description": "الكلمة أو العبارة المتكررة المراد استبدالها في كافة مواضع الفصل (إجباري)"
+          },
+          "new_text": {
+            "type": "STRING",
+            "description": "النص البديل الجديد المختلف عن النص الأصلي (إجباري)"
+          },
+          "scope": {
+            "type": "STRING",
+            "enum": [
+              "chapter"
+            ],
+            "description": "نطاق الاستبدال ويجب أن يكون \"chapter\" حرفياً (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف الاستبدال الشامل حرفياً لعرضه في خطوات التنفيذ (إجباري)"
+          }
+        },
+        "required": [
+          "target_text",
+          "new_text",
+          "scope",
+          "step_note"
+        ]
+      }
+    },
+    {
+      "name": "diacritize_scope",
+      "description": "تشغيل خط إنتاج الضبط اللغوي (تشكيل جزئي معتمد، فواصل أدبية، وهمزات) لنطاق محدد دون إرسال أي نصوص في الوسائط — النطاق فقط، والتطبيق ينفذ خط الإنتاج.",
+      "parameters": {
+        "type": "OBJECT",
+        "properties": {
+          "target": {
+            "type": "STRING",
+            "description": "نطاق الضبط اللغوي: إما معرف فقرة يبدأ بـ b_ أو \"chapter\" للفصل كاملاً (إجباري)"
+          },
+          "step_note": {
+            "type": "STRING",
+            "description": "سطر وصفي عربي موجز مولّد يصف نطاق الضبط لعرضه في خطوات التنفيذ (إجباري)"
+          }
+        },
+        "required": [
+          "target",
+          "step_note"
+        ]
+      }
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { detectAnalysisCalls, isAnalysisTool, formatAnalysisReports, recoverInterruptedAnalysis, type AnalysisReport } from "../lib/literary-analysis";
+import { GroundedSearchSuggestions } from "./GroundedSearchSuggestions";
 import ThinkingIndicator from "./ThinkingIndicator";
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -54,6 +56,7 @@ import {
 import { cancelDiacritizeJob, undoDiacritizeJob } from "../lib/tashkeel-pipeline";
 
 export type Message = {
+  analysisReports?: AnalysisReport[];
   id: string;
   role: "user" | "assistant" | "system_ephemeral" | "agent_steps";
   content: string;
@@ -685,8 +688,9 @@ function AgentStepsMessageCard({ message, theme }: AgentStepsMessageCardProps) {
   const checkboxId = `agent-tree-toggle-${message.id}`;
 
   const stepCount = steps.length || 1;
-  const stepCountLabel =
-    stepCount === 1
+  const stepCountLabel = steps.length > 0 && steps.every(s => isAnalysisTool(s.toolName))
+    ? `${stepCount} فحص للقراءة فقط`
+    : stepCount === 1
       ? "خطوة جراحية واحدة"
       : stepCount === 2
       ? "خطوتين جراحيتين"
@@ -954,7 +958,7 @@ export const loadStoredConversationsFromStorage = (storageKey: string): StoredCo
         ...item,
         lastMessageAt: new Date(item.lastMessageAt),
         pinnedAt: item.pinnedAt ? new Date(item.pinnedAt) : null,
-        messages: (item.messages || []).map((m: any) => ({
+        messages: (item.messages || []).map((m: any) => recoverInterruptedAnalysis({
           ...m,
           timestamp: new Date(m.timestamp),
         })),
@@ -994,6 +998,17 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const [isAgentExecuting, setIsAgentExecuting] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const analysisRunRef = useRef<{ controller: AbortController; story: typeof storyId } | null>(null);
+  const analysisStoryRef = useRef(storyId);
+  analysisStoryRef.current = storyId;
+  useEffect(() => {
+    if (analysisRunRef.current && analysisRunRef.current.story !== storyId) {
+      analysisRunRef.current.controller.abort(); analysisRunRef.current = null;
+      setIsLoading(false); setIsAgentExecuting(false);
+    }
+  }, [storyId]);
+  useEffect(() => () => { analysisRunRef.current?.controller.abort(); analysisRunRef.current = null; }, []);
+
   const [feedback, setFeedback] = useState<Record<string, "like" | "dislike">>({});
   const [copiedResponseId, setCopiedResponseId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -1292,6 +1307,10 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   };
 
   const startNewConversation = () => {
+    if (analysisRunRef.current) {
+      analysisRunRef.current.controller.abort(); analysisRunRef.current = null;
+      setIsLoading(false); setIsAgentExecuting(false);
+    }
     setWelcomeLineIndex(index => (index + 1) % welcomeLines.length);
     setActiveConversationId(null);
     setMessages([]);
@@ -1307,7 +1326,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     const target = conversations.find((c) => c.id === conversationId);
     if (target) {
       setActiveConversationId(target.id);
-      setMessages(target.messages || []);
+      setMessages((target.messages || []).map(recoverInterruptedAnalysis));
       setIsDrawerOpen(false);
       setOpenConversationMenuId(null);
       setMenuAnchor(null);
@@ -1436,6 +1455,36 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     }
   }, [messages, isLoading, isAgentExecuting]);
 
+  const runReadOnlyAnalysis = useCallback(async (calls: ExecutiveToolCall[], request: string) => {
+    const run = { controller: new AbortController(), story: storyId };
+    analysisRunRef.current?.controller.abort(); analysisRunRef.current = run;
+    const current = () => analysisRunRef.current === run && analysisStoryRef.current === run.story && !run.controller.signal.aborted;
+    const stepsId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setIsLoading(true); setIsAgentExecuting(true);
+    setMessages(prev => [...prev, { id: stepsId + '-intro', role: 'assistant', content: calls.some(c => c.name === 'historical_and_cultural_reference_agent') ? 'سأبحث عن المعلومة مع مصادرها دون تعديل النص. يستخدم هذا الفحص بحث Google وقد يحتسب من حصته الخاصة بالمفتاح.' : 'سأفحص النص وأعرض الملاحظات وأدلتها للقراءة فقط؛ لن أغيّر أي كلمة.', timestamp: new Date(), isAgent: false },
+      { id: stepsId, role: 'agent_steps', content: '', timestamp: new Date(), steps: calls.map((c, i) => ({ id: stepsId + i, toolName: c.name, blockId: (c.args as any).target || 'reference', stepNote: (c.args as any).step_note, status: 'waiting' })) }]);
+    try {
+      const root = editorRootElement || document.querySelector<HTMLElement>('#story-content');
+      const anchor = window.getSelection()?.anchorNode;
+      const selectedElement = anchor instanceof Element ? anchor : anchor?.parentElement;
+      const activeChapterId = selectedElement && root?.contains(selectedElement) ? selectedElement.closest('[data-chapter-id]')?.getAttribute('data-chapter-id') || undefined : undefined;
+      const result = await executeAgentPlan({ rootElement: root, rawCalls: calls,
+        analysisContext: { title: storyContext.title, chapters: chapters?.length ? chapters : undefined, activeChapterId, request },
+        analysisSignal: run.controller.signal, onCommit: () => {},
+        onStepUpdate: steps => { if (current()) setMessages(prev => prev.map(m => m.id === stepsId ? { ...m, steps: steps.map(s => ({ ...s })) } : m)); } });
+      if (!current()) return;
+      setMessages(prev => [...prev.map(m => m.id === stepsId ? { ...m, steps: result.executedSteps,
+        agentResult: { totalMutations: 0, completed: result.success, failed: !result.success, error: result.error } } : m),
+        { id: stepsId + '-report', role: 'assistant', content: [result.analysisReports?.length ? formatAnalysisReports(result.analysisReports) : '', result.error ? `تعذر إكمال الفحص: ${result.error}` : 'اكتمل التقرير دون تعديل النص.'].filter(Boolean).join('\n\n'),
+          analysisReports: result.analysisReports, timestamp: new Date(), isAgent: false }]);
+    } catch {
+      if (current()) setMessages(prev => [...prev.map(m => m.id === stepsId ? { ...m, agentResult: { totalMutations: 0, completed: false, failed: true, error: 'تعذر التحليل.' } } : m),
+        { id: stepsId + '-error', role: 'assistant', content: 'تعذر إكمال التحليل؛ لم يتغير النص. يمكنك إعادة المحاولة.', timestamp: new Date() }]);
+    } finally {
+      if (analysisRunRef.current === run) { analysisRunRef.current = null; setIsLoading(false); setIsAgentExecuting(false); }
+    }
+  }, [storyId, storyContext, chapters, editorRootElement]);
+
   const executeExecutiveEditing = useCallback(
     async (
       userPromptText: string,
@@ -1443,6 +1492,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
       hist: Message[],
       currentConvId?: string | null
     ) => {
+      const decisionStory = analysisStoryRef.current;
       setIsAgentExecuting(true);
       setIsLoading(true);
 
@@ -1537,6 +1587,12 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
           },
         ]);
         setIsAgentExecuting(false);
+        return;
+      }
+
+      if (decision.functionCalls.some(fc => isAnalysisTool(fc.name)) && !decision.functionCalls.some(fc => fc.name === "ask_writer")) {
+        if (analysisStoryRef.current !== decisionStory) return;
+        await runReadOnlyAnalysis(decision.functionCalls as ExecutiveToolCall[], effectivePrompt);
         return;
       }
 
@@ -1742,6 +1798,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
     },
     [
       editorRootElement,
+      runReadOnlyAnalysis,
       isNovelMode,
       chapters,
       storyContext,
@@ -1841,6 +1898,12 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
         saveStoredConversations(updated);
         return updated;
       });
+    }
+
+    const analysisCalls = detectAnalysisCalls(trimmed, activeMentions);
+    if (analysisCalls.length > 0 && pendingAgentRequest === null) {
+      await runReadOnlyAnalysis(analysisCalls, trimmed);
+      return;
     }
 
     const isEditIntent =
@@ -2933,6 +2996,7 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                             }}
                           />
                         </div>
+                        {m.analysisReports?.map((report, index) => report.searchSuggestionsHtml ? <GroundedSearchSuggestions key={index} html={report.searchSuggestionsHtml} /> : null)}
                         {m.diacritizeJobId && (
                           <div
                             dir="rtl"
@@ -3207,7 +3271,9 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder={
-                isAgentExecuting
+                analysisRunRef.current
+                  ? "جارٍ تحليل النص للقراءة فقط..."
+                  : isAgentExecuting
                   ? "جارٍ تنفيذ التعديلات الجراحية في النص..."
                   : pendingAgentRequest
                   ? "أجيبي على سؤال الوكيل لتثبيت التعديل..."

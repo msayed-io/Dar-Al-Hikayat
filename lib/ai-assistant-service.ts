@@ -1,3 +1,4 @@
+import { validAnalysisTarget, isAnalysisTool } from "./literary-analysis";
 import {
   executeWithSmartRotation,
   AllKeysExhaustedError,
@@ -325,7 +326,7 @@ export const AGENTIC_TOOL_DECLARATIONS = [
       properties: {
         target: {
           type: "STRING",
-          description: "نطاق التدقيق: إما معرف فقرة b_ أو \"chapter\" للفصل كاملاً (إجباري)",
+          description: "نطاق التدقيق: معرف فقرة b_ أو \"chapter\" للفصل أو \"story\" للعمل كاملاً (إجباري)",
         },
         step_note: {
           type: "STRING",
@@ -343,7 +344,7 @@ export const AGENTIC_TOOL_DECLARATIONS = [
       properties: {
         target: {
           type: "STRING",
-          description: "نطاق التحليل: إما b_ أو \"chapter\" للفصل كاملاً (إجباري)",
+          description: "نطاق التحليل: b_ أو \"chapter\" للفصل أو \"story\" للعمل كاملاً (إجباري)",
         },
         step_note: {
           type: "STRING",
@@ -361,7 +362,7 @@ export const AGENTIC_TOOL_DECLARATIONS = [
       properties: {
         target: {
           type: "STRING",
-          description: "نطاق البحث عن الثغرات: \"chapter\" أو معرف محدد (إجباري)",
+          description: "نطاق البحث عن الثغرات: \"chapter\" أو \"story\" أو معرف فقرة b_ (إجباري)",
         },
         step_note: {
           type: "STRING",
@@ -379,7 +380,7 @@ export const AGENTIC_TOOL_DECLARATIONS = [
       properties: {
         target: {
           type: "STRING",
-          description: "نطاق الفحص الأسلوبي: \"chapter\" أو معرف محدد (إجباري)",
+          description: "نطاق الفحص الأسلوبي: \"chapter\" أو \"story\" أو معرف فقرة b_ (إجباري)",
         },
         step_note: {
           type: "STRING",
@@ -1177,8 +1178,7 @@ export async function requestExecutiveDecision({
           name === "voice_and_tone_guardian"
         ) {
           const isTargetValid =
-            args.target === "chapter" ||
-            (typeof args.target === "string" && args.target.length > 0);
+            validAnalysisTarget(args.target);
           if (
             isTargetValid &&
             typeof args.step_note === "string" &&
@@ -1195,7 +1195,7 @@ export async function requestExecutiveDecision({
         } else if (name === "historical_and_cultural_reference_agent") {
           if (
             typeof args.query === "string" &&
-            args.query.trim().length > 0 &&
+            args.query.trim().length > 0 && args.query.length <= 2000 &&
             typeof args.step_note === "string" &&
             args.step_note.trim().length > 0
           ) {
@@ -1208,6 +1208,10 @@ export async function requestExecutiveDecision({
             });
           }
         }
+      }
+
+      if (rawCalls.some(c => isAnalysisTool(c?.name)) && !validatedCalls.some(c => isAnalysisTool(c.name))) {
+        return { text: "", functionCalls: [], model: rawData.model || GEMINI_PRIMARY_MODEL, error: "تعذر تحديد نطاق الفحص أو سؤاله؛ حددي فقرة أو فصلاً أو سؤالاً تاريخياً واضحاً." };
       }
 
       return {

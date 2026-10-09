@@ -32,6 +32,7 @@ import {
   AGENTIC_TOOL_DECLARATIONS,
 } from "./ai-assistant-service";
 import { runDiacritizeJob } from "./tashkeel-pipeline";
+import { executeAnalysisPlan, isAnalysisTool, type AnalysisContext, type AnalysisReport } from "./literary-analysis";
 
 // ============================================================================
 // 1. الثوابت والأدوات والأنواع
@@ -170,6 +171,7 @@ export interface PendingAgentRequest {
 }
 
 export interface AgentExecutionResult {
+  analysisReports?: AnalysisReport[];
   success: boolean;
   executedSteps: AgentStepItem[];
   askWriter?: {
@@ -578,6 +580,8 @@ export async function executeAgentPlan({
   accentColor = "#D97706",
   skipScopeCheck,
   requestId,
+  analysisContext,
+  analysisSignal,
 }: {
   rootElement: HTMLElement | null;
   rawCalls: ExecutiveToolCall[];
@@ -586,7 +590,13 @@ export async function executeAgentPlan({
   accentColor?: string;
   skipScopeCheck?: boolean;
   requestId?: string;
+  analysisContext?: AnalysisContext;
+  analysisSignal?: AbortSignal;
 }): Promise<AgentExecutionResult> {
+  // New reports bypass the mutation pipeline entirely, including snapshot restore and onCommit.
+  if (rawCalls.some(call => isAnalysisTool(call.name))) {
+    return executeAnalysisPlan({ rootElement, rawCalls, onStepUpdate, context: analysisContext, signal: analysisSignal });
+  }
   // 1. فحص التزامن والقفل (Concurrency Guard)
   
   // فحص تكرار الطلب (Idempotency)
@@ -1229,50 +1239,6 @@ export async function executeAgentPlan({
               error: diacritizeRes.error,
             };
           }
-        } else if (
-          call.name === "character_continuity_checker" ||
-          call.name === "pacing_and_emotion_analyzer" ||
-          call.name === "plot_hole_detector" ||
-          call.name === "voice_and_tone_guardian"
-        ) {
-          stepItems[idx].status = "active";
-          onStepUpdate([...stepItems]);
-          await new Promise((r) => setTimeout(r, 150));
-
-          globalAuditLog.record({
-            type: "REPLACE", // generic audit entry type for analysis
-            blockId: call.args.target,
-            details: {
-              tool: call.name,
-              stepNote: call.args.step_note,
-            },
-            status: "SUCCESS",
-          });
-
-          stepItems[idx].status = "completed";
-          onStepUpdate([...stepItems]);
-          cleanupAgentFx(rootElement);
-          return { status: "SUCCESS", blockId: call.args.target };
-        } else if (call.name === "historical_and_cultural_reference_agent") {
-          stepItems[idx].status = "active";
-          onStepUpdate([...stepItems]);
-          await new Promise((r) => setTimeout(r, 150));
-
-          globalAuditLog.record({
-            type: "REPLACE",
-            blockId: "reference",
-            details: {
-              tool: call.name,
-              query: call.args.query,
-              stepNote: call.args.step_note,
-            },
-            status: "SUCCESS",
-          });
-
-          stepItems[idx].status = "completed";
-          onStepUpdate([...stepItems]);
-          cleanupAgentFx(rootElement);
-          return { status: "SUCCESS", blockId: "reference" };
         }
 
         return { status: "SUCCESS", blockId: "noop" };
