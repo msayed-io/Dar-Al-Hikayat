@@ -50,6 +50,7 @@ import { ImportResultModal, type FailedImportItem } from "./ImportResultModal";
 import { HandwritingPreview } from "./HandwritingPreview";
 import { hasHandwritingInk } from "../lib/handwriting-document";
 import { CreativityStatsModal } from "./CreativityStatsModal";
+import { emptyStateAsset } from "../lib/logo-assets";
 
 const HomePage: React.FC = () => {
   const {
@@ -364,7 +365,7 @@ const HomePage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen relative font-sans transition-colors duration-500"
+      className="min-h-screen min-h-[100dvh] flex flex-col relative font-sans transition-colors duration-500"
       dir="rtl"
       style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
     >
@@ -1234,17 +1235,16 @@ const HomePage: React.FC = () => {
         </header>
 
         {/* --- Main Content (Passes seamlessly under floating capsules) --- */}
-        <div
-          className="flex-1 px-4 sm:px-5 pb-28"
+        <main
+          className="flex-1 flex flex-col px-4 sm:px-5 pb-28"
           style={{ paddingTop: "80px", paddingBottom: "96px" }}
         >
-
-          <div
-            className={`${viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" : "max-w-2xl sm:max-w-3xl mx-auto space-y-4 w-full"}`}
-          >
-            <AnimatePresence>
-              {filteredNotes.length > 0 ? (
-                filteredNotes.map((note) => {
+          {filteredNotes.length > 0 ? (
+            <div
+              className={`${viewMode === "grid" ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" : "max-w-2xl sm:max-w-3xl mx-auto space-y-4 w-full"}`}
+            >
+              <AnimatePresence>
+                {filteredNotes.map((note) => {
                   const isSelected = selectedNoteIds.includes(note.id);
                   return (
                     <div
@@ -1406,27 +1406,52 @@ const HomePage: React.FC = () => {
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div
-                  className={`text-center py-20 opacity-40 flex flex-col items-center ${viewMode === "grid" ? "col-span-full" : ""}`}
+                })}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div
+              className="flex-1 flex flex-col items-center justify-center w-full my-auto py-4 select-none min-h-[calc(100dvh-200px)]"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                className="flex flex-col items-center max-w-xs px-4 text-center select-none"
+              >
+                <img
+                  src={emptyStateAsset(currentTheme.mode)}
+                  alt="محراب الحكايات"
+                  loading="eager"
+                  decoding="sync"
+                  className="w-28 h-28 sm:w-32 sm:h-32 object-contain aspect-square mb-2.5 select-none pointer-events-none drop-shadow-sm transition-all duration-200"
+                />
+                <h3
+                  className="text-base sm:text-lg font-bold mb-1 tracking-tight"
+                  style={{
+                    color: currentTheme.text,
+                    fontFamily: "'Thmanyah Serif Display', serif",
+                  }}
                 >
-                  <BookOpen
-                    className="w-10 h-10 mb-4"
-                    style={{ color: currentTheme.accent }}
-                    strokeWidth={1}
-                  />
-                  <p
-                    className="text-lg font-zain-reg"
-                    style={{ color: currentTheme.text }}
-                  >
-                    لا توجد حكايات مطابقة...
-                  </p>
-                </div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+                  {notes.length === 0
+                    ? "المحراب بانتظار حكايتك الأولى..."
+                    : "لم نجد حكايات مطابقة..."}
+                </h3>
+                <p
+                  className="text-xs sm:text-sm leading-relaxed opacity-60 text-center max-w-[260px] mx-auto"
+                  style={{
+                    color: currentTheme.text,
+                    fontFamily: "'Thmanyah Sans', sans-serif",
+                  }}
+                >
+                  {notes.length === 0
+                    ? "صفحاتٌ بكرٌ ترتقب فيض مدادك؛ أطلق لقلمك العنان في سكون الدار"
+                    : "جرّب البحث بكلمات أخرى أو تصفّح فهرس الحكايات كاملاً"}
+                </p>
+              </motion.div>
+            </div>
+          )}
+        </main>
 
         {/* --- Selection Mode Footer (Apple Rounded Full Geometry) --- */}
         {/* --- IMPORT PROGRESS MODAL --- */}

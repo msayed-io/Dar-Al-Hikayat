@@ -50,6 +50,9 @@
 .max-w-\[380px\] { max-width: 380px !important; }
 .max-w-\[360px\] { max-width: 360px !important; }
 .max-w-\[340px\] { max-width: 340px !important; }
+.min-w-\[160px\] { min-width: 160px !important; }
+.min-w-\[180px\] { min-width: 180px !important; }
+.min-w-\[185px\] { min-width: 185px !important; }
 .max-h-\[85vh\] { max-height: 85vh !important; }
 .max-h-72 { max-height: 18rem !important; }
 
@@ -88,6 +91,8 @@
 .gap-3\.5 { gap: 0.875rem !important; }
 
 .px-3\.5 { padding-left: 0.875rem !important; padding-right: 0.875rem !important; }
+.px-8 { padding-left: 2rem !important; padding-right: 2rem !important; }
+.px-10 { padding-left: 2.5rem !important; padding-right: 2.5rem !important; }
 .py-3\.5 { padding-top: 0.875rem !important; padding-bottom: 0.875rem !important; }
 .pt-2\.5 { padding-top: 0.625rem !important; }
 .pb-2\.5 { padding-bottom: 0.625rem !important; }
