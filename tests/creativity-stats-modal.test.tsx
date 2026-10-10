@@ -210,4 +210,66 @@ describe("CreativityStatsModal Component Tests", () => {
       expect(el.style.whiteSpace).toBe("nowrap");
     });
   });
+
+  it("dynamically adheres to 'أجواء الدار' themes (royal_classic, apple_dark, night_whisper)", async () => {
+    // 1. Royal Classic
+    await dom.render(
+      <CreativityStatsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        notes={mockNotes}
+        theme={{
+          mode: "royal_classic",
+          bg: "#EAE6D2",
+          text: "#121A1B",
+          accent: "#A7AA63",
+          secondary: "#4A5556",
+          glass: "rgba(244, 241, 228, 0.96)",
+          border: "rgba(18, 26, 27, 0.12)",
+          shadow: "0 10px 30px rgba(18, 26, 27, 0.12)",
+          isDark: false,
+        }}
+      />,
+    );
+
+    const royalModal = dom.host.querySelector(".stats-modal") as HTMLElement;
+    expect(royalModal.style.backgroundColor).toBe("rgb(244, 241, 228)");
+    const royalTitle = dom.host.querySelector("h2") as HTMLElement;
+    expect(royalTitle.style.color).toBe("rgb(18, 26, 27)");
+
+    // 2. Apple Dark
+    await dom.render(
+      <CreativityStatsModal
+        isOpen={true}
+        onClose={vi.fn()}
+        notes={mockNotes}
+        theme={{
+          mode: "apple_dark",
+          bg: "#000000",
+          text: "#F5F5F5",
+          accent: "#F5F5F5",
+          secondary: "#8E8E93",
+          glass: "#1C1C1E",
+          border: "rgba(255, 255, 255, 0.08)",
+          shadow: "0 4px 30px rgba(0, 0, 0, 0.4)",
+          isDark: true,
+        }}
+      />,
+    );
+
+    const appleModal = dom.host.querySelector(".stats-modal") as HTMLElement;
+    expect(appleModal.style.backgroundColor).toBe("rgb(28, 28, 30)"); // #1C1C1E
+    const appleTitle = dom.host.querySelector("h2") as HTMLElement;
+    expect(appleTitle.style.color).toBe("rgb(245, 245, 245)");
+
+    // 3. Number layout styles: LTR direction, tabular nums, line-height 1
+    const numberSpans = dom.host.querySelectorAll(".stat-row__number");
+    expect(numberSpans.length).toBe(6);
+    numberSpans.forEach((span) => {
+      const el = span as HTMLElement;
+      expect(el.style.direction).toBe("ltr");
+      expect(el.style.fontVariantNumeric).toBe("tabular-nums");
+      expect(el.style.lineHeight).toBe("1");
+    });
+  });
 });

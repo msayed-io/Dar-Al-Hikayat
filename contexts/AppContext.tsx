@@ -143,7 +143,7 @@ interface AppContextType {
 
 export type { PrayerLocation, PrayerState, CalculationMethodId } from "../lib/prayer-config";
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // --- Provider Component ---
 export const AppProvider: React.FC<{ children: ReactNode }> = ({

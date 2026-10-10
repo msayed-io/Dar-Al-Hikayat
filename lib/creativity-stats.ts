@@ -48,7 +48,19 @@ export function formatStatValue(val: number | null | undefined): string {
  */
 export function calculateTotalWords(notes: Note[]): number {
   if (!Array.isArray(notes) || notes.length === 0) return 0;
-  return notes.reduce((sum, n) => sum + (n.word_count || 0), 0);
+  return notes.reduce((sum, n) => {
+    let count = typeof n.word_count === "number" && n.word_count > 0 ? n.word_count : 0;
+    if (count === 0) {
+      if (n.content) {
+        const clean = (n.content || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim();
+        count = clean === "" ? 0 : clean.split(/\s+/).filter(Boolean).length;
+      } else if (n.preview) {
+        const clean = (n.preview || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim();
+        count = clean === "" ? 0 : clean.split(/\s+/).filter(Boolean).length;
+      }
+    }
+    return sum + count;
+  }, 0);
 }
 
 /**

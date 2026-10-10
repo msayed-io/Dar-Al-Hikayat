@@ -643,6 +643,7 @@ const HomePage: React.FC = () => {
         isOpen={showDashboard}
         onClose={() => setShowDashboard(false)}
         notes={notes}
+        theme={currentTheme}
       />
       {showAbout && (
         <div

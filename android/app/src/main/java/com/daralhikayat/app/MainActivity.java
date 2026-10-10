@@ -26,8 +26,6 @@ public class MainActivity extends BridgeActivity {
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().setBackgroundColor(0xFF0F1617);
-                getBridge().getWebView().setVerticalScrollBarEnabled(false);
-                getBridge().getWebView().setHorizontalScrollBarEnabled(false);
             }
         } catch (Exception ignored) {}
 
