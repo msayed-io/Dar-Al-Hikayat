@@ -15,14 +15,7 @@
     <link rel="preload" href="/fonts/thmanyahserifdisplay-Bold.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/thmanyahseriftext-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/thmanyahseriftext-Medium.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- Preload Empty State Visuals for Instant Zero-Delay (<5ms) Rendering Across Themes -->
-    <link rel="preload" href="/empty-state-royal_classic.png" as="image" type="image/png" />
-    <link rel="preload" href="/empty-state-night_whisper.png" as="image" type="image/png" />
-    <link rel="preload" href="/empty-state-apple_dark.png" as="image" type="image/png" />
-    <!-- Preload Update Dialog Banners for Instant Instantaneous Rendering Across Themes -->
-    <link rel="preload" href="/update-banner-royal_classic.png" as="image" type="image/png" />
-    <link rel="preload" href="/update-banner-night_whisper.png" as="image" type="image/png" />
-    <link rel="preload" href="/update-banner-apple_dark.png" as="image" type="image/png" />
+    <!-- Theme-specific visuals load on demand, avoiding a multi-megabyte preload of unused themes. -->
     <link rel="stylesheet" href="/fonts/fonts.css" />
     <link rel="stylesheet" href="/index.css" />
     <style>
