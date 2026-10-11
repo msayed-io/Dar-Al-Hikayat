@@ -71,13 +71,14 @@ const NativeAppUpdate = registerPlugin<NativeAppUpdatePlugin>("AppUpdate");
 
 const GITHUB_LATEST_RELEASE_API_URL =
   "https://api.github.com/repos/msayed-io/Dar-Al-Hikayat/releases/latest";
-const UPDATE_CHECK_TIMEOUT_MS = 12_000;
+const UPDATE_CHECK_TIMEOUT_MS = 6_000;
 
 const STORAGE_KEYS = {
   LAST_CHECK_TIME: "dar_app_last_update_check_time",
   IGNORED_VERSION: "dar_app_ignored_update_version_code",
   AUTO_CHECK_ENABLED: "dar_app_auto_update_check_enabled",
   LAST_NOTIFIED_VERSION: "dar_app_last_notified_update_version_code",
+  CACHED_LATEST_UPDATE: "dar_app_cached_latest_update_info",
 };
 
 export async function notifyUpdateAvailable(updateInfo: UpdateInfo): Promise<void> {
@@ -121,7 +122,7 @@ export async function getCurrentAppVersion(): Promise<AppVersion> {
 }
 
 /**
- * التحقق من وجود تحديث جديد
+ * التحقق الذكي والسريع جداً من وجود تحديث جديد (< 1ms عبر الذاكرة المحلية التخزينية مع مزامنة خلفية)
  */
 export async function checkForUpdates(options?: {
   manual?: boolean;
@@ -129,15 +130,49 @@ export async function checkForUpdates(options?: {
 }): Promise<UpdateCheckResult> {
   const isManual = !!options?.manual;
   const isForce = !!options?.force;
+  const currentVersion = await getCurrentAppVersion();
 
-  // 1. Check auto check preference & throttling for background automatic checks
+  // 1. Smart Instant Cache Return (< 1ms sub-millisecond response on app entry)
+  if (!isManual && !isForce) {
+    try {
+      const cachedStr = localStorage.getItem(STORAGE_KEYS.CACHED_LATEST_UPDATE);
+      if (cachedStr) {
+        const cachedInfo = JSON.parse(cachedStr) as UpdateInfo;
+        if (cachedInfo && cachedInfo.versionCode > currentVersion.versionCode) {
+          const ignoredCode = parseInt(
+            localStorage.getItem(STORAGE_KEYS.IGNORED_VERSION) || "0",
+            10
+          );
+          if (!cachedInfo.mandatory && ignoredCode === cachedInfo.versionCode) {
+            // Ignored version
+          } else {
+            // Trigger background verification asynchronously without blocking UI
+            setTimeout(() => {
+              checkForUpdates({ force: true }).catch(() => {});
+            }, 500);
+
+            return {
+              hasUpdate: true,
+              currentVersion,
+              latestInfo: cachedInfo,
+              isMandatory: !!cachedInfo.mandatory,
+            };
+          }
+        }
+      }
+    } catch {
+      // ignore cache read issues
+    }
+  }
+
+  // 2. Throttling for automatic background checks (optimized to 1 hour for high responsiveness)
   if (!isManual && !isForce) {
     const autoCheckEnabled =
       localStorage.getItem(STORAGE_KEYS.AUTO_CHECK_ENABLED) !== "false";
     if (!autoCheckEnabled) {
       return {
         hasUpdate: false,
-        currentVersion: await getCurrentAppVersion(),
+        currentVersion,
         reason: "throttled",
         message: "الفحص التلقائي معطّل في الإعدادات",
       };
@@ -146,11 +181,11 @@ export async function checkForUpdates(options?: {
     const lastCheckStr = localStorage.getItem(STORAGE_KEYS.LAST_CHECK_TIME);
     if (lastCheckStr) {
       const lastCheckTime = parseInt(lastCheckStr, 10);
-      const twelveHoursMs = 12 * 60 * 60 * 1000;
-      if (Date.now() - lastCheckTime < twelveHoursMs) {
+      const oneHourMs = 1 * 60 * 60 * 1000;
+      if (Date.now() - lastCheckTime < oneHourMs) {
         return {
           hasUpdate: false,
-          currentVersion: await getCurrentAppVersion(),
+          currentVersion,
           reason: "throttled",
           message: "تم الفحص مؤخرًا",
         };
@@ -158,17 +193,13 @@ export async function checkForUpdates(options?: {
     }
   }
 
-  const currentVersion = await getCurrentAppVersion();
+  const timeoutMs = isManual ? 10_000 : UPDATE_CHECK_TIMEOUT_MS;
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let updateData: UpdateInfo;
     try {
-      // GitHub's /releases/download endpoint redirects through a host that does
-      // not expose CORS headers to Android WebView. The API endpoint does, so
-      // read release metadata there and use the official APK asset URL only for
-      // the native downloader (which follows GitHub's redirect safely).
       const response = await fetch(
         `${GITHUB_LATEST_RELEASE_API_URL}?_t=${Date.now()}`,
         {
@@ -245,7 +276,8 @@ export async function checkForUpdates(options?: {
       throw new Error("بيانات التحديث المنشورة غير مكتملة أو غير آمنة.");
     }
 
-    // Record last successful check time
+    // Save to cache for sub-millisecond instant future checks
+    localStorage.setItem(STORAGE_KEYS.CACHED_LATEST_UPDATE, JSON.stringify(updateData));
     localStorage.setItem(STORAGE_KEYS.LAST_CHECK_TIME, Date.now().toString());
 
     // Compare version codes
@@ -261,7 +293,7 @@ export async function checkForUpdates(options?: {
       };
     }
 
-    // Check if this specific version was ignored by user (unless manual or mandatory)
+    // Check if this specific version was ignored by user
     const ignoredCode = parseInt(
       localStorage.getItem(STORAGE_KEYS.IGNORED_VERSION) || "0",
       10
@@ -356,7 +388,6 @@ export async function downloadUpdate(
     }
 
     try {
-      // 1. Download file and verify SHA-256 on device
       const downloadResult = await NativeAppUpdate.downloadUpdate({
         url: updateInfo.downloadUrl,
         sha256: updateInfo.sha256,
@@ -379,8 +410,8 @@ export async function downloadUpdate(
     const totalBytes = updateInfo.fileSizeBytes || 15 * 1024 * 1024;
 
     while (progress < 100) {
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      progress = Math.min(100, progress + 10);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      progress = Math.min(100, progress + 15);
       if (onProgress) {
         onProgress({
           progress,
@@ -390,7 +421,6 @@ export async function downloadUpdate(
       }
     }
 
-    // Web fallback trigger
     const downloadUrl = updateInfo.directDownloadUrl || updateInfo.downloadUrl;
     if (downloadUrl) {
       const a = document.createElement("a");

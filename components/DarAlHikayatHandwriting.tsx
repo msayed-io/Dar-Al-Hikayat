@@ -196,16 +196,122 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
       isColorPickerSheetOpenRef.current = isColorPickerSheetOpen;
     }, [isColorPickerSheetOpen]);
 
-    const [customColors, setCustomColors] = useState<string[]>(() => {
+    // Session-only Custom Colors (Never persisted to localStorage - cleared on session exit/reload)
+    const [customColors, setCustomColors] = useState<string[]>([]);
+
+    useEffect(() => {
+      // Clear any legacy persisted colors from past sessions
       try {
-        const stored = localStorage.getItem("dar_al_hikayat_custom_handwriting_colors");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) return parsed.slice(0, 6);
-        }
+        localStorage.removeItem("dar_al_hikayat_custom_handwriting_colors");
       } catch {}
-      return [];
-    });
+    }, []);
+
+    // ── Smooth Native Touch & Drag Scrolling for Color Capsule Swatches ──
+    const colorSwatchesScrollRef = useRef<HTMLDivElement>(null);
+    const isScrollingRef = useRef<boolean>(false);
+    const scrollEndTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Touch gesture tracking (Native scroll enabled; track swipes to prevent accidental clicks)
+    const touchStartXRef = useRef<number>(0);
+    const touchStartYRef = useRef<number>(0);
+    const hasSwipedRef = useRef<boolean>(false);
+    const swipeBlockTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Mouse drag tracking (for desktop click-and-drag)
+    const isMouseDownRef = useRef<boolean>(false);
+    const mouseStartXRef = useRef<number>(0);
+    const mouseStartScrollLeftRef = useRef<number>(0);
+    const isMouseDraggingRef = useRef<boolean>(false);
+    const mouseDragTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleSwatchesScroll = () => {
+      isScrollingRef.current = true;
+      if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+      scrollEndTimerRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 150);
+    };
+
+    const handleSwatchesPointerDown = (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button === 0 && colorSwatchesScrollRef.current) {
+        isMouseDownRef.current = true;
+        mouseStartXRef.current = e.clientX;
+        mouseStartScrollLeftRef.current = colorSwatchesScrollRef.current.scrollLeft;
+        isMouseDraggingRef.current = false;
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {}
+      }
+    };
+
+    const handleSwatchesPointerMove = (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && isMouseDownRef.current && colorSwatchesScrollRef.current) {
+        const deltaX = e.clientX - mouseStartXRef.current;
+        if (Math.abs(deltaX) > 4) {
+          isMouseDraggingRef.current = true;
+          isScrollingRef.current = true;
+        }
+        colorSwatchesScrollRef.current.scrollLeft = mouseStartScrollLeftRef.current - deltaX;
+      }
+    };
+
+    const handleSwatchesPointerUp = (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && isMouseDownRef.current) {
+        isMouseDownRef.current = false;
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {}
+        if (isMouseDraggingRef.current) {
+          if (mouseDragTimerRef.current) clearTimeout(mouseDragTimerRef.current);
+          mouseDragTimerRef.current = setTimeout(() => {
+            isMouseDraggingRef.current = false;
+            isScrollingRef.current = false;
+          }, 150);
+        }
+      }
+    };
+
+    const handleSwatchesWheel = (e: React.WheelEvent) => {
+      if (!colorSwatchesScrollRef.current) return;
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (delta !== 0) {
+        colorSwatchesScrollRef.current.scrollLeft += delta;
+        e.stopPropagation();
+      }
+    };
+
+    const isInteractionBlocked = () => {
+      return hasSwipedRef.current || isScrollingRef.current || isMouseDraggingRef.current;
+    };
+
+    const handleSwatchesTouchStart = (e: React.TouchEvent) => {
+      if (e.touches.length === 0) return;
+      const touch = e.touches[0];
+      touchStartXRef.current = touch.clientX;
+      touchStartYRef.current = touch.clientY;
+      hasSwipedRef.current = false;
+    };
+
+    const handleSwatchesTouchMove = (e: React.TouchEvent) => {
+      if (e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const deltaX = Math.abs(touch.clientX - touchStartXRef.current);
+      const deltaY = Math.abs(touch.clientY - touchStartYRef.current);
+      if (deltaX > 6 || deltaY > 6) {
+        hasSwipedRef.current = true;
+        isScrollingRef.current = true;
+      }
+    };
+
+    const handleSwatchesTouchEnd = () => {
+      if (hasSwipedRef.current) {
+        if (swipeBlockTimerRef.current) clearTimeout(swipeBlockTimerRef.current);
+        swipeBlockTimerRef.current = setTimeout(() => {
+          hasSwipedRef.current = false;
+          isScrollingRef.current = false;
+        }, 180);
+      }
+    };
 
     const handleCustomColorApply = useCallback((hex: string) => {
       const isHl = activeToolRef.current === "highlighter";
@@ -220,13 +326,10 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           activeToolRef.current = "pen";
         }
       }
+      // Held in active session state ONLY (never written to localStorage)
       setCustomColors((prev) => {
         const filtered = prev.filter((c) => c.toUpperCase() !== hex.toUpperCase());
-        const updated = [hex.toUpperCase(), ...filtered].slice(0, 6);
-        try {
-          localStorage.setItem("dar_al_hikayat_custom_handwriting_colors", JSON.stringify(updated));
-        } catch {}
-        return updated;
+        return [hex.toUpperCase(), ...filtered].slice(0, 6);
       });
       setIsColorPickerSheetOpen(false);
       setActivePopup("none");
@@ -1468,7 +1571,7 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
           width: "100vw",
           height: "100vh",
           overflow: "hidden",
-          touchAction: "none",
+          touchAction: "auto",
           zIndex: 999999,
         }}
         onClick={(e) => {
@@ -1887,123 +1990,169 @@ export const DarAlHikayatHandwriting = forwardRef<HandwritingHandle, DarAlHikaya
                   </div>
                 )}
 
-                {/* 3. Color Capsule */}
+                {/* 3. Color Capsule — Fixed Standard Width with Sticky Rainbow Plus & Smooth Horizontal Scroll */}
                 {activePopup === "color" && (
                   <div
                     id="capsule-color"
-                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 rounded-full py-1 px-1.5 flex items-center gap-1.5 shadow-xl backdrop-blur-2xl border animate-in fade-in zoom-in-95 duration-200"
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 rounded-full py-1.5 pl-2 pr-2.5 flex items-center shadow-xl backdrop-blur-2xl border animate-in fade-in zoom-in-95 duration-200 overflow-hidden"
                     style={{
                       backgroundColor: barBg,
                       borderColor: barBorder,
                       boxShadow: barShadow,
                       borderRadius: "9999px",
+                      minHeight: "44px",
+                      width: "288px",
+                      maxWidth: "calc(100vw - 24px)",
+                      touchAction: "pan-x",
                     }}
                     onClick={(e) => e.stopPropagation()}
                     dir="ltr"
                   >
-                    {/* Rainbow Circle Button with Dark Center & White Plus (Matches Screenshot_20261007_190033.jpg) */}
-                    <button
-                      id="color-capsule-rainbow-btn"
-                      type="button"
-                      onClick={() => {
-                        setIsColorPickerSheetOpen(true);
-                        setActivePopup("none");
-                      }}
-                      className="relative w-6.5 h-6.5 rounded-full p-[2.5px] flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95 flex-shrink-0 shadow-sm"
-                      style={{
-                        background:
-                          "conic-gradient(from 180deg, #FF0055, #FF5500, #FFAA00, #00CC44, #00BBFF, #2255FF, #8800FF, #FF00AA, #FF0055)",
-                      }}
-                      title="إضافة واختيار لون مخصص"
-                      aria-label="فتح لوحة اختيار الألوان"
-                    >
-                      <div
-                        className="w-full h-full rounded-full flex items-center justify-center"
-                        style={{
-                          backgroundColor: "#16171B",
+                    {/* Fixed / Pinned Left Section: Rainbow Plus Button & Divider (Never affected by scrolling) */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0 z-10 pr-1 select-none">
+                      {/* Rainbow Circle Button with Dark Center & White Plus (Matches Image WhatsApp Image 2026-10-11 at 6.41.33 PM.jpeg) */}
+                      <button
+                        id="color-capsule-rainbow-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsColorPickerSheetOpen(true);
+                          setActivePopup("none");
                         }}
+                        className="relative rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 flex-shrink-0 shadow-md"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          minWidth: "32px",
+                          minHeight: "32px",
+                          padding: "3.5px",
+                          background:
+                            "conic-gradient(from 0deg, #8800FF 0%, #D000FF 10%, #FF0055 25%, #FF2200 35%, #FFAA00 45%, #FFFF00 55%, #55FF00 65%, #00FF66 75%, #00EAFF 85%, #0066FF 95%, #8800FF 100%)",
+                        }}
+                        title="إضافة واختيار لون مخصص"
+                        aria-label="فتح لوحة اختيار الألوان"
                       >
-                        <Plus className="w-3.5 h-3.5 text-white" strokeWidth={2.8} />
-                      </div>
-                    </button>
-
-                    {/* Subtle divider */}
-                    <div className="w-px h-3.5 bg-white/20 mx-0.5" />
-
-                    {/* Recent Custom Colors */}
-                    {customColors.map((hex) => {
-                      const isHl = activeTool === "highlighter";
-                      const currentColor = isHl ? selectedHighlighterColor : selectedColor;
-                      const isSelected = currentColor.toUpperCase() === hex.toUpperCase();
-                      return (
-                        <button
-                          key={`custom-${hex}`}
-                          onClick={() => {
-                            if (isHl) {
-                              setSelectedHighlighterColor(hex);
-                              selectedHighlighterColorRef.current = hex;
-                            } else {
-                              setSelectedColor(hex);
-                              selectedColorRef.current = hex;
-                              if (activeTool === "eraser" || activeTool === "lasso") {
-                                setActiveTool("pen");
-                                activeToolRef.current = "pen";
-                              }
-                            }
-                            setActivePopup("none");
-                          }}
-                          className={`w-6 h-6 rounded-full transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
-                            isSelected ? "scale-110 ring-2 ring-offset-1" : "hover:scale-105 opacity-90 hover:opacity-100"
-                          }`}
+                        <div
+                          className="w-full h-full rounded-full flex items-center justify-center shadow-inner"
                           style={{
-                            backgroundColor: hex,
-                            // @ts-ignore
-                            "--tw-ring-color": theme.accent,
-                            "--tw-ring-offset-color": theme.bg,
+                            backgroundColor: "#16181D",
                           }}
-                          title={`لون مخصص: ${hex}`}
-                        />
-                      );
-                    })}
-
-                    {/* Standard Preset Palette Colors */}
-                    {(activeTool === "highlighter" ? HIGHLIGHTER_PALETTE : COLOR_PALETTE).map((c) => {
-                      const isHl = activeTool === "highlighter";
-                      const currentColor = isHl ? selectedHighlighterColor : selectedColor;
-                      const colorVal = isHl ? c.hex : theme.isDark ? c.hex : (c as any).lightHex || c.hex;
-                      const isSelected = currentColor.toLowerCase() === colorVal.toLowerCase();
-                      return (
-                        <button
-                          key={c.hex}
-                          onClick={() => {
-                            if (isHl) {
-                              setSelectedHighlighterColor(colorVal);
-                              selectedHighlighterColorRef.current = colorVal;
-                            } else {
-                              setSelectedColor(colorVal);
-                              selectedColorRef.current = colorVal;
-                              if (activeTool === "eraser" || activeTool === "lasso") {
-                                setActiveTool("pen");
-                                activeToolRef.current = "pen";
-                              }
-                            }
-                            setActivePopup("none");
-                          }}
-                          className={`w-6 h-6 rounded-full transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
-                            isSelected ? "scale-110 ring-2 ring-offset-1" : "hover:scale-105 opacity-90 hover:opacity-100"
-                          }`}
-                          style={{
-                            backgroundColor: colorVal,
-                            // @ts-ignore
-                            "--tw-ring-color": theme.accent,
-                            "--tw-ring-offset-color": theme.bg,
-                          }}
-                          title={c.name}
                         >
-                          {colorVal === "#FFFFFF" && <div className="w-full h-full rounded-full border border-black/20" />}
-                        </button>
-                      );
-                    })}
+                          <Plus className="w-4 h-4 text-white" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+                        </div>
+                      </button>
+
+                      {/* Subtle divider */}
+                      <div className="w-px h-4 bg-white/20 mx-0.5 flex-shrink-0" />
+                    </div>
+
+                    {/* Smooth Native Scrollable Swatches Container (Custom + Preset Colors) */}
+                    <div
+                      ref={colorSwatchesScrollRef}
+                      onScroll={handleSwatchesScroll}
+                      onTouchStart={handleSwatchesTouchStart}
+                      onTouchMove={handleSwatchesTouchMove}
+                      onTouchEnd={handleSwatchesTouchEnd}
+                      onTouchCancel={handleSwatchesTouchEnd}
+                      onPointerDown={handleSwatchesPointerDown}
+                      onPointerMove={handleSwatchesPointerMove}
+                      onPointerUp={handleSwatchesPointerUp}
+                      onPointerCancel={handleSwatchesPointerUp}
+                      onWheel={handleSwatchesWheel}
+                      onDragStart={(e) => e.preventDefault()}
+                      className="flex items-center gap-1.5 overflow-x-auto overflow-y-hidden no-scrollbar flex-1 min-w-0 py-0.5 pl-1 pr-2 cursor-grab active:cursor-grabbing select-none"
+                      style={{
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                        WebkitOverflowScrolling: "touch",
+                        touchAction: "pan-x",
+                        overscrollBehaviorX: "contain",
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Recent Custom Colors */}
+                      {customColors.map((hex) => {
+                        const isHl = activeTool === "highlighter";
+                        const currentColor = isHl ? selectedHighlighterColor : selectedColor;
+                        const isSelected = currentColor.toUpperCase() === hex.toUpperCase();
+                        return (
+                          <button
+                            key={`custom-${hex}`}
+                            type="button"
+                            onClick={() => {
+                              if (isInteractionBlocked()) return;
+                              if (isHl) {
+                                setSelectedHighlighterColor(hex);
+                                selectedHighlighterColorRef.current = hex;
+                              } else {
+                                setSelectedColor(hex);
+                                selectedColorRef.current = hex;
+                                if (activeTool === "eraser" || activeTool === "lasso") {
+                                  setActiveTool("pen");
+                                  activeToolRef.current = "pen";
+                                }
+                              }
+                              setActivePopup("none");
+                            }}
+                            className={`w-6 h-6 rounded-full transition-all cursor-pointer relative flex items-center justify-center flex-shrink-0 active:scale-90 ${
+                              isSelected ? "scale-110 ring-2 ring-offset-1" : "hover:scale-105 opacity-90 hover:opacity-100"
+                            }`}
+                            style={{
+                              backgroundColor: hex,
+                              touchAction: "pan-x",
+                              // @ts-ignore
+                              "--tw-ring-color": theme.accent,
+                              "--tw-ring-offset-color": theme.bg,
+                            }}
+                            title={`لون مخصص: ${hex}`}
+                          />
+                        );
+                      })}
+
+                      {/* Standard Preset Palette Colors */}
+                      {(activeTool === "highlighter" ? HIGHLIGHTER_PALETTE : COLOR_PALETTE).map((c) => {
+                        const isHl = activeTool === "highlighter";
+                        const currentColor = isHl ? selectedHighlighterColor : selectedColor;
+                        const colorVal = isHl ? c.hex : theme.isDark ? c.hex : (c as any).lightHex || c.hex;
+                        const isSelected = currentColor.toLowerCase() === colorVal.toLowerCase();
+                        return (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            onClick={() => {
+                              if (isInteractionBlocked()) return;
+                              if (isHl) {
+                                setSelectedHighlighterColor(colorVal);
+                                selectedHighlighterColorRef.current = colorVal;
+                              } else {
+                                setSelectedColor(colorVal);
+                                selectedColorRef.current = colorVal;
+                                if (activeTool === "eraser" || activeTool === "lasso") {
+                                  setActiveTool("pen");
+                                  activeToolRef.current = "pen";
+                                }
+                              }
+                              setActivePopup("none");
+                            }}
+                            className={`w-6 h-6 rounded-full transition-all cursor-pointer relative flex items-center justify-center flex-shrink-0 active:scale-90 ${
+                              isSelected ? "scale-110 ring-2 ring-offset-1" : "hover:scale-105 opacity-90 hover:opacity-100"
+                            }`}
+                            style={{
+                              backgroundColor: colorVal,
+                              touchAction: "pan-x",
+                              // @ts-ignore
+                              "--tw-ring-color": theme.accent,
+                              "--tw-ring-offset-color": theme.bg,
+                            }}
+                            title={c.name}
+                          >
+                            {colorVal === "#FFFFFF" && <div className="w-full h-full rounded-full border border-black/20" />}
+                          </button>
+                        );
+                      })}
+
+                      {/* Spacer to prevent trailing color from hugging the right edge */}
+                      <div className="w-1.5 flex-shrink-0" />
+                    </div>
                   </div>
                 )}
 

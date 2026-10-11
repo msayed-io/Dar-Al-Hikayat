@@ -21,7 +21,7 @@ import {
   getLastSavedLocation,
   loadPrayerSettings,
 } from "./lib/prayer-alarms";
-import { logoAsset } from "./lib/logo-assets";
+import { logoAsset, logoTransparentAsset } from "./lib/logo-assets";
 import RemoteKeyboardMobilePage from "./components/RemoteKeyboardMobilePage";
 
 // The main component that manages views and persistent navigation
@@ -430,36 +430,50 @@ const BiometricGuard: React.FC<{ children: React.ReactNode }> = ({
         dir="rtl"
       >
         <div className="flex flex-col items-center justify-center max-w-sm w-full p-8 text-center space-y-6 pointer-events-none">
-          <div
-            className="w-24 h-24 rounded-3xl flex items-center justify-center border backdrop-blur-2xl transition-all duration-300 animate-pulse"
-            style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              boxShadow: `0 12px 32px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
-            }}
-          >
-            <img
-              src={
-                logoAsset(currentTheme.mode)
-              }
-              alt="Logo"
-              className="w-16 h-16 object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
+          <div className="relative animate-pulse" style={{ marginBottom: 4 }}>
+            <div
+              className="relative flex items-center justify-center"
+              style={{
+                width: 64,
+                height: 64,
+                background: "transparent",
+                borderColor: "transparent",
+                boxShadow: "none",
               }}
-            />
+            >
+              <img
+                src={logoTransparentAsset(currentTheme.mode)}
+                alt="Logo"
+                className="w-16 h-16 object-contain relative z-25 drop-shadow-md"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <h2
-              className="text-2xl font-zain-bold tracking-wide"
-              style={{ color: currentTheme.text }}
+              className="tracking-wide"
+              style={{
+                color: currentTheme.text,
+                fontFamily: "'Thmanyah Serif Display', 'Thmanyah Sans', serif",
+                fontWeight: 700,
+                fontSize: "24px",
+                lineHeight: 1.4,
+              }}
             >
               التطبيق مقفل
             </h2>
             <p
-              className="text-sm font-zain-reg opacity-60"
-              style={{ color: currentTheme.text }}
+              className="opacity-70"
+              style={{
+                color: currentTheme.text,
+                fontFamily: "'Thmanyah Serif Text', 'Thmanyah Sans', serif",
+                fontWeight: 500,
+                fontSize: "14px",
+                lineHeight: 1.6,
+              }}
             >
               المصادقة ببصمة الإصبع أو نظام حماية الهاتف
             </p>
@@ -526,7 +540,7 @@ function App() {
       const timer = setTimeout(() => {
         void checkAndPresentUpdate(false);
         void refreshPrayerAlarmsSilently();
-      }, 1200);
+      }, 250);
 
       let appStateHandle: { remove: () => Promise<void> } | null = null;
       if (Capacitor.isNativePlatform()) {

@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { X, Check, Pipette, RefreshCw } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
+import { Check } from "lucide-react";
 import { ThemeColors } from "../contexts/AppContext";
 
 export interface DarAlHikayatColorPickerSheetProps {
@@ -10,76 +12,196 @@ export interface DarAlHikayatColorPickerSheetProps {
   theme: ThemeColors;
 }
 
-// Convert Hex to HSL
-function hexToHsl(hex: string): { h: number; s: number; l: number } {
-  let c = hex.replace("#", "");
-  if (c.length === 3) {
-    c = c.split("").map((x) => x + x).join("");
+// ── Math & Color Conversion Helpers (HSV / RGB / HEX) ──
+
+interface HSV {
+  h: number; // 0 - 360
+  s: number; // 0 - 1
+  v: number; // 0 - 1
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  let clean = hex.replace("#", "").trim();
+  if (clean.length === 3) {
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
-  const num = parseInt(c, 16);
-  if (isNaN(num)) return { h: 0, s: 100, l: 50 };
-  const r = ((num >> 16) & 255) / 255;
-  const g = ((num >> 8) & 255) / 255;
-  const b = (num & 255) / 255;
+  const num = parseInt(clean, 16);
+  if (isNaN(num) || clean.length !== 6) {
+    return { r: 255, g: 255, b: 255 };
+  }
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255,
+  };
+}
 
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
+function rgbToHsv(r: number, g: number, b: number): HSV {
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  const d = max - min;
+
   let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
+  const v = max;
+  const s = max === 0 ? 0 : d / max;
 
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  if (d !== 0) {
     switch (max) {
-      case r:
-        h = (g - b) / d + (g < b ? 6 : 0);
+      case rNorm:
+        h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0);
         break;
-      case g:
-        h = (b - r) / d + 2;
+      case gNorm:
+        h = (bNorm - rNorm) / d + 2;
         break;
-      case b:
-        h = (r - g) / d + 4;
+      case bNorm:
+        h = (rNorm - gNorm) / d + 4;
         break;
     }
-    h /= 6;
+    h *= 60;
   }
-  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
-}
 
-// Convert HSL to Hex
-function hslToHex(h: number, s: number, l: number): string {
-  s /= 100;
-  l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color)
-      .toString(16)
-      .padStart(2, "0");
+  return {
+    h: Math.round(h),
+    s: Math.max(0, Math.min(1, s)),
+    v: Math.max(0, Math.min(1, v)),
   };
-  return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
 }
 
-const QUICK_PRESETS = [
-  "#FFFFFF",
-  "#121A1B",
-  "#A7AA63",
-  "#3B82F6",
-  "#0EA5E9",
-  "#10B981",
-  "#F59E0B",
-  "#EF4444",
-  "#9333EA",
-  "#EC4899",
-  "#6366F1",
-  "#14B8A6",
-  "#84CC16",
-  "#EAB308",
-  "#F97316",
-  "#64748B",
-];
+function hsvToHex(h: number, s: number, v: number): string {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+
+  let rPrime = 0;
+  let gPrime = 0;
+  let bPrime = 0;
+
+  const segment = Math.floor(h / 60) % 6;
+  switch (segment) {
+    case 0:
+      rPrime = c;
+      gPrime = x;
+      bPrime = 0;
+      break;
+    case 1:
+      rPrime = x;
+      gPrime = c;
+      bPrime = 0;
+      break;
+    case 2:
+      rPrime = 0;
+      gPrime = c;
+      bPrime = x;
+      break;
+    case 3:
+      rPrime = 0;
+      gPrime = x;
+      bPrime = c;
+      break;
+    case 4:
+      rPrime = x;
+      gPrime = 0;
+      bPrime = c;
+      break;
+    case 5:
+      rPrime = c;
+      gPrime = 0;
+      bPrime = x;
+      break;
+  }
+
+  const r = Math.round((rPrime + m) * 255);
+  const g = Math.round((gPrime + m) * 255);
+  const b = Math.round((bPrime + m) * 255);
+
+  const toHex = (n: number) => n.toString(16).padStart(2, "0").toUpperCase();
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/**
+ * دالة ذكية لتوليد الاسم اللوني العربي الدقيق وفقاً لدرجة اللون والإشباع والسطوع
+ * (مثل: "أحمر داكن"، "سماوي"، "أزرق كحلي"، "ذهبي"، "رمادي هادئ"، إلخ).
+ */
+export function getArabicColorName(h: number, s: number, v: number): string {
+  if (v <= 0.12) return "أسود";
+  if (v <= 0.22 && s <= 0.25) return "أسود داكن";
+  if (s <= 0.08) {
+    if (v >= 0.92) return "أبيض";
+    if (v >= 0.70) return "رمادي فاتح";
+    if (v >= 0.38) return "رمادي";
+    return "رمادي داكن";
+  }
+
+  let baseName = "";
+  let isPresetComposite = false;
+
+  // تحديد الطيف الأساسي
+  if (h >= 345 || h < 14) {
+    baseName = "أحمر";
+  } else if (h < 42) {
+    if (v < 0.58 && s > 0.32) {
+      baseName = "بني";
+      isPresetComposite = true;
+    } else {
+      baseName = "برتقالي";
+    }
+  } else if (h < 68) {
+    if (v < 0.45) {
+      baseName = "زيتي";
+      isPresetComposite = true;
+    } else if (s > 0.75) {
+      baseName = "أصفر ذهبي";
+      isPresetComposite = true;
+    } else {
+      baseName = "أصفر";
+    }
+  } else if (h < 165) {
+    if (v < 0.38) {
+      baseName = "أخضر داكن";
+      isPresetComposite = true;
+    } else if (h < 95) {
+      baseName = "أخضر ليموني";
+      isPresetComposite = true;
+    } else {
+      baseName = "أخضر";
+    }
+  } else if (h < 195) {
+    baseName = "سماوي";
+  } else if (h < 255) {
+    if (v < 0.40) {
+      baseName = "كحلي";
+      isPresetComposite = true;
+    } else {
+      baseName = "أزرق";
+    }
+  } else if (h < 290) {
+    baseName = "بنفسجي";
+  } else {
+    baseName = "وردي";
+  }
+
+  // إضافة النعوت والصفات الدقيقة
+  if (!isPresetComposite) {
+    if (v <= 0.42) {
+      return `${baseName} داكن`;
+    } else if (v >= 0.86 && s <= 0.42) {
+      return `${baseName} فاتح`;
+    } else if (s >= 0.85 && v >= 0.80) {
+      return `${baseName} ناصع`;
+    } else if (s <= 0.35) {
+      return `${baseName} هادئ`;
+    }
+  }
+
+  return baseName;
+}
 
 export const DarAlHikayatColorPickerSheet: React.FC<DarAlHikayatColorPickerSheetProps> = ({
   isOpen,
@@ -88,288 +210,405 @@ export const DarAlHikayatColorPickerSheet: React.FC<DarAlHikayatColorPickerSheet
   onApplyColor,
   theme,
 }) => {
-  const [hue, setHue] = useState<number>(0);
-  const [saturation, setSaturation] = useState<number>(100);
-  const [lightness, setLightness] = useState<number>(50);
-  const [hexInput, setHexInput] = useState<string>("#FFFFFF");
-  const [selectedHex, setSelectedHex] = useState<string>("#FFFFFF");
+  // HSV state
+  const [hsv, setHsv] = useState<HSV>({ h: 0, s: 0.66, v: 0.26 });
+  const [hexInput, setHexInput] = useState<string>("#431616");
 
+  // Portal container
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+
+  // References for dragging
+  const satValFieldRef = useRef<HTMLDivElement>(null);
+  const hueSliderRef = useRef<HTMLDivElement>(null);
+  const isDraggingSatVal = useRef(false);
+  const isDraggingHue = useRef(false);
+
+  // Initialize portal node on mount
   useEffect(() => {
-    if (currentColor) {
-      const validHex = currentColor.startsWith("#") ? currentColor : `#${currentColor}`;
-      setSelectedHex(validHex.toUpperCase());
-      setHexInput(validHex.toUpperCase());
-      const { h, s, l } = hexToHsl(validHex);
-      setHue(h);
-      setSaturation(s);
-      setLightness(l);
+    if (typeof document === "undefined") return;
+    let element = document.getElementById("dar-color-picker-root");
+    if (!element) {
+      element = document.createElement("div");
+      element.id = "dar-color-picker-root";
+      element.style.position = "relative";
+      element.style.zIndex = "2147483647";
+      document.body.appendChild(element);
     }
-  }, [currentColor, isOpen]);
-
-  const updateFromHsl = useCallback((h: number, s: number, l: number) => {
-    const hex = hslToHex(h, s, l);
-    setSelectedHex(hex);
-    setHexInput(hex);
+    setPortalNode(element);
   }, []);
 
-  const handleHueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newHue = Number(e.target.value);
-    setHue(newHue);
-    updateFromHsl(newHue, saturation, lightness);
+  // Sync state when opened or currentColor changes
+  useEffect(() => {
+    if (isOpen && currentColor) {
+      const rgb = hexToRgb(currentColor);
+      const parsedHsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+      setHsv(parsedHsv);
+      setHexInput(currentColor.startsWith("#") ? currentColor.toUpperCase() : `#${currentColor.toUpperCase()}`);
+    }
+  }, [isOpen, currentColor]);
+
+  // Derived current HEX color and Arabic Name
+  const currentHex = useMemo(() => {
+    return hsvToHex(hsv.h, hsv.s, hsv.v);
+  }, [hsv]);
+
+  const arabicColorName = useMemo(() => {
+    return getArabicColorName(hsv.h, hsv.s, hsv.v);
+  }, [hsv]);
+
+  // Keep hex input in sync with currentHex while user is dragging
+  useEffect(() => {
+    setHexInput(currentHex);
+  }, [currentHex]);
+
+  // Keyboard shortcut: Escape to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // ── 2D Saturation-Value Field Drag Handler ──
+  const updateSatValFromPointer = useCallback((clientX: number, clientY: number) => {
+    if (!satValFieldRef.current) return;
+    const rect = satValFieldRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+
+    const s = Math.max(0, Math.min(1, x / rect.width));
+    const v = Math.max(0, Math.min(1, 1 - y / rect.height));
+
+    setHsv((prev) => ({ ...prev, s, v }));
+  }, []);
+
+  const handleSatValPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingSatVal.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    updateSatValFromPointer(e.clientX, e.clientY);
   };
 
-  const handleSaturationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newSat = Number(e.target.value);
-    setSaturation(newSat);
-    updateFromHsl(hue, newSat, lightness);
+  const handleSatValPointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingSatVal.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    updateSatValFromPointer(e.clientX, e.clientY);
   };
 
-  const handleLightnessChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newLight = Number(e.target.value);
-    setLightness(newLight);
-    updateFromHsl(hue, saturation, newLight);
+  const handleSatValPointerUp = (e: React.PointerEvent) => {
+    if (!isDraggingSatVal.current) return;
+    isDraggingSatVal.current = false;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   };
 
+  // ── Hue Slider Drag Handler ──
+  const updateHueFromPointer = useCallback((clientX: number) => {
+    if (!hueSliderRef.current) return;
+    const rect = hueSliderRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const ratio = Math.max(0, Math.min(1, x / rect.width));
+    const h = Math.round(ratio * 360) % 360;
+
+    setHsv((prev) => ({ ...prev, h }));
+  }, []);
+
+  const handleHuePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingHue.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    updateHueFromPointer(e.clientX);
+  };
+
+  const handleHuePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingHue.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    updateHueFromPointer(e.clientX);
+  };
+
+  const handleHuePointerUp = (e: React.PointerEvent) => {
+    if (!isDraggingHue.current) return;
+    isDraggingHue.current = false;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  // ── Manual Hex Input Change ──
   const handleHexInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+    const val = e.target.value.trim();
     setHexInput(val);
-    if (/^#?([0-9A-F]{3}){1,2}$/i.test(val)) {
-      const formatted = val.startsWith("#") ? val : `#${val}`;
-      setSelectedHex(formatted.toUpperCase());
-      const { h, s, l } = hexToHsl(formatted);
-      setHue(h);
-      setSaturation(s);
-      setLightness(l);
+    const clean = val.replace("#", "");
+    if (/^[0-9A-Fa-f]{6}$/.test(clean)) {
+      const rgb = hexToRgb(`#${clean}`);
+      const parsedHsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+      setHsv(parsedHsv);
     }
   };
 
-  const handlePresetSelect = (hex: string) => {
-    setSelectedHex(hex.toUpperCase());
-    setHexInput(hex.toUpperCase());
-    const { h, s, l } = hexToHsl(hex);
-    setHue(h);
-    setSaturation(s);
-    setLightness(l);
-  };
-
+  // ── Apply Selection ──
   const handleApply = () => {
-    onApplyColor(selectedHex);
+    onApplyColor(currentHex);
     onClose();
   };
 
   if (!isOpen) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-[9999999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
-      dir="rtl"
-    >
+  // ── Sheet styling based on application theme (matches UpdateDialog standards) ──
+  const isAppleDark = theme.mode === "apple_dark";
+  const isNightWhisper = theme.mode === "night_whisper";
+  const sheetBg = isAppleDark
+    ? "#1C1C1E"
+    : isNightWhisper
+    ? "#171F21"
+    : theme.isDark
+    ? "#121A1B"
+    : "#FFFFFF";
+
+  const sheetBorder = isAppleDark
+    ? "rgba(255, 255, 255, 0.12)"
+    : isNightWhisper
+    ? "rgba(226, 223, 210, 0.12)"
+    : theme.border;
+
+  const content = (
+    <AnimatePresence>
       <div
-        className="w-full max-w-lg mx-auto rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl border transition-all duration-300 transform animate-in slide-in-from-bottom-6 sm:zoom-in-95"
+        id="dar-color-picker-overlay"
+        dir="rtl"
+        className="fixed inset-0 flex items-end justify-center pointer-events-auto select-none"
         style={{
-          backgroundColor: theme.isDark ? "#171F20" : "#F4F1E4",
-          borderColor: theme.border,
-          color: theme.text,
+          zIndex: 2147483647,
+          isolation: "isolate",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10 mb-4">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center shadow-sm"
-              style={{ backgroundColor: `${theme.accent}30`, color: theme.accent }}
-            >
-              <Pipette className="w-4 h-4" />
-            </div>
-            <h3 className="text-base font-bold tracking-tight">اختيار لون مخصص</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-            aria-label="إغلاق"
-          >
-            <X className="w-5 h-5 opacity-70" />
-          </button>
-        </div>
+        {/* Backdrop overlay — click anywhere to close smoothly */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+          className="fixed inset-0 bg-black/65 backdrop-blur-md cursor-pointer"
+          onClick={onClose}
+        />
 
-        {/* Selected Color Preview Banner */}
-        <div
-          className="w-full h-16 rounded-2xl shadow-inner border flex items-center justify-between px-4 mb-5 transition-colors relative overflow-hidden"
-          style={{ backgroundColor: selectedHex, borderColor: theme.border }}
+        {/* Bottom Sheet Card — matches exact UpdateDialog sizing, radius and philosophy */}
+        <motion.div
+          initial={{ y: "100%", opacity: 0.9 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "100%", opacity: 0.9 }}
+          transition={{
+            type: "spring",
+            damping: 32,
+            stiffness: 340,
+            mass: 0.9,
+          }}
+          className="relative w-full max-w-[420px] border shadow-2xl z-10 flex flex-col items-center overflow-hidden"
+          style={{
+            borderTopLeftRadius: "36px",
+            borderTopRightRadius: "36px",
+            borderBottomLeftRadius: "0px",
+            borderBottomRightRadius: "0px",
+            backgroundColor: sheetBg,
+            borderColor: sheetBorder,
+            boxShadow: `0 -16px 50px -10px ${theme.shadow || "rgba(0,0,0,0.5)"}`,
+            padding: "14px 18px 24px 18px",
+            paddingBottom: "max(env(safe-area-inset-bottom), 24px)",
+          }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <span
-            className="text-xs font-bold px-2.5 py-1 rounded-full backdrop-blur-md border shadow-sm"
-            style={{
-              backgroundColor: theme.isDark ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.85)",
-              color: theme.isDark ? "#FFFFFF" : "#121A1B",
-              borderColor: theme.border,
-            }}
-          >
-            {selectedHex}
-          </span>
-          <span
-            className="text-xs font-medium opacity-80 px-2 py-0.5 rounded"
-            style={{
-              color: lightness > 60 ? "#000000" : "#FFFFFF",
-            }}
-          >
-            معاينة اللون
-          </span>
-        </div>
+          {/* Top Drag Indicator Pill */}
+          <div
+            className="w-10 h-1.5 rounded-full mb-3 opacity-25"
+            style={{ backgroundColor: theme.text }}
+          />
 
-        {/* Color Sliders */}
-        <div className="space-y-4 mb-5">
-          {/* Hue Slider */}
-          <div>
-            <div className="flex justify-between text-xs font-medium mb-1.5 opacity-80">
-              <span>درجة اللون (Hue)</span>
-              <span>{hue}°</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="360"
-              value={hue}
-              onChange={handleHueChange}
-              className="w-full h-3 rounded-lg appearance-none cursor-pointer focus:outline-none"
+          {/* ── Header: Checkmark Button on Left & Dynamic Arabic Color Name in Center ── */}
+          <div className="w-full flex items-center justify-between mb-4 px-1">
+            {/* Top-Left / Top-Corner Apply Checkmark Button (Matches Screenshot Exactly) */}
+            <button
+              type="button"
+              onClick={handleApply}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-90 cursor-pointer"
               style={{
-                background:
-                  "linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)",
-              }}
-            />
-          </div>
-
-          {/* Saturation Slider */}
-          <div>
-            <div className="flex justify-between text-xs font-medium mb-1.5 opacity-80">
-              <span>الشباع (Saturation)</span>
-              <span>{saturation}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={saturation}
-              onChange={handleSaturationChange}
-              className="w-full h-3 rounded-lg appearance-none cursor-pointer focus:outline-none"
-              style={{
-                background: `linear-gradient(to right, ${hslToHex(hue, 0, lightness)}, ${hslToHex(hue, 100, lightness)})`,
-              }}
-            />
-          </div>
-
-          {/* Lightness Slider */}
-          <div>
-            <div className="flex justify-between text-xs font-medium mb-1.5 opacity-80">
-              <span>السطوع (Lightness)</span>
-              <span>{lightness}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={lightness}
-              onChange={handleLightnessChange}
-              className="w-full h-3 rounded-lg appearance-none cursor-pointer focus:outline-none"
-              style={{
-                background: `linear-gradient(to right, #000000, ${hslToHex(hue, saturation, 50)}, #ffffff)`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Hex Code Manual Input */}
-        <div className="mb-5">
-          <label className="block text-xs font-medium mb-1.5 opacity-80">رمز اللون (HEX Code)</label>
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              value={hexInput}
-              onChange={handleHexInputChange}
-              maxLength={7}
-              placeholder="#FFFFFF"
-              className="w-full px-3.5 py-2 rounded-xl border text-sm font-mono tracking-wider focus:outline-none transition-all dir-ltr text-center"
-              style={{
-                backgroundColor: theme.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                borderColor: theme.border,
                 color: theme.text,
               }}
-            />
+              title="تطبيق واختيار اللون"
+              aria-label="تطبيق اللون"
+            >
+              <Check className="w-6 h-6 stroke-[2.4]" />
+            </button>
+
+            {/* Dynamic Arabic Color Name (Matches Screenshot: "أحمر داكن") */}
+            <h3
+              className="text-base sm:text-lg font-bold font-zain-bold tracking-tight text-center pl-9"
+              style={{
+                color: theme.text,
+                fontFamily: "'Thmanyah Serif Display', 'Thmanyah Sans', sans-serif",
+              }}
+            >
+              {arabicColorName}
+            </h3>
+
+            {/* Spacer for symmetrical centering */}
+            <div className="w-0" />
+          </div>
+
+          {/* ── 2D Saturation-Value Color Field (Matches Screenshot Exactly) ── */}
+          <div
+            ref={satValFieldRef}
+            onPointerDown={handleSatValPointerDown}
+            onPointerMove={handleSatValPointerMove}
+            onPointerUp={handleSatValPointerUp}
+            onPointerCancel={handleSatValPointerUp}
+            className="w-full relative rounded-2xl sm:rounded-[22px] overflow-hidden mb-4 border shadow-inner cursor-crosshair touch-none select-none"
+            style={{
+              height: "175px",
+              backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
+              borderColor: isAppleDark || isNightWhisper ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)",
+            }}
+          >
+            {/* Horizontal Saturation Layer: White to Transparent */}
             <div
-              className="absolute left-2.5 w-5 h-5 rounded-md border shadow-inner"
-              style={{ backgroundColor: selectedHex, borderColor: theme.border }}
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: "linear-gradient(to right, #FFFFFF, rgba(255, 255, 255, 0))",
+              }}
             />
-          </div>
-        </div>
 
-        {/* Quick Swatches Palette */}
-        <div className="mb-6">
-          <label className="block text-xs font-medium mb-2 opacity-80">ألوان سريعة جاهزة</label>
-          <div className="grid grid-cols-8 gap-2">
-            {QUICK_PRESETS.map((hex) => {
-              const isSelected = selectedHex.toUpperCase() === hex.toUpperCase();
-              return (
-                <button
-                  key={hex}
-                  type="button"
-                  onClick={() => handlePresetSelect(hex)}
-                  className={`w-full aspect-square rounded-full transition-all duration-150 flex items-center justify-center relative shadow-sm hover:scale-110 active:scale-95 ${
-                    isSelected ? "ring-2 ring-offset-2 scale-105" : "opacity-90"
-                  }`}
+            {/* Vertical Brightness/Value Layer: Transparent to Black */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: "linear-gradient(to top, #000000, rgba(0, 0, 0, 0))",
+              }}
+            />
+
+            {/* Draggable Circle Cursor (White Ring 'O' from Reference Image) */}
+            <div
+              className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2"
+              style={{
+                left: `${hsv.s * 100}%`,
+                top: `${(1 - hsv.v) * 100}%`,
+              }}
+            >
+              <div
+                className="w-6 h-6 rounded-full border-2 border-white shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+                style={{
+                  backgroundColor: "transparent",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* ── Hue Slider Bar (Matches Screenshot Exactly) ── */}
+          <div className="w-full mb-5 select-none" style={{ marginBottom: "22px" }}>
+            <div
+              ref={hueSliderRef}
+              onPointerDown={handleHuePointerDown}
+              onPointerMove={handleHuePointerMove}
+              onPointerUp={handleHuePointerUp}
+              onPointerCancel={handleHuePointerUp}
+              className="w-full relative rounded-full border shadow-sm cursor-pointer touch-none select-none flex items-center"
+              style={{
+                height: "18px",
+                background:
+                  "linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)",
+                borderColor: isAppleDark || isNightWhisper ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.12)",
+              }}
+            >
+              {/* Draggable Hue Circle Cursor (White Ring 'O' from Reference Image) */}
+              <div
+                className="absolute pointer-events-none top-1/2 -translate-y-1/2 -translate-x-1/2 z-10"
+                style={{
+                  left: `${(hsv.h / 360) * 100}%`,
+                }}
+              >
+                <div
+                  className="w-6 h-6 rounded-full border-2 border-white shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
                   style={{
-                    backgroundColor: hex,
-                    border: hex === "#FFFFFF" ? "1px solid rgba(0,0,0,0.2)" : "none",
-                    // @ts-ignore
-                    "--tw-ring-color": theme.accent,
-                    "--tw-ring-offset-color": theme.isDark ? "#171F20" : "#F4F1E4",
+                    backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
                   }}
-                  title={hex}
-                >
-                  {isSelected && (
-                    <Check
-                      className="w-3.5 h-3.5"
-                      style={{
-                        color: hexToHsl(hex).l > 60 ? "#000000" : "#FFFFFF",
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 pt-2 border-t border-black/10 dark:border-white/10">
-          <button
-            type="button"
-            onClick={handleApply}
-            className="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+          {/* ── Hex Code Display & Color Preview Circle Capsule ── */}
+          <div
+            className="w-full rounded-full border flex items-center justify-between px-3.5 transition-colors"
             style={{
-              backgroundColor: theme.accent,
-              color: theme.isDark ? "#121A1B" : "#FFFFFF",
+              height: "52px",
+              minHeight: "52px",
+              borderRadius: "9999px",
+              backgroundColor: isAppleDark || isNightWhisper ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)",
+              borderColor: isAppleDark || isNightWhisper ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.1)",
             }}
           >
-            <Check className="w-4 h-4" />
-            <span>تطبيق اللون</span>
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="py-2.5 px-4 rounded-xl font-medium text-sm border hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer opacity-80 hover:opacity-100"
-            style={{
-              borderColor: theme.border,
-              color: theme.text,
-            }}
-          >
-            إلغاء
-          </button>
-        </div>
+            {/* Dot and Hex Code Grouped Directly Next to Each Other in Natural Order */}
+            <div className="flex items-center gap-3" dir="rtl">
+              {/* Circular Color Preview Swatch */}
+              <button
+                type="button"
+                onClick={handleApply}
+                className="w-8 h-8 rounded-full border shadow-inner transition-transform active:scale-95 cursor-pointer shrink-0"
+                style={{
+                  backgroundColor: currentHex,
+                  borderColor: isAppleDark || isNightWhisper ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 0, 0, 0.2)",
+                }}
+                title="تطبيق هذا اللون"
+                aria-label="تطبيق اللون المختار"
+              />
+
+              {/* Hex Code Input directly next to the color dot */}
+              <input
+                type="text"
+                value={hexInput}
+                onChange={handleHexInputChange}
+                maxLength={7}
+                dir="ltr"
+                className="bg-transparent text-base font-mono font-bold tracking-wider outline-none text-right w-28"
+                style={{
+                  color: theme.text,
+                }}
+                placeholder="#000000"
+              />
+            </div>
+
+            {/* Subtle Pill Indicator / Label */}
+            <span
+              onClick={handleApply}
+              className="text-xs font-mono font-bold opacity-45 hover:opacity-100 transition-opacity cursor-pointer px-2"
+              style={{ color: theme.text }}
+            >
+              HEX
+            </span>
+          </div>
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   );
+
+  const targetNode =
+    portalNode ||
+    (typeof document !== "undefined"
+      ? document.getElementById("dar-color-picker-root") || document.body
+      : null);
+
+  if (targetNode) {
+    return createPortal(content, targetNode);
+  }
+
+  return content;
 };
 
 export default DarAlHikayatColorPickerSheet;

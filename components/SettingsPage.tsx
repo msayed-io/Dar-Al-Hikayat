@@ -57,6 +57,7 @@ import {
 import { downloadBlob } from "../lib/pdf-export";
 import { StorageService } from "../lib/storage-service";
 import { ImportResultModal, type FailedImportItem } from "./ImportResultModal";
+import { checkIsTabletOrWideScreen } from "../lib/screen-classifier";
 
 const SettingsPage: React.FC = () => {
   const {
@@ -86,6 +87,21 @@ const SettingsPage: React.FC = () => {
   }>({ isOpen: false, imported: 0, failed: [] });
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Screen classification for wide screen assistant capability
+  const [screenInfo, setScreenInfo] = useState(() => checkIsTabletOrWideScreen());
+
+  useEffect(() => {
+    const handleResize = () => {
+      setScreenInfo(checkIsTabletOrWideScreen());
+    };
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
 
   // ─── مفاتيح الاتصال بالمساعد الأدبي (Multi-Key Rotation) ───
   const [managedKeys, setManagedKeys] = useState<ManagedApiKey[]>([]);
@@ -441,15 +457,15 @@ const SettingsPage: React.FC = () => {
   }[] = [
     {
       id: "royal_classic",
-      label: "كلاسيكى •",
+      label: "كلاسيكي",
     },
     {
       id: "night_whisper",
-      label: "• ليلى",
+      label: "ليلي",
     },
     {
       id: "apple_dark",
-      label: "داكن آبل",
+      label: "معتم",
     },
   ];
 
@@ -558,10 +574,10 @@ const SettingsPage: React.FC = () => {
                 style={{ color: currentTheme.text }}
               >
                 {currentTheme.mode === "royal_classic"
-                  ? "كلاسيكي ملكي"
+                  ? "كلاسيكي"
                   : currentTheme.mode === "night_whisper"
-                  ? "همس الليالي"
-                  : "داكن آبل"}
+                  ? "ليلي"
+                  : "معتم"}
               </span>
             </div>
 
@@ -691,115 +707,117 @@ const SettingsPage: React.FC = () => {
           </div>
 
           {/* ─── 3. مفاتيح المساعد الأدبي ─── */}
-          <div
-            id="settings-card-assistant-keys"
-            className="settings-card border transition-all flex flex-col gap-4 justify-center"
-            style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              borderRadius: "32px",
-              padding: "20px 24px",
-              boxShadow: `0 8px 32px -8px ${currentTheme.shadow}`,
-            }}
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div
-                  className="w-12 h-12 flex items-center justify-center border flex-shrink-0"
+          {screenInfo.canOpenAssistant && (
+            <div
+              id="settings-card-assistant-keys"
+              className="settings-card border transition-all flex flex-col gap-4 justify-center"
+              style={{
+                backgroundColor: currentTheme.glass,
+                borderColor: currentTheme.border,
+                borderRadius: "32px",
+                padding: "20px 24px",
+                boxShadow: `0 8px 32px -8px ${currentTheme.shadow}`,
+              }}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div
+                    className="w-12 h-12 flex items-center justify-center border flex-shrink-0"
+                    style={{
+                      backgroundColor: `${currentTheme.accent}10`,
+                      borderColor: `${currentTheme.accent}20`,
+                      borderRadius: "50%",
+                    }}
+                  >
+                    <KeyRound className="w-5 h-5" style={{ color: currentTheme.accent }} />
+                  </div>
+                  <div className="flex flex-col text-right min-w-0">
+                    <span
+                      className="font-zain-bold text-sm leading-tight"
+                      style={{ color: currentTheme.text }}
+                    >
+                      مفاتيح المساعد
+                    </span>
+                    <span
+                      className="font-zain-reg text-xs opacity-60 mt-1 leading-tight"
+                      style={{ color: currentTheme.text }}
+                    >
+                      {managedKeys.length > 0 ? `${managedKeys.length} مفاتيح مُضافة` : "تبديل تلقائي للمفاتيح"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setAddKeyError(null);
+                    setNewKeyInput("");
+                    setNewKeyLabel("");
+                    setShowAddKeyDialog(true);
+                  }}
+                  className="w-9 h-9 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer flex-shrink-0"
                   style={{
                     backgroundColor: `${currentTheme.accent}10`,
-                    borderColor: `${currentTheme.accent}20`,
-                    borderRadius: "50%",
+                    borderColor: `${currentTheme.accent}30`,
+                    color: currentTheme.accent,
                   }}
                 >
-                  <KeyRound className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                </div>
-                <div className="flex flex-col text-right min-w-0">
-                  <span
-                    className="font-zain-bold text-sm leading-tight"
-                    style={{ color: currentTheme.text }}
-                  >
-                    مفاتيح المساعد
-                  </span>
-                  <span
-                    className="font-zain-reg text-xs opacity-60 mt-1 leading-tight"
-                    style={{ color: currentTheme.text }}
-                  >
-                    {managedKeys.length > 0 ? `${managedKeys.length} مفاتيح مُضافة` : "تبديل تلقائي للمفاتيح"}
-                  </span>
-                </div>
+                  <Plus className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setAddKeyError(null);
-                  setNewKeyInput("");
-                  setNewKeyLabel("");
-                  setShowAddKeyDialog(true);
-                }}
-                className="w-9 h-9 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer flex-shrink-0"
-                style={{
-                  backgroundColor: `${currentTheme.accent}10`,
-                  borderColor: `${currentTheme.accent}30`,
-                  color: currentTheme.accent,
-                }}
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
 
-            {/* List of Collapsed Key Cards / Empty State */}
-            {managedKeys.length > 0 && (
-              <div className="flex flex-col gap-2">
-                {managedKeys.slice(0, 2).map((item) => {
-                  const isActive = item.status === "active";
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-2.5 border rounded-2xl transition-all"
-                      style={{
-                        backgroundColor: `${currentTheme.bg}70`,
-                        borderColor: currentTheme.border,
-                      }}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className="w-6 h-6 flex items-center justify-center border rounded-full flex-shrink-0"
-                          style={{
-                            backgroundColor: `${currentTheme.accent}10`,
-                            borderColor: `${currentTheme.accent}25`,
-                          }}
-                        >
-                          <KeyRound className="w-3 h-3" style={{ color: currentTheme.accent }} />
+              {/* List of Collapsed Key Cards / Empty State */}
+              {managedKeys.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {managedKeys.slice(0, 2).map((item) => {
+                    const isActive = item.status === "active";
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-2.5 border rounded-2xl transition-all"
+                        style={{
+                          backgroundColor: `${currentTheme.bg}70`,
+                          borderColor: currentTheme.border,
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="w-6 h-6 flex items-center justify-center border rounded-full flex-shrink-0"
+                            style={{
+                              backgroundColor: `${currentTheme.accent}10`,
+                              borderColor: `${currentTheme.accent}25`,
+                            }}
+                          >
+                            <KeyRound className="w-3 h-3" style={{ color: currentTheme.accent }} />
+                          </div>
+                          <span
+                            className="font-zain-bold text-xs truncate"
+                            style={{ color: currentTheme.text }}
+                          >
+                            {item.label || "مفتاح API"}
+                          </span>
                         </div>
-                        <span
-                          className="font-zain-bold text-xs truncate"
-                          style={{ color: currentTheme.text }}
-                        >
-                          {item.label || "مفتاح API"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {isActive && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                          )}
+                          <button
+                            onClick={() => setKeyToDelete(item)}
+                            className="p-1 rounded-full opacity-50 hover:opacity-100 hover:text-red-500 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {isActive && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                        )}
-                        <button
-                          onClick={() => setKeyToDelete(item)}
-                          className="p-1 rounded-full opacity-50 hover:opacity-100 hover:text-red-500 transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
+                    );
+                  })}
+                  {managedKeys.length > 2 && (
+                    <div className="text-center text-[10px] font-zain-bold opacity-50 mt-1">
+                      +{managedKeys.length - 2} مفاتيح أخرى
                     </div>
-                  );
-                })}
-                {managedKeys.length > 2 && (
-                  <div className="text-center text-[10px] font-zain-bold opacity-50 mt-1">
-                    +{managedKeys.length - 2} مفاتيح أخرى
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ─── 4. أرشيف المخطوطات والنسخ الاحتياطي ─── */}
           <div
@@ -892,75 +910,7 @@ const SettingsPage: React.FC = () => {
             )}
           </div>
 
-          {/* ─── 5. قفل الدار بالبصمة ─── */}
-          <div
-            id="settings-card-security"
-            className="settings-card border transition-all flex flex-col justify-center"
-            style={{
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              borderRadius: "32px",
-              padding: "20px 24px",
-              boxShadow: `0 8px 32px -8px ${currentTheme.shadow}`,
-            }}
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div
-                  className="w-12 h-12 flex items-center justify-center border flex-shrink-0 transition-colors"
-                  style={{
-                    backgroundColor: isLocked ? `${currentTheme.accent}15` : `${currentTheme.accent}05`,
-                    borderColor: isLocked ? `${currentTheme.accent}30` : currentTheme.border,
-                    borderRadius: "50%",
-                  }}
-                >
-                  {isLocked ? (
-                    <Lock className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                  ) : (
-                    <Unlock className="w-5 h-5 opacity-40" style={{ color: currentTheme.text }} />
-                  )}
-                </div>
-                <div className="flex flex-col text-right min-w-0">
-                  <span
-                    className="font-zain-bold text-sm leading-tight"
-                    style={{ color: currentTheme.text }}
-                  >
-                    قفل الدار
-                  </span>
-                  <span
-                    className="font-zain-reg text-xs opacity-60 mt-1 leading-tight"
-                    style={{ color: currentTheme.text }}
-                  >
-                    تأمين الحكايات بالبصمة
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                role="switch"
-                aria-checked={isLocked}
-                onClick={toggleLock}
-                dir="ltr"
-                className="w-12 h-6 relative inline-flex items-center rounded-full transition-colors duration-300 cursor-pointer flex-shrink-0 p-0.5 border focus:outline-none"
-                style={{
-                  backgroundColor: isLocked ? currentTheme.accent : (currentTheme.isDark ? "#374151" : "#E5E7EB"),
-                  borderColor: isLocked ? currentTheme.accent : currentTheme.border,
-                }}
-                aria-label="تبديل قفل التطبيق"
-              >
-                <span
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300 ease-in-out ${
-                    isLocked ? "translate-x-6" : "translate-x-0"
-                  }`}
-                >
-                  {isLocked && <Check className="w-3 h-3 text-[#2C3E30] stroke-[3]" />}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* ─── 6. تحديثات التطبيق (OTA) ─── */}
+          {/* ─── 5. تحديثات التطبيق (OTA) ─── */}
           <div
             id="settings-card-updates"
             className="settings-card border transition-all flex flex-col justify-center"
@@ -1056,6 +1006,74 @@ const SettingsPage: React.FC = () => {
                 <span className="leading-tight">{updateFeedback.message}</span>
               </div>
             )}
+          </div>
+
+          {/* ─── 6. قفل الدار بالبصمة ─── */}
+          <div
+            id="settings-card-security"
+            className="settings-card border transition-all flex flex-col justify-center"
+            style={{
+              backgroundColor: currentTheme.glass,
+              borderColor: currentTheme.border,
+              borderRadius: "32px",
+              padding: "20px 24px",
+              boxShadow: `0 8px 32px -8px ${currentTheme.shadow}`,
+            }}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div
+                  className="w-12 h-12 flex items-center justify-center border flex-shrink-0 transition-colors"
+                  style={{
+                    backgroundColor: isLocked ? `${currentTheme.accent}15` : `${currentTheme.accent}05`,
+                    borderColor: isLocked ? `${currentTheme.accent}30` : currentTheme.border,
+                    borderRadius: "50%",
+                  }}
+                >
+                  {isLocked ? (
+                    <Lock className="w-5 h-5" style={{ color: currentTheme.accent }} />
+                  ) : (
+                    <Unlock className="w-5 h-5 opacity-40" style={{ color: currentTheme.text }} />
+                  )}
+                </div>
+                <div className="flex flex-col text-right min-w-0">
+                  <span
+                    className="font-zain-bold text-sm leading-tight"
+                    style={{ color: currentTheme.text }}
+                  >
+                    قفل الدار
+                  </span>
+                  <span
+                    className="font-zain-reg text-xs opacity-60 mt-1 leading-tight"
+                    style={{ color: currentTheme.text }}
+                  >
+                    تأمين الحكايات بالبصمة
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isLocked}
+                onClick={toggleLock}
+                dir="ltr"
+                className="w-12 h-6 relative inline-flex items-center rounded-full transition-colors duration-300 cursor-pointer flex-shrink-0 p-0.5 border focus:outline-none"
+                style={{
+                  backgroundColor: isLocked ? currentTheme.accent : (currentTheme.isDark ? "#374151" : "#E5E7EB"),
+                  borderColor: isLocked ? currentTheme.accent : currentTheme.border,
+                }}
+                aria-label="تبديل قفل التطبيق"
+              >
+                <span
+                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300 ease-in-out ${
+                    isLocked ? "translate-x-6" : "translate-x-0"
+                  }`}
+                >
+                  {isLocked && <Check className="w-3 h-3 text-[#2C3E30] stroke-[3]" />}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 

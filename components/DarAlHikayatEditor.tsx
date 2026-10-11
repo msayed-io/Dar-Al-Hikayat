@@ -113,6 +113,7 @@ import {
   type AttachedMention,
 } from "../lib/editor-block-system";
 import { StorageService } from "../lib/storage-service";
+import { checkIsTabletOrWideScreen, type ScreenClassification } from "../lib/screen-classifier";
 
 // --- 20 Premium Ink Colors ---
 const inkColors = [
@@ -520,91 +521,6 @@ export const getCleanCharCount = (htmlText: string): number => {
     .replace(/&[a-z0-9#]+;/gi, " ")
     .replace(/\u00A0/g, " ");
   return text.length;
-};
-
-// --- Comprehensive Screen & Device Classification ---
-// Differentiates actual tablets (like Samsung Galaxy Tab A7, iPad, etc.) from mobile phones,
-// and enforces that the Literary Assistant split-screen mode is STRICTLY available ONLY in Landscape orientation.
-export interface ScreenClassification {
-  isDeviceWideCapable: boolean; // Physical tablet (Smallest Width >= 500dp, Longest side >= 720dp) OR desktop browser
-  isLandscape: boolean;         // Current viewport width > height
-  canOpenAssistant: boolean;    // Strict combined requirement: isDeviceWideCapable && isLandscape
-  isTablet: boolean;
-  isDesktop: boolean;
-  isMobilePhone: boolean;
-  width: number;
-  height: number;
-  minDim: number;
-  maxDim: number;
-}
-
-export const checkIsTabletOrWideScreen = (): ScreenClassification => {
-  if (typeof window === "undefined") {
-    return {
-      isDeviceWideCapable: false,
-      isLandscape: false,
-      canOpenAssistant: false,
-      isTablet: false,
-      isDesktop: false,
-      isMobilePhone: true,
-      width: 0,
-      height: 0,
-      minDim: 0,
-      maxDim: 0,
-    };
-  }
-
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const minDim = Math.min(w, h);
-  const maxDim = Math.max(w, h);
-
-  // Read hardware physical screen dimensions (these do NOT change when virtual keyboard opens)
-  const sw = window.screen ? window.screen.width : 0;
-  const sh = window.screen ? window.screen.height : 0;
-  const screenMinDim = sw && sh ? Math.min(sw, sh) : minDim;
-  const screenMaxDim = sw && sh ? Math.max(sw, sh) : maxDim;
-
-  // Tablet classification (Samsung Galaxy Tab A7 has physical screenMinDim ~600dp, screenMaxDim ~960-1000dp):
-  // - Smallest Width (screenMinDim) >= 500dp (standard tablets have sw >= 530-600dp; phones are 360-430dp)
-  // - Longest side (screenMaxDim) >= 720dp
-  // By checking physical screen dimensions, this remains 100% stable even when on-screen virtual keyboard shrinks window.innerHeight!
-  const isTablet = (screenMinDim >= 500 && screenMaxDim >= 720) || (minDim >= 500 && maxDim >= 720);
-
-  // Desktop or wide laptop browser window (width >= 768)
-  const isDesktop = (w >= 768 && (h >= 500 || screenMinDim >= 600)) || (screenMaxDim >= 1024 && w >= 768);
-
-  const isDeviceWideCapable = isTablet || isDesktop;
-  const isMobilePhone = !isTablet && !isDesktop;
-
-  // Accurate orientation detection:
-  // Virtual keyboard opening reduces window.innerHeight, but DOES NOT change device orientation.
-  // We use window.matchMedia("(orientation: landscape)") and screen orientation properties
-  // which stay strictly in Landscape even when the keyboard is open.
-  const isLandscape =
-    typeof window !== "undefined" && window.matchMedia
-      ? window.matchMedia("(orientation: landscape)").matches ||
-        (Boolean(window.screen?.orientation) && window.screen.orientation.type.includes("landscape")) ||
-        (sw > 0 && sh > 0 ? (sw > sh && w >= 600) : w > h)
-      : w > h;
-
-  // Strict Rule: Assistant full split-screen studio ONLY opens when device is qualified AND currently in Landscape!
-  // If a tablet is in Portrait, canOpenAssistant is FALSE.
-  // In Landscape (even with keyboard active), canOpenAssistant remains TRUE.
-  const canOpenAssistant = isDeviceWideCapable && isLandscape;
-
-  return {
-    isDeviceWideCapable,
-    isLandscape,
-    canOpenAssistant,
-    isTablet,
-    isDesktop,
-    isMobilePhone,
-    width: w,
-    height: h,
-    minDim,
-    maxDim,
-  };
 };
 
 const DarAlHikayatMaster: React.FC = () => {
