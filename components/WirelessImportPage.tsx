@@ -42,6 +42,25 @@ export const WirelessImportPage: React.FC = () => {
     }
   };
 
+  const optimizeCameraFocus = async (stream: MediaStream): Promise<void> => {
+    const track = stream.getVideoTracks()[0];
+    if (!track || typeof track.getCapabilities !== "function" || typeof track.applyConstraints !== "function") return;
+
+    try {
+      const capabilities = track.getCapabilities() as MediaTrackCapabilities & {
+        focusMode?: string[];
+      };
+      if (capabilities.focusMode?.includes("continuous")) {
+        await track.applyConstraints({
+          advanced: [{ focusMode: "continuous" }],
+        } as unknown as MediaTrackConstraints);
+      }
+    } catch (error) {
+      // Focus controls are optional across browsers; the stream remains usable without them.
+      console.debug("Continuous camera focus is not available:", error);
+    }
+  };
+
   // Stop camera tracks cleanly
   const stopCameraStream = () => {
     isScanningActiveRef.current = false;
@@ -69,15 +88,17 @@ export const WirelessImportPage: React.FC = () => {
         throw new Error("الكاميرا غير مدعومة في هذا المتصفح أو الجهاز.");
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      const videoConstraints = {
+        facingMode: { ideal: "environment" },
+        width: { min: 1280, ideal: 1920 },
+        height: { min: 720, ideal: 1080 },
+        frameRate: { ideal: 30, max: 60 },
+        focusMode: { ideal: "continuous" },
+      } as MediaTrackConstraints;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
 
       streamRef.current = stream;
+      await optimizeCameraFocus(stream);
       setHasCameraPermission(true);
 
       if (videoRef.current) {
