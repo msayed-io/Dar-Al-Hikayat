@@ -13,6 +13,9 @@ import {
   TransferPayloadMeta,
 } from "../lib/wireless-transfer-service";
 
+const QR_CODE_SIZE = 220;
+const QR_SURFACE_SIZE = QR_CODE_SIZE + 32;
+
 export const WirelessExportPage: React.FC = () => {
   const { currentTheme, closeWirelessExport, notes } = useApp();
   const [status, setStatus] = useState<"preparing" | "ready" | "transferring" | "completed" | "error">("preparing");
@@ -220,8 +223,11 @@ export const WirelessExportPage: React.FC = () => {
 
               {/* QR Code Frame */}
               <div
-                className="p-5 sm:p-6 rounded-[32px] border backdrop-blur-2xl transition-all duration-300 flex flex-col items-center justify-center relative group"
+                className="rounded-[32px] border backdrop-blur-2xl transition-all duration-300 flex flex-col items-center justify-center relative group"
                 style={{
+                  width: `${QR_SURFACE_SIZE + 40}px`,
+                  minWidth: `${QR_SURFACE_SIZE + 40}px`,
+                  padding: "20px",
                   backgroundColor: currentTheme.mode === "apple_dark" ? "#1C1C1E" : currentTheme.glass,
                   borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
                   boxShadow:
@@ -231,10 +237,13 @@ export const WirelessExportPage: React.FC = () => {
                 }}
               >
                 {/* White contrast box for instant camera acquisition */}
-                <div className="p-4 bg-white rounded-2xl shadow-inner flex items-center justify-center">
+                <div
+                  className="bg-white rounded-2xl shadow-inner flex items-center justify-center"
+                  style={{ width: `${QR_SURFACE_SIZE}px`, height: `${QR_SURFACE_SIZE}px`, padding: "16px" }}
+                >
                   <QRCodeSVG
                     value={qrString}
-                    size={220}
+                    size={QR_CODE_SIZE}
                     level="M"
                     includeMargin={false}
                     fgColor="#121A1B"
@@ -284,17 +293,18 @@ export const WirelessExportPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <h2 className="font-zain-xbold text-xl" style={{ color: currentTheme.text }}>
-                  جاري بث الحكايات...
+                  جاري الإرسال...
                 </h2>
                 <p className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text }}>
                   يتم نقل النصوص والتنسيقات بأمان فائق
                 </p>
               </div>
 
-              {/* Seamless Infinite Shimmering Bar */}
+              {/* Fixed-width transfer progress bar */}
               <div
-                className="w-full h-2 rounded-full overflow-hidden border relative"
+                className="w-full h-2.5 rounded-full overflow-hidden border relative"
                 style={{
+                  maxWidth: `${QR_SURFACE_SIZE}px`,
                   backgroundColor: `${currentTheme.accent}15`,
                   borderColor: `${currentTheme.accent}25`,
                 }}

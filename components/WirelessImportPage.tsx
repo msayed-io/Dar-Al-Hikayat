@@ -18,6 +18,7 @@ interface CameraPermissionPlugin {
 }
 
 const CameraPermission = registerPlugin<CameraPermissionPlugin>("CameraPermission");
+const QR_SURFACE_SIZE = 252;
 
 export const WirelessImportPage: React.FC = () => {
   const { currentTheme, closeWirelessImport, importNotesBulk, reloadNotes } = useApp();
@@ -334,8 +335,14 @@ export const WirelessImportPage: React.FC = () => {
 
               {/* Viewfinder Square Box with Scanner Laser */}
               <div
-                className="relative w-[280px] h-[280px] min-w-[280px] min-h-[280px] max-w-[280px] max-h-[280px] flex-none rounded-[32px] overflow-hidden border shadow-2xl flex items-center justify-center bg-black/90"
+                className="relative flex-none rounded-[32px] overflow-hidden border shadow-2xl flex items-center justify-center bg-black/90"
                 style={{
+                  width: `${QR_SURFACE_SIZE}px`,
+                  height: `${QR_SURFACE_SIZE}px`,
+                  minWidth: `${QR_SURFACE_SIZE}px`,
+                  minHeight: `${QR_SURFACE_SIZE}px`,
+                  maxWidth: `${QR_SURFACE_SIZE}px`,
+                  maxHeight: `${QR_SURFACE_SIZE}px`,
                   borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.15)" : currentTheme.border,
                 }}
               >
@@ -423,7 +430,7 @@ export const WirelessImportPage: React.FC = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.94 }}
               transition={{ duration: 0.35 }}
-              className="flex flex-col items-center gap-6 w-full max-w-xs"
+              className="flex flex-col items-center gap-6 w-full max-w-xs px-2"
             >
               <div
                 className="w-20 h-20 rounded-full border flex items-center justify-center relative shadow-2xl"
@@ -439,18 +446,18 @@ export const WirelessImportPage: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <h2 className="font-zain-xbold text-xl" style={{ color: currentTheme.text }}>
+              <div className="flex flex-col items-center gap-2 w-full">
+                <h2 className="font-zain-xbold text-xl leading-relaxed" style={{ color: currentTheme.text }}>
                   تم الاقتران بنجاح
                 </h2>
-                <p className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text }}>
+                <p className="font-zain-reg text-sm leading-relaxed opacity-70" style={{ color: currentTheme.text }}>
                   جاري استقبال حزمة الحكايات عبر الشبكة المحلية...
                 </p>
               </div>
 
               {/* Shimmering Progress Line */}
               <div
-                className="w-full h-2 rounded-full overflow-hidden border relative"
+                className="w-full h-2.5 rounded-full overflow-hidden border relative"
                 style={{
                   backgroundColor: `${currentTheme.accent}15`,
                   borderColor: `${currentTheme.accent}25`,
@@ -480,7 +487,7 @@ export const WirelessImportPage: React.FC = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.94 }}
               transition={{ duration: 0.35 }}
-              className="flex flex-col items-center gap-6 w-full max-w-xs"
+              className="flex flex-col items-center gap-6 w-full max-w-xs px-2"
             >
               <div
                 className="w-20 h-20 rounded-full border flex items-center justify-center shadow-2xl"
@@ -496,11 +503,11 @@ export const WirelessImportPage: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <h2 className="font-zain-xbold text-xl" style={{ color: currentTheme.text }}>
+              <div className="flex flex-col items-center gap-2 w-full">
+                <h2 className="font-zain-xbold text-xl leading-relaxed" style={{ color: currentTheme.text }}>
                   جاري استيراد الحكايات...
                 </h2>
-                <p className="font-zain-reg text-xs opacity-70" style={{ color: currentTheme.text }}>
+                <p className="font-zain-reg text-sm leading-relaxed opacity-70" style={{ color: currentTheme.text }}>
                   تم استيراد {importProgress.processed} من {importProgress.total} حكاية
                 </p>
               </div>
