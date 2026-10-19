@@ -53,8 +53,8 @@ export const WirelessExportPage: React.FC = () => {
         setQrString(encoded);
         setStatus("ready");
 
-        // Listen for receiver connection & completion
-        unsubscribeRef.current = subscribeToTransferEvents(pin, (newStatus) => {
+        // Listen for receiver connection & completion on the same device server
+        unsubscribeRef.current = subscribeToTransferEvents(meta, (newStatus) => {
           if (newStatus === "transferring") {
             setStatus("transferring");
             triggerHaptic("scan");

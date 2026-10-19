@@ -29,6 +29,14 @@ export interface TransferSessionStatus {
 const TRANSFER_CHANNEL_NAME = "dar_wireless_transfer_channel";
 const TRANSFER_STORAGE_KEY = "dar_wireless_transfer_active_session";
 
+function transferApiUrl(meta: TransferPayloadMeta, path: string): string {
+  try {
+    return new URL(path, meta.url).toString();
+  } catch {
+    return `http://${meta.ip}:${meta.port}${path}`;
+  }
+}
+
 /**
  * Triggers native haptic vibration if supported on the platform
  */
@@ -159,7 +167,10 @@ export async function prepareWirelessExport(
     }
   }
 
-  const endpointUrl = `http://${ip}:${port}/api/transfer/stories?pin=${encodeURIComponent(pin)}`;
+  const serverOrigin = Capacitor.isNativePlatform()
+    ? `http://${ip}:${port}`
+    : window.location.origin;
+  const endpointUrl = `${serverOrigin}/api/transfer/stories?pin=${encodeURIComponent(pin)}`;
 
   const meta: TransferPayloadMeta = {
     version: 1,
@@ -175,7 +186,8 @@ export async function prepareWirelessExport(
 
   // 1. Post to local server for HTTP access
   try {
-    await fetch("/api/transfer/prepare", {
+    const prepareUrl = transferApiUrl(meta, "/api/transfer/prepare");
+    const response = await fetch(prepareUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -184,8 +196,12 @@ export async function prepareWirelessExport(
         meta,
       }),
     });
+    if (!response.ok) {
+      throw new Error(`تعذر تجهيز خادم النقل (رمز الخطأ: ${response.status})`);
+    }
   } catch (e) {
-    console.warn("Could not push transfer payload to local server endpoint:", e);
+    console.warn("Could not push transfer payload to the device transfer server:", e);
+    throw new Error("تعذر تجهيز قناة نقل الحكايات على الجهاز المرسل. أعد المحاولة بعد التأكد من اتصال الشبكة.");
   }
 
   // 2. Broadcast via BroadcastChannel for same-origin tabs / testing
@@ -309,7 +325,7 @@ export async function notifyTransferCompleted(meta: TransferPayloadMeta): Promis
 
   // 2. Notify local server
   try {
-    await fetch("/api/transfer/complete", {
+    await fetch(transferApiUrl(meta, "/api/transfer/complete"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pin: meta.pin }),
@@ -326,10 +342,11 @@ export async function notifyTransferCompleted(meta: TransferPayloadMeta): Promis
  * Subscribes to transfer events on the sender side
  */
 export function subscribeToTransferEvents(
-  pin: string,
+  meta: TransferPayloadMeta,
   onStatusChange: (status: "transferring" | "completed") => void
 ): () => void {
   let isCancelled = false;
+  const pin = meta.pin;
 
   // 1. BroadcastChannel listener
   let bc: BroadcastChannel | null = null;
@@ -354,7 +371,9 @@ export function subscribeToTransferEvents(
   const intervalId = setInterval(async () => {
     if (isCancelled) return;
     try {
-      const res = await fetch(`/api/transfer/status?pin=${encodeURIComponent(pin)}`);
+      const res = await fetch(
+        `${transferApiUrl(meta, "/api/transfer/status")}?pin=${encodeURIComponent(pin)}`
+      );
       if (res.ok) {
         const data = await res.json();
         if (data.status === "transferring") {

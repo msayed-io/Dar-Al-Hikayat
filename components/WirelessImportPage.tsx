@@ -29,6 +29,7 @@ export const WirelessImportPage: React.FC = () => {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const isScanningActiveRef = useRef<boolean>(true);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -89,13 +90,21 @@ export const WirelessImportPage: React.FC = () => {
       }
 
       const videoConstraints = {
-        facingMode: { ideal: "environment" },
-        width: { min: 1280, ideal: 1920 },
-        height: { min: 720, ideal: 1080 },
+        facingMode: { exact: "environment" },
+        width: { ideal: 1920, max: 1920 },
+        height: { ideal: 1080, max: 1080 },
         frameRate: { ideal: 30, max: 60 },
         focusMode: { ideal: "continuous" },
       } as MediaTrackConstraints;
-      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+      } catch (error) {
+        // Some Android WebViews expose the rear lens without supporting exact facingMode.
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { ...videoConstraints, facingMode: { ideal: "environment" } },
+        });
+      }
 
       streamRef.current = stream;
       await optimizeCameraFocus(stream);
@@ -124,13 +133,21 @@ export const WirelessImportPage: React.FC = () => {
 
     const video = videoRef.current;
     if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const canvas = scanCanvasRef.current || document.createElement("canvas");
+      scanCanvasRef.current = canvas;
+      // The viewfinder is square; analyze only its center crop at a stable size.
+      // This avoids processing a full 1080p frame on every animation frame and keeps
+      // QR modules sharp instead of repeatedly scaling an oversized canvas.
+      const sourceSize = Math.min(video.videoWidth, video.videoHeight);
+      const scanSize = Math.min(720, sourceSize);
+      canvas.width = scanSize;
+      canvas.height = scanSize;
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const sourceX = (video.videoWidth - sourceSize) / 2;
+        const sourceY = (video.videoHeight - sourceSize) / 2;
+        ctx.drawImage(video, sourceX, sourceY, sourceSize, sourceSize, 0, 0, scanSize, scanSize);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
@@ -317,7 +334,7 @@ export const WirelessImportPage: React.FC = () => {
 
               {/* Viewfinder Square Box with Scanner Laser */}
               <div
-                className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-[32px] overflow-hidden border shadow-2xl flex items-center justify-center bg-black/90"
+                className="relative w-[280px] h-[280px] min-w-[280px] min-h-[280px] max-w-[280px] max-h-[280px] flex-none rounded-[32px] overflow-hidden border shadow-2xl flex items-center justify-center bg-black/90"
                 style={{
                   borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.15)" : currentTheme.border,
                 }}
