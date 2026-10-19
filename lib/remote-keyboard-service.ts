@@ -73,6 +73,10 @@ export interface NativeRemoteServerPlugin {
     connectionUrl: string;
     isNativeServerRunning?: boolean;
   }>;
+  prepareTransfer(options: {
+    pin: string;
+    storiesJson: string;
+  }): Promise<{ ok: boolean; count: number; port: number; ip: string }>;
   startServer(): Promise<{ running: boolean; port: number; ip: string }>;
   stopServer(): Promise<{ running: boolean }>;
   updateSession(options: { pin: string; connected: boolean }): Promise<{ ok: boolean }>;

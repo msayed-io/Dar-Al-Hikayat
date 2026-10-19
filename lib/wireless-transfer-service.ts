@@ -5,7 +5,7 @@
  */
 
 import { Capacitor } from "@capacitor/core";
-import { getDeviceLocalIp, NetworkIpResult } from "./remote-keyboard-service";
+import { getDeviceLocalIp, NativeRemoteServer, NetworkIpResult } from "./remote-keyboard-service";
 
 export interface TransferPayloadMeta {
   version: number;
@@ -184,24 +184,31 @@ export async function prepareWirelessExport(
     timestamp: Date.now(),
   };
 
-  // 1. Post to local server for HTTP access
+  // 1. Native Android: place the payload directly in LocalHttpServer memory.
+  // The sender must not POST its complete library to its own HTTP socket.
   try {
-    const prepareUrl = transferApiUrl(meta, "/api/transfer/prepare");
-    const response = await fetch(prepareUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    if (Capacitor.isNativePlatform()) {
+      const result = await NativeRemoteServer.prepareTransfer({
         pin,
-        stories,
-        meta,
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`تعذر تجهيز خادم النقل (رمز الخطأ: ${response.status})`);
-    }
-    const result = await response.json();
-    if (result?.ok !== true) {
-      throw new Error(result?.message || "رفض خادم النقل تجهيز جلسة الحكايات.");
+        storiesJson: JSON.stringify(stories),
+      });
+      if (result?.ok !== true) {
+        throw new Error("رفض الخادم الأصلي تجهيز جلسة الحكايات.");
+      }
+    } else {
+      const prepareUrl = transferApiUrl(meta, "/api/transfer/prepare");
+      const response = await fetch(prepareUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin, stories, meta }),
+      });
+      if (!response.ok) {
+        throw new Error(`تعذر تجهيز خادم النقل (رمز الخطأ: ${response.status})`);
+      }
+      const result = await response.json();
+      if (result?.ok !== true) {
+        throw new Error(result?.message || "رفض خادم النقل تجهيز جلسة الحكايات.");
+      }
     }
   } catch (e) {
     console.warn("Could not push transfer payload to the device transfer server:", e);

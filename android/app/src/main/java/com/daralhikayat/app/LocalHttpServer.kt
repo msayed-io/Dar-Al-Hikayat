@@ -114,6 +114,28 @@ class LocalHttpServer(private val port: Int = 8080) {
     fun isServerRunning(): Boolean =
         isRunning && isReady && serverSocket?.isBound == true && serverSocket?.isClosed == false
 
+    /**
+     * Prepare transfer data directly from the Capacitor bridge. The Android
+     * sender must not POST its full library back to its own HTTP socket.
+     */
+    fun prepareTransferSession(pin: String, storiesJson: String): Int {
+        if (!pin.matches(Regex("\\d{4}"))) {
+            throw IllegalArgumentException("Transfer PIN must contain four digits")
+        }
+        val stories = JSONArray(storiesJson)
+        if (stories.length() == 0) {
+            throw IllegalArgumentException("Transfer stories array is empty")
+        }
+        synchronized(stateLock) {
+            activeTransferPin = pin
+            activeTransferPayload = stories.toString()
+            activeTransferCreatedAt = System.currentTimeMillis()
+            activeTransferStatus = "ready"
+        }
+        Log.i(TAG, "Transfer session prepared locally: ${stories.length()} stories")
+        return stories.length()
+    }
+
     /** Get the real IPv4 address of a Wi-Fi or hotspot interface. */
     fun getLocalIpAddress(): String {
         try {
@@ -278,11 +300,8 @@ class LocalHttpServer(private val port: Int = 8080) {
                 sendErrorResponse(writer, 400, "INVALID_TRANSFER", "A four-digit PIN and non-empty stories array are required")
                 return
             }
-            activeTransferPin = pin
-            activeTransferPayload = stories.toString()
-            activeTransferCreatedAt = System.currentTimeMillis()
-            activeTransferStatus = "ready"
-            sendJsonResponse(writer, JSONObject().apply { put("ok", true); put("pin", pin); put("count", stories.length()) }.toString())
+            val count = prepareTransferSession(pin, stories.toString())
+            sendJsonResponse(writer, JSONObject().apply { put("ok", true); put("pin", pin); put("count", count) }.toString())
         } catch (e: Exception) {
             Log.w(TAG, "Invalid transfer preparation payload: ${e.message}")
             sendErrorResponse(writer, 400, "INVALID_JSON", "Invalid transfer JSON")

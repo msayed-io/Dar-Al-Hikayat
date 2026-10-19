@@ -77,6 +77,30 @@ public class RemoteServerPlugin extends Plugin {
         }
     }
 
+    /** Prepare the sender session directly in the native server memory. */
+    @PluginMethod
+    public void prepareTransfer(PluginCall call) {
+        try {
+            ensureServer();
+            if (!httpServer.isServerRunning()) {
+                httpServer.start();
+            }
+            String pin = call.getString("pin", "");
+            String storiesJson = call.getString("storiesJson", "");
+            int count = httpServer.prepareTransferSession(pin, storiesJson);
+
+            JSObject result = new JSObject();
+            result.put("ok", true);
+            result.put("count", count);
+            result.put("port", 8080);
+            result.put("ip", httpServer.getLocalIpAddress());
+            call.resolve(result);
+        } catch (Exception e) {
+            android.util.Log.e("RemoteServerPlugin", "Native transfer preparation failed", e);
+            call.reject("Failed to prepare native transfer session", e);
+        }
+    }
+
     @PluginMethod
     public void startServer(PluginCall call) {
         try {
