@@ -223,11 +223,19 @@ async function startServer() {
     createdAt: number;
   }
   let activeTransferSession: TransferSession | null = null;
+  const TRANSFER_SESSION_TTL_MS = 10 * 60 * 1000;
+
+  const clearExpiredTransferSession = () => {
+    if (activeTransferSession && Date.now() - activeTransferSession.createdAt > TRANSFER_SESSION_TTL_MS) {
+      activeTransferSession = null;
+    }
+  };
 
   // 1. Prepare export stories session
   app.post("/api/transfer/prepare", (req, res) => {
     const { pin, stories, meta } = req.body;
-    if (!pin || !Array.isArray(stories)) {
+    clearExpiredTransferSession();
+    if (!/^\d{4}$/.test(String(pin || "")) || !Array.isArray(stories) || stories.length === 0) {
       res.status(400).json({ error: "Missing PIN or stories array" });
       return;
     }
@@ -243,12 +251,13 @@ async function startServer() {
 
   // 2. Fetch export stories by PIN
   app.get("/api/transfer/stories", (req, res) => {
+    clearExpiredTransferSession();
     const pin = String(req.query.pin || "");
     if (!activeTransferSession) {
       res.status(404).json({ error: "لا توجد جلسة نقل نشطة حالياً" });
       return;
     }
-    if (activeTransferSession.pin && pin && activeTransferSession.pin !== pin) {
+    if (activeTransferSession.pin !== pin) {
       res.status(403).json({ error: "رمز PIN غير متطابق" });
       return;
     }
@@ -260,22 +269,26 @@ async function startServer() {
 
   // 3. Complete transfer confirmation
   app.post("/api/transfer/complete", (req, res) => {
+    clearExpiredTransferSession();
     const { pin } = req.body;
-    if (activeTransferSession && (!pin || activeTransferSession.pin === String(pin))) {
-      activeTransferSession.status = "completed";
+    if (!activeTransferSession || activeTransferSession.pin !== String(pin || "")) {
+      res.status(403).json({ error: "رمز PIN غير متطابق" });
+      return;
     }
+    activeTransferSession.status = "completed";
     res.json({ ok: true });
   });
 
   // 4. Check transfer status (polling fallback)
   app.get("/api/transfer/status", (req, res) => {
+    clearExpiredTransferSession();
     const pin = String(req.query.pin || "");
     if (!activeTransferSession) {
       res.json({ status: "idle" });
       return;
     }
-    if (pin && activeTransferSession.pin !== pin) {
-      res.json({ status: "idle" });
+    if (activeTransferSession.pin !== pin) {
+      res.status(403).json({ error: "رمز PIN غير متطابق" });
       return;
     }
     res.json({

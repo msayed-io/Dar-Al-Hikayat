@@ -96,7 +96,7 @@ export function decodeTransferQrData(qrText: string): TransferPayloadMeta | null
         type: "dar_stories_transfer",
         pin,
         ip: url.hostname,
-        port: parseInt(url.port, 10) || 80,
+        port: parseInt(url.port, 10) || (url.protocol === "https:" ? 443 : 80),
         url: trimmed,
         count: 0,
         words: 0,
@@ -199,9 +199,14 @@ export async function prepareWirelessExport(
     if (!response.ok) {
       throw new Error(`تعذر تجهيز خادم النقل (رمز الخطأ: ${response.status})`);
     }
+    const result = await response.json();
+    if (result?.ok !== true) {
+      throw new Error(result?.message || "رفض خادم النقل تجهيز جلسة الحكايات.");
+    }
   } catch (e) {
     console.warn("Could not push transfer payload to the device transfer server:", e);
-    throw new Error("تعذر تجهيز قناة نقل الحكايات على الجهاز المرسل. أعد المحاولة بعد التأكد من اتصال الشبكة.");
+    const detail = e instanceof Error ? e.message : "خطأ غير معروف";
+    throw new Error(`تعذر تجهيز قناة نقل الحكايات على الجهاز المرسل: ${detail}`);
   }
 
   // 2. Broadcast via BroadcastChannel for same-origin tabs / testing
@@ -325,13 +330,21 @@ export async function notifyTransferCompleted(meta: TransferPayloadMeta): Promis
 
   // 2. Notify local server
   try {
-    await fetch(transferApiUrl(meta, "/api/transfer/complete"), {
+    const response = await fetch(transferApiUrl(meta, "/api/transfer/complete"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pin: meta.pin }),
     });
-  } catch {
-    // ignore
+    if (!response.ok) {
+      throw new Error(`تعذر تأكيد اكتمال النقل (رمز الخطأ: ${response.status})`);
+    }
+    const result = await response.json();
+    if (result?.ok !== true) {
+      throw new Error(result?.message || "رفض خادم النقل تأكيد الإكمال.");
+    }
+  } catch (error) {
+    console.warn("Could not confirm transfer completion:", error);
+    throw error instanceof Error ? error : new Error("تعذر تأكيد اكتمال النقل.");
   }
 
   // 3. Trigger receiver haptic
@@ -346,7 +359,14 @@ export function subscribeToTransferEvents(
   onStatusChange: (status: "transferring" | "completed") => void
 ): () => void {
   let isCancelled = false;
+  let lastStatus: "transferring" | "completed" | null = null;
   const pin = meta.pin;
+
+  const emitStatus = (status: "transferring" | "completed") => {
+    if (isCancelled || lastStatus === status) return;
+    lastStatus = status;
+    onStatusChange(status);
+  };
 
   // 1. BroadcastChannel listener
   let bc: BroadcastChannel | null = null;
@@ -354,11 +374,11 @@ export function subscribeToTransferEvents(
     try {
       bc = new BroadcastChannel(TRANSFER_CHANNEL_NAME);
       bc.onmessage = (event) => {
-        if (event.data?.pin === pin) {
-          if (event.data.action === "TRANSFER_STARTED") {
-            onStatusChange("transferring");
+          if (event.data?.pin === pin) {
+            if (event.data.action === "TRANSFER_STARTED") {
+              emitStatus("transferring");
           } else if (event.data.action === "TRANSFER_COMPLETED") {
-            onStatusChange("completed");
+              emitStatus("completed");
           }
         }
       };
@@ -377,9 +397,9 @@ export function subscribeToTransferEvents(
       if (res.ok) {
         const data = await res.json();
         if (data.status === "transferring") {
-          onStatusChange("transferring");
+          emitStatus("transferring");
         } else if (data.status === "completed") {
-          onStatusChange("completed");
+          emitStatus("completed");
         }
       }
     } catch {

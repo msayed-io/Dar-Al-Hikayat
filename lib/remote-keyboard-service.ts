@@ -62,6 +62,7 @@ export interface NetworkIpResult {
   ips: string[];
   port: number;
   connectionUrl: string;
+  isNativeServerRunning?: boolean;
 }
 
 export interface NativeRemoteServerPlugin {
@@ -322,17 +323,20 @@ export async function getDeviceLocalIp(): Promise<NetworkIpResult> {
   if (Capacitor.isNativePlatform()) {
     try {
       const res = await NativeRemoteServer.getLocalIpAddress();
-      if (res && res.primaryIp && res.primaryIp !== "127.0.0.1") {
-        const port = res.port || nativePort;
-        return {
-          primaryIp: res.primaryIp,
-          ips: res.ips || [res.primaryIp],
-          port,
-          connectionUrl: `http://${res.primaryIp}:${port}/`,
-        };
+      if (!res || !res.isNativeServerRunning || !res.primaryIp || res.primaryIp === "127.0.0.1") {
+        throw new Error("الخادم المحلي لم يصبح جاهزًا أو لم يتم العثور على عنوان شبكة صالح.");
       }
+      const port = res.port || nativePort;
+      return {
+        primaryIp: res.primaryIp,
+        ips: res.ips || [res.primaryIp],
+        port,
+        connectionUrl: `http://${res.primaryIp}:${port}/`,
+        isNativeServerRunning: true,
+      };
     } catch (e) {
       console.warn("NativeRemoteServer error:", e);
+      throw e instanceof Error ? e : new Error("تعذر تشغيل الخادم المحلي الأصلي.");
     }
   }
 
@@ -362,6 +366,7 @@ export async function getDeviceLocalIp(): Promise<NetworkIpResult> {
     ips: [resolvedIp],
     port: nativePort,
     connectionUrl: `http://${resolvedIp}:${nativePort}/`,
+    isNativeServerRunning: false,
   };
 }
 

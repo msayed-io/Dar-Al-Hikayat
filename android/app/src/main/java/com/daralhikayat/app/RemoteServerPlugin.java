@@ -14,23 +14,30 @@ public class RemoteServerPlugin extends Plugin {
 
     private LocalHttpServer httpServer;
 
+    private void ensureServer() {
+        if (httpServer != null) {
+            return;
+        }
+        httpServer = new LocalHttpServer(8080);
+        httpServer.setOnCommandReceivedListener((action, params) -> {
+            JSObject ret = new JSObject();
+            ret.put("action", action);
+            for (Map.Entry<String, String> entry : params.entrySet()) {
+                ret.put(entry.getKey(), entry.getValue());
+            }
+            notifyListeners("remoteCommand", ret, true);
+            return kotlin.Unit.INSTANCE;
+        });
+    }
+
     @Override
     public void load() {
         super.load();
         try {
-            httpServer = new LocalHttpServer(8080);
-            httpServer.setOnCommandReceivedListener((action, params) -> {
-                JSObject ret = new JSObject();
-                ret.put("action", action);
-                for (Map.Entry<String, String> entry : params.entrySet()) {
-                    ret.put(entry.getKey(), entry.getValue());
-                }
-                notifyListeners("remoteCommand", ret, true);
-                return kotlin.Unit.INSTANCE;
-            });
+            ensureServer();
             httpServer.start();
         } catch (Exception e) {
-            e.printStackTrace();
+            android.util.Log.e("RemoteServerPlugin", "Native server failed to start", e);
         }
     }
 
@@ -45,18 +52,7 @@ public class RemoteServerPlugin extends Plugin {
     @PluginMethod
     public void getLocalIpAddress(PluginCall call) {
         try {
-            if (httpServer == null) {
-                httpServer = new LocalHttpServer(8080);
-                httpServer.setOnCommandReceivedListener((action, params) -> {
-                    JSObject ret = new JSObject();
-                    ret.put("action", action);
-                    for (Map.Entry<String, String> entry : params.entrySet()) {
-                        ret.put(entry.getKey(), entry.getValue());
-                    }
-                    notifyListeners("remoteCommand", ret, true);
-                    return kotlin.Unit.INSTANCE;
-                });
-            }
+            ensureServer();
             if (!httpServer.isServerRunning()) {
                 httpServer.start();
             }
@@ -71,6 +67,10 @@ public class RemoteServerPlugin extends Plugin {
             result.put("port", 8080);
             result.put("connectionUrl", "http://" + primaryIp + ":8080/");
             result.put("isNativeServerRunning", httpServer.isServerRunning());
+            if (!httpServer.isServerRunning()) {
+                call.reject("Native LocalHttpServer is not ready");
+                return;
+            }
             call.resolve(result);
         } catch (Exception e) {
             call.reject("Failed to get local IPv4 address", e);
@@ -80,9 +80,7 @@ public class RemoteServerPlugin extends Plugin {
     @PluginMethod
     public void startServer(PluginCall call) {
         try {
-            if (httpServer == null) {
-                httpServer = new LocalHttpServer(8080);
-            }
+            ensureServer();
             if (!httpServer.isServerRunning()) {
                 httpServer.start();
             }
@@ -90,6 +88,10 @@ public class RemoteServerPlugin extends Plugin {
             ret.put("running", true);
             ret.put("port", 8080);
             ret.put("ip", httpServer.getLocalIpAddress());
+            if (!httpServer.isServerRunning()) {
+                call.reject("Native LocalHttpServer is not ready");
+                return;
+            }
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Failed to start native LocalHttpServer", e);
