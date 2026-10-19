@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { ChevronRight, Scan, CheckCircle2, AlertCircle, Camera, RefreshCw } from "lucide-react";
 import jsQR from "jsqr";
 import { useApp } from "../contexts/AppContext";
@@ -11,6 +12,12 @@ import {
   triggerHaptic,
   TransferPayloadMeta,
 } from "../lib/wireless-transfer-service";
+
+interface CameraPermissionPlugin {
+  requestCameraPermission(): Promise<{ granted: boolean }>;
+}
+
+const CameraPermission = registerPlugin<CameraPermissionPlugin>("CameraPermission");
 
 export const WirelessImportPage: React.FC = () => {
   const { currentTheme, closeWirelessImport, importNotesBulk, reloadNotes } = useApp();
@@ -25,6 +32,15 @@ export const WirelessImportPage: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const isScanningActiveRef = useRef<boolean>(true);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const requestNativeCameraPermission = async (): Promise<void> => {
+    if (Capacitor.getPlatform() !== "android") return;
+
+    const result = await CameraPermission.requestCameraPermission();
+    if (!result.granted) {
+      throw new Error("تم رفض إذن الكاميرا. اسمح بالوصول إلى الكاميرا من إعدادات التطبيق ثم أعد المحاولة.");
+    }
+  };
 
   // Stop camera tracks cleanly
   const stopCameraStream = () => {
@@ -47,6 +63,8 @@ export const WirelessImportPage: React.FC = () => {
     setErrorMessage("");
 
     try {
+      await requestNativeCameraPermission();
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("الكاميرا غير مدعومة في هذا المتصفح أو الجهاز.");
       }
@@ -258,7 +276,7 @@ export const WirelessImportPage: React.FC = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.94 }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="flex flex-col items-center gap-6 w-full"
+              className="flex flex-col items-center gap-8 w-full"
             >
               {/* Header Texts */}
               <div className="space-y-1.5 px-2">
@@ -356,18 +374,6 @@ export const WirelessImportPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Subtitle Hint */}
-              <div
-                className="px-4 py-1.5 rounded-full border text-xs font-zain-bold flex items-center gap-2"
-                style={{
-                  backgroundColor: `${currentTheme.accent}10`,
-                  borderColor: `${currentTheme.accent}25`,
-                  color: currentTheme.accent,
-                }}
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>الماسح الضوئي الذكي متأهب</span>
-              </div>
             </motion.div>
           )}
 

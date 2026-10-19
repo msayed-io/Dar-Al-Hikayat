@@ -200,7 +200,7 @@ export const WirelessExportPage: React.FC = () => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: -12 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="flex flex-col items-center gap-6 w-full"
+              className="flex flex-col items-center gap-8 w-full"
             >
               {/* Narrative Title & Description */}
               <div className="space-y-1.5 px-2">

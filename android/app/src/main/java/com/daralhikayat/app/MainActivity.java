@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DownloadNotificationPlugin.class);
         registerPlugin(AppUpdatePlugin.class);
         registerPlugin(RemoteServerPlugin.class);
+        registerPlugin(CameraPermissionPlugin.class);
         super.onCreate(savedInstanceState);
         
         // Eliminate the default white WebView surface completely at root
