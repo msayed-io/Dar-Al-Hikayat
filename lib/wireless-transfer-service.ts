@@ -422,16 +422,14 @@ export function subscribeToTransferEvents(
   const intervalId = setInterval(async () => {
     if (isCancelled) return;
     try {
-      const res = await fetch(
-        `${transferApiUrl(meta, "/api/transfer/status")}?pin=${encodeURIComponent(pin)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === "transferring") {
-          emitStatus("transferring");
-        } else if (data.status === "completed") {
-          emitStatus("completed");
-        }
+      const statusUrl = `${transferApiUrl(meta, "/api/transfer/status")}?pin=${encodeURIComponent(pin)}`;
+      const data = Capacitor.isNativePlatform()
+        ? await NativeRemoteServer.getTransferStatus({ url: statusUrl, pin })
+        : await fetch(statusUrl).then(async (res) => (res.ok ? res.json() : null));
+      if (data?.status === "transferring") {
+        emitStatus("transferring");
+      } else if (data?.status === "completed") {
+        emitStatus("completed");
       }
     } catch {
       // ignore network blips

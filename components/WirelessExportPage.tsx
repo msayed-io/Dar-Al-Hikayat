@@ -302,24 +302,22 @@ export const WirelessExportPage: React.FC = () => {
 
               {/* Fixed-width transfer progress bar */}
               <div
-                className="w-full h-2.5 rounded-full overflow-hidden border relative"
+                className="w-full h-2 rounded-full border overflow-hidden p-0.5 relative"
                 style={{
                   maxWidth: `${QR_SURFACE_SIZE}px`,
-                  backgroundColor: `${currentTheme.accent}15`,
-                  borderColor: `${currentTheme.accent}25`,
+                  backgroundColor: currentTheme.mode === "apple_dark" || currentTheme.mode === "night_whisper"
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : `${currentTheme.accent}12`,
+                  borderColor: currentTheme.mode === "apple_dark" || currentTheme.mode === "night_whisper"
+                    ? "rgba(255, 255, 255, 0.1)"
+                    : currentTheme.border,
                 }}
               >
                 <motion.div
                   className="h-full rounded-full"
                   style={{ backgroundColor: currentTheme.accent }}
-                  animate={{
-                    x: ["-100%", "100%"],
-                  }}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 1.5,
-                    ease: "easeInOut",
-                  }}
+                  animate={{ x: ["-180%", "220%"] }}
+                  transition={{ repeat: Infinity, duration: 1.25, ease: "easeInOut" }}
                 />
               </div>
             </motion.div>

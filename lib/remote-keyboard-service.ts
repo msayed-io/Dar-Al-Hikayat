@@ -85,6 +85,10 @@ export interface NativeRemoteServerPlugin {
     url: string;
     pin: string;
   }): Promise<{ ok: boolean }>;
+  getTransferStatus(options: {
+    url: string;
+    pin: string;
+  }): Promise<{ status: "idle" | "transferring" | "completed"; count?: number }>;
   startServer(): Promise<{ running: boolean; port: number; ip: string }>;
   stopServer(): Promise<{ running: boolean }>;
   updateSession(options: { pin: string; connected: boolean }): Promise<{ ok: boolean }>;

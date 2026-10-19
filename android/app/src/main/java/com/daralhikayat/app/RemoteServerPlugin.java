@@ -164,6 +164,26 @@ public class RemoteServerPlugin extends Plugin {
         }
     }
 
+    /** Read sender transfer status natively so the export UI can change state on Android. */
+    @PluginMethod
+    public void getTransferStatus(PluginCall call) {
+        String url = call.getString("url", "");
+        try {
+            HttpURLConnection connection = openTransferConnection(url, "GET");
+            int status = connection.getResponseCode();
+            String body = readConnectionBody(connection, status);
+            connection.disconnect();
+            if (status < 200 || status >= 300) {
+                call.reject("تعذر قراءة حالة النقل (HTTP " + status + ")");
+                return;
+            }
+            call.resolve(new JSObject(body));
+        } catch (Exception e) {
+            android.util.Log.d("RemoteServerPlugin", "Transfer status check unavailable: " + e.getMessage());
+            call.reject("تعذر قراءة حالة النقل: " + e.getMessage(), e);
+        }
+    }
+
     private HttpURLConnection openTransferConnection(String targetUrl, String method) throws Exception {
         if (targetUrl == null || !(targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
             throw new IllegalArgumentException("عنوان النقل غير صالح");

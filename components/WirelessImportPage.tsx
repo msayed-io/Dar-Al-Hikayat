@@ -457,10 +457,14 @@ export const WirelessImportPage: React.FC = () => {
 
               {/* Shimmering Progress Line */}
               <div
-                className="w-full h-2.5 rounded-full overflow-hidden border relative"
+                className="w-full h-2 rounded-full border overflow-hidden p-0.5"
                 style={{
-                  backgroundColor: `${currentTheme.accent}15`,
-                  borderColor: `${currentTheme.accent}25`,
+                  backgroundColor: currentTheme.mode === "apple_dark" || currentTheme.mode === "night_whisper"
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : `${currentTheme.accent}12`,
+                  borderColor: currentTheme.mode === "apple_dark" || currentTheme.mode === "night_whisper"
+                    ? "rgba(255, 255, 255, 0.1)"
+                    : currentTheme.border,
                 }}
               >
                 <motion.div
@@ -514,10 +518,14 @@ export const WirelessImportPage: React.FC = () => {
 
               {/* Measured Progress Bar */}
               <div
-                className="w-full h-2.5 rounded-full overflow-hidden border relative"
+                className="w-full h-2 rounded-full border overflow-hidden p-0.5"
                 style={{
-                  backgroundColor: `${currentTheme.accent}15`,
-                  borderColor: `${currentTheme.accent}25`,
+                  backgroundColor: currentTheme.mode === "apple_dark" || currentTheme.mode === "night_whisper"
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : `${currentTheme.accent}12`,
+                  borderColor: currentTheme.mode === "apple_dark" || currentTheme.mode === "night_whisper"
+                    ? "rgba(255, 255, 255, 0.1)"
+                    : currentTheme.border,
                 }}
               >
                 <div
