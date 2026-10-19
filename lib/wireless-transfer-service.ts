@@ -278,6 +278,22 @@ export async function fetchRemoteStories(
   
   onProgress?.(30);
 
+  // Native Android must use native HTTP for LAN requests. WebView fetch can be
+  // rejected before an HTTP response exists even when the sender is listening.
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const result = await NativeRemoteServer.fetchTransfer({ url: targetUrl, pin: meta.pin });
+      onProgress?.(70);
+      const data = JSON.parse(result.storiesJson);
+      onProgress?.(90);
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.stories)) return data.stories;
+      throw new Error("تنسيق بيانات الحكايات المستلمة غير صالح");
+    } catch (err: any) {
+      throw new Error(err?.message || "تعذر الاتصال بالجهاز المرسل عبر الشبكة المحلية.");
+    }
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 20000);
 
@@ -337,17 +353,25 @@ export async function notifyTransferCompleted(meta: TransferPayloadMeta): Promis
 
   // 2. Notify local server
   try {
-    const response = await fetch(transferApiUrl(meta, "/api/transfer/complete"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: meta.pin }),
-    });
-    if (!response.ok) {
-      throw new Error(`تعذر تأكيد اكتمال النقل (رمز الخطأ: ${response.status})`);
-    }
-    const result = await response.json();
-    if (result?.ok !== true) {
-      throw new Error(result?.message || "رفض خادم النقل تأكيد الإكمال.");
+    if (Capacitor.isNativePlatform()) {
+      const result = await NativeRemoteServer.completeTransfer({
+        url: transferApiUrl(meta, "/api/transfer/complete"),
+        pin: meta.pin,
+      });
+      if (result?.ok !== true) throw new Error("رفض خادم النقل تأكيد الإكمال.");
+    } else {
+      const response = await fetch(transferApiUrl(meta, "/api/transfer/complete"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: meta.pin }),
+      });
+      if (!response.ok) {
+        throw new Error(`تعذر تأكيد اكتمال النقل (رمز الخطأ: ${response.status})`);
+      }
+      const result = await response.json();
+      if (result?.ok !== true) {
+        throw new Error(result?.message || "رفض خادم النقل تأكيد الإكمال.");
+      }
     }
   } catch (error) {
     console.warn("Could not confirm transfer completion:", error);

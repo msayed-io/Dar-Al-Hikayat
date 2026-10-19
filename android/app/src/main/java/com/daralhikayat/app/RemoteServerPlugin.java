@@ -7,6 +7,12 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Map;
 
 @CapacitorPlugin(name = "RemoteServer")
@@ -99,6 +105,87 @@ public class RemoteServerPlugin extends Plugin {
             android.util.Log.e("RemoteServerPlugin", "Native transfer preparation failed", e);
             call.reject("Failed to prepare native transfer session", e);
         }
+    }
+
+    /** Fetch the sender payload natively; WebView fetch is not reliable for LAN HTTP. */
+    @PluginMethod
+    public void fetchTransfer(PluginCall call) {
+        String url = call.getString("url", "");
+        try {
+            HttpURLConnection connection = openTransferConnection(url, "GET");
+            int status = connection.getResponseCode();
+            String body = readConnectionBody(connection, status);
+            connection.disconnect();
+            if (status < 200 || status >= 300) {
+                call.reject("تعذر الاتصال بالجهاز المرسل (HTTP " + status + ")");
+                return;
+            }
+            org.json.JSONArray stories = new org.json.JSONArray(body);
+            JSObject result = new JSObject();
+            result.put("ok", true);
+            result.put("storiesJson", stories.toString());
+            result.put("count", stories.length());
+            call.resolve(result);
+        } catch (Exception e) {
+            android.util.Log.e("RemoteServerPlugin", "Native transfer fetch failed for " + url, e);
+            call.reject("تعذر الوصول إلى الجهاز المرسل عبر الشبكة المحلية: " + e.getMessage(), e);
+        }
+    }
+
+    /** Confirm completion natively so the receiver has no WebView LAN dependency. */
+    @PluginMethod
+    public void completeTransfer(PluginCall call) {
+        String url = call.getString("url", "");
+        String pin = call.getString("pin", "");
+        try {
+            HttpURLConnection connection = openTransferConnection(url, "POST");
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            connection.setDoOutput(true);
+            byte[] payload = ("{\"pin\":\"" + pin.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try (OutputStream output = connection.getOutputStream()) {
+                output.write(payload);
+            }
+            int status = connection.getResponseCode();
+            String body = readConnectionBody(connection, status);
+            connection.disconnect();
+            if (status < 200 || status >= 300) {
+                call.reject("تعذر تأكيد اكتمال النقل (HTTP " + status + ")");
+                return;
+            }
+            JSObject result = new JSObject(body);
+            if (!result.optBoolean("ok", false)) {
+                call.reject("رفض الجهاز المرسل تأكيد اكتمال النقل");
+                return;
+            }
+            call.resolve(result);
+        } catch (Exception e) {
+            android.util.Log.e("RemoteServerPlugin", "Native transfer completion failed for " + url, e);
+            call.reject("تعذر تأكيد النقل عبر الشبكة المحلية: " + e.getMessage(), e);
+        }
+    }
+
+    private HttpURLConnection openTransferConnection(String targetUrl, String method) throws Exception {
+        if (targetUrl == null || !(targetUrl.startsWith("http://") || targetUrl.startsWith("https://"))) {
+            throw new IllegalArgumentException("عنوان النقل غير صالح");
+        }
+        HttpURLConnection connection = (HttpURLConnection) new URL(targetUrl).openConnection();
+        connection.setRequestMethod(method);
+        connection.setConnectTimeout(20000);
+        connection.setReadTimeout(20000);
+        connection.setUseCaches(false);
+        connection.setRequestProperty("Accept", "application/json");
+        return connection;
+    }
+
+    private String readConnectionBody(HttpURLConnection connection, int status) throws Exception {
+        InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        if (stream == null) return "";
+        StringBuilder body = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) body.append(line);
+        }
+        return body.toString();
     }
 
     @PluginMethod

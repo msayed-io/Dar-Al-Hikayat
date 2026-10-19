@@ -77,6 +77,14 @@ export interface NativeRemoteServerPlugin {
     pin: string;
     storiesJson: string;
   }): Promise<{ ok: boolean; count: number; port: number; ip: string }>;
+  fetchTransfer(options: {
+    url: string;
+    pin: string;
+  }): Promise<{ ok: boolean; storiesJson: string; count: number }>;
+  completeTransfer(options: {
+    url: string;
+    pin: string;
+  }): Promise<{ ok: boolean }>;
   startServer(): Promise<{ running: boolean; port: number; ip: string }>;
   stopServer(): Promise<{ running: boolean }>;
   updateSession(options: { pin: string; connected: boolean }): Promise<{ ok: boolean }>;
