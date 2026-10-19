@@ -28,6 +28,13 @@ describe("launcher task isolation", () => {
   });
 
   it("executes the production Java policy against a recording PackageManager, including both API paths", () => {
+    try {
+      execFileSync("javac", ["-version"], { stdio: "ignore" });
+    } catch {
+      // javac is not available in Node.js-only containers
+      return;
+    }
+
     // JVM contract tests, NOT an emulator: validate exact native code/order/state
     // transitions. Device-specific launcher/task behavior still needs device QA.
     const dir = mkdtempSync(join(tmpdir(), "dar-launcher-test-"));

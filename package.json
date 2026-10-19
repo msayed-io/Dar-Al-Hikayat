@@ -30,6 +30,7 @@
     "docx": "8.5.0",
     "express": "^5.2.1",
     "html2pdf.js": "^0.10.3",
+    "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",
     "localforage": "^1.10.0",
     "lucide-react": "^0.563.0",

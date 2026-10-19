@@ -25,6 +25,9 @@ class LocalHttpServer(private val port: Int = 8080) {
     @Volatile private var isRunning: Boolean = false
     @Volatile var activeSessionPin: String = ""
     @Volatile var isSessionConnected: Boolean = false
+    @Volatile var activeTransferPin: String = ""
+    @Volatile var activeTransferPayload: String = ""
+    @Volatile var activeTransferStatus: String = "idle"
     private val executor = Executors.newCachedThreadPool()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -289,6 +292,47 @@ class LocalHttpServer(private val port: Int = 8080) {
                         put("ip", getLocalIpAddress())
                     }
                     sendJsonResponse(writer, responseJson.toString())
+                }
+
+                // Wireless Transfer: Prepare session
+                path == "/api/transfer/prepare" -> {
+                    if (bodyString.isNotEmpty()) {
+                        try {
+                            val json = JSONObject(bodyString)
+                            activeTransferPin = json.optString("pin", "")
+                            activeTransferPayload = json.opt("stories")?.toString() ?: "[]"
+                            activeTransferStatus = "ready"
+                            sendJsonResponse(writer, """{"ok":true}""")
+                        } catch (e: Exception) {
+                            sendJsonResponse(writer, """{"error":"${e.message}"}""")
+                        }
+                    } else {
+                        sendJsonResponse(writer, """{"error":"Empty body"}""")
+                    }
+                }
+
+                // Wireless Transfer: Fetch stories
+                path == "/api/transfer/stories" -> {
+                    val incomingPin = queryParams["pin"] ?: ""
+                    if (activeTransferPin.isNotEmpty() && incomingPin.isNotEmpty() && incomingPin != activeTransferPin) {
+                        sendUnauthorizedResponse(writer, """{"error":"PIN_MISMATCH"}""")
+                    } else if (activeTransferPayload.isNotEmpty()) {
+                        activeTransferStatus = "transferring"
+                        sendJsonResponse(writer, activeTransferPayload)
+                    } else {
+                        sendJsonResponse(writer, "[]")
+                    }
+                }
+
+                // Wireless Transfer: Complete session
+                path == "/api/transfer/complete" -> {
+                    activeTransferStatus = "completed"
+                    sendJsonResponse(writer, """{"ok":true}""")
+                }
+
+                // Wireless Transfer: Status
+                path == "/api/transfer/status" -> {
+                    sendJsonResponse(writer, """{"status":"$activeTransferStatus"}""")
                 }
 
                 // Fallback - 404 Not Found (DarAlHikayat API Server)

@@ -115,7 +115,7 @@ const themes: Record<ThemeMode, ThemeColors> = {
 // --- Context Type ---
 interface AppContextType {
   notes: Note[];
-  currentView: "home" | "editor" | "settings" | "prayer" | "locationPicker";
+  currentView: "home" | "editor" | "settings" | "prayer" | "locationPicker" | "wirelessExport" | "wirelessImport";
   selectedNote: Note | null;
   currentTheme: ThemeColors;
   isSelectionMode: boolean;
@@ -133,6 +133,10 @@ interface AppContextType {
   isLocationSheetOpen: boolean;
   openLocationSheet: () => void;
   closeLocationSheet: () => void;
+  openWirelessExport: () => void;
+  closeWirelessExport: () => void;
+  openWirelessImport: () => void;
+  closeWirelessImport: () => void;
   saveNote: (noteData: NoteSaveData) => Promise<boolean>;
   importNotesBulk: (newNotes: Note[]) => void;
   deleteNotes: (idsToDelete: number[]) => void;
@@ -150,7 +154,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [currentView, setCurrentView] = useState<
-    "home" | "editor" | "settings" | "prayer" | "locationPicker"
+    "home" | "editor" | "settings" | "prayer" | "locationPicker" | "wirelessExport" | "wirelessImport"
   >("home");
   const [previousLocationView, setPreviousLocationView] = useState<"settings" | "prayer">("settings");
   const [isLocationSheetOpen, setIsLocationSheetOpen] = useState<boolean>(false);
@@ -453,6 +457,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     setIsLocationSheetOpen(false);
   };
 
+  const openWirelessExport = () => {
+    setIsSelectionMode(false);
+    setCurrentView("wirelessExport");
+  };
+
+  const closeWirelessExport = () => {
+    setCurrentView("settings");
+  };
+
+  const openWirelessImport = () => {
+    setIsSelectionMode(false);
+    setCurrentView("wirelessImport");
+  };
+
+  const closeWirelessImport = () => {
+    setCurrentView("settings");
+  };
+
   const toggleTheme = (mode: ThemeMode) => {
     // The theme effect persists and synchronizes this once after React commits.
     setThemeMode(mode);
@@ -476,6 +498,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({
     isLocationSheetOpen,
     openLocationSheet,
     closeLocationSheet,
+    openWirelessExport,
+    closeWirelessExport,
+    openWirelessImport,
+    closeWirelessImport,
     saveNote,
     importNotesBulk,
     deleteNotes,

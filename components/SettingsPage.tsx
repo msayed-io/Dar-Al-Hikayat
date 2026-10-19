@@ -28,6 +28,10 @@ import {
   Smartphone,
   Layers,
   Sparkle,
+  Radio,
+  Scan,
+  ArrowLeftRight,
+  QrCode,
 } from "lucide-react";
 import { CITIES, type CityData } from "../lib/prayer-cities";
 import {
@@ -70,7 +74,30 @@ const SettingsPage: React.FC = () => {
     notes,
     saveNote,
     importNotesBulk,
+    openWirelessExport,
+    openWirelessImport,
   } = useApp();
+
+  // Archive Transfer Mode: "wireless" (default new mode) or "file" (traditional JSON)
+  const [archiveMode, setArchiveMode] = useState<"wireless" | "file">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dar_archive_transfer_mode");
+      if (saved === "wireless" || saved === "file") return saved;
+    }
+    return "wireless";
+  });
+
+  const toggleArchiveMode = () => {
+    setArchiveMode((prev) => {
+      const next = prev === "wireless" ? "file" : "wireless";
+      try {
+        localStorage.setItem("dar_archive_transfer_mode", next);
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const [isLocked, setIsLocked] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -833,19 +860,49 @@ const SettingsPage: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3.5 min-w-0">
-                <div
-                  className="w-12 h-12 flex items-center justify-center border flex-shrink-0"
+                <button
+                  type="button"
+                  onClick={toggleArchiveMode}
+                  className="w-12 h-12 flex items-center justify-center border flex-shrink-0 cursor-pointer active:scale-90 hover:scale-105 transition-all duration-300 relative group"
                   style={{
                     backgroundColor: `${currentTheme.accent}10`,
-                    borderColor: `${currentTheme.accent}20`,
+                    borderColor: `${currentTheme.accent}25`,
                     borderRadius: "50%",
                   }}
+                  title={
+                    archiveMode === "wireless"
+                      ? "الوضع الحالي: اقتران لاسلكي (انقر للتبديل إلى وضع الملفات)"
+                      : "الوضع الحالي: ملفات احتياطية (انقر للتبديل إلى النقل اللاسلكي)"
+                  }
+                  aria-label="تبديل وضع النقل"
                 >
-                  <Download className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                </div>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {archiveMode === "wireless" ? (
+                      <motion.div
+                        key="mode-wireless"
+                        initial={{ opacity: 0, rotate: -90, scale: 0.7 }}
+                        animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                        exit={{ opacity: 0, rotate: 90, scale: 0.7 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <ArrowLeftRight className="w-5 h-5" style={{ color: currentTheme.accent }} strokeWidth={2.2} />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="mode-file"
+                        initial={{ opacity: 0, rotate: -90, scale: 0.7 }}
+                        animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                        exit={{ opacity: 0, rotate: 90, scale: 0.7 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Download className="w-5 h-5" style={{ color: currentTheme.accent }} strokeWidth={2.2} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </button>
                 <div className="flex flex-col text-right min-w-0">
                   <span
-                    className="font-zain-bold text-sm leading-tight"
+                    className="font-zain-bold text-sm leading-tight flex items-center gap-1.5"
                     style={{ color: currentTheme.text }}
                   >
                     أرشيف الحكايات
@@ -861,43 +918,76 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportBackup}
-                disabled={isImporting}
-                className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2 disabled:opacity-50"
-                style={{
-                  backgroundColor: `${currentTheme.accent}10`,
-                  borderColor: `${currentTheme.accent}30`,
-                  color: currentTheme.accent,
-                }}
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>تصدير</span>
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2 disabled:opacity-50"
-                style={{
-                  backgroundColor: isImporting ? `${currentTheme.accent}20` : `${currentTheme.bg}80`,
-                  borderColor: isImporting ? currentTheme.accent : currentTheme.border,
-                  color: currentTheme.text,
-                }}
-              >
-                {isImporting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Upload className="w-3.5 h-3.5" style={{ color: currentTheme.accent }} />
-                )}
-                <span>{isImporting ? "جاري الاستيراد..." : "استيراد"}</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleImportFile}
-                className="hidden"
-              />
+              {archiveMode === "wireless" ? (
+                <>
+                  <button
+                    onClick={openWirelessExport}
+                    className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2"
+                    style={{
+                      backgroundColor: `${currentTheme.accent}12`,
+                      borderColor: `${currentTheme.accent}30`,
+                      color: currentTheme.accent,
+                    }}
+                    title="بث الحكايات لاسلكياً"
+                  >
+                    <Radio className="w-3.5 h-3.5" strokeWidth={2.4} />
+                    <span>بث</span>
+                  </button>
+                  <button
+                    onClick={openWirelessImport}
+                    className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2"
+                    style={{
+                      backgroundColor: `${currentTheme.bg}80`,
+                      borderColor: currentTheme.border,
+                      color: currentTheme.text,
+                    }}
+                    title="استقبال الحكايات عبر مسح الكود"
+                  >
+                    <Scan className="w-3.5 h-3.5" style={{ color: currentTheme.accent }} strokeWidth={2.4} />
+                    <span>استقبال</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleExportBackup}
+                    disabled={isImporting}
+                    className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2 disabled:opacity-50"
+                    style={{
+                      backgroundColor: `${currentTheme.accent}10`,
+                      borderColor: `${currentTheme.accent}30`,
+                      color: currentTheme.accent,
+                    }}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>تصدير</span>
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                    className="flex-1 h-9 rounded-full font-zain-bold text-xs border transition-all active:scale-95 flex items-center justify-center cursor-pointer gap-2 disabled:opacity-50"
+                    style={{
+                      backgroundColor: isImporting ? `${currentTheme.accent}20` : `${currentTheme.bg}80`,
+                      borderColor: isImporting ? currentTheme.accent : currentTheme.border,
+                      color: currentTheme.text,
+                    }}
+                  >
+                    {isImporting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" style={{ color: currentTheme.accent }} />
+                    )}
+                    <span>{isImporting ? "جاري..." : "استيراد"}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportFile}
+                    className="hidden"
+                  />
+                </>
+              )}
             </div>
 
             {importStatus && (

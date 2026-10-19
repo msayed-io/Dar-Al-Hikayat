@@ -214,6 +214,77 @@ async function startServer() {
     res.json({ status: "active", clientCount: remoteKeyboardClients.size, serverTime: Date.now() });
   });
 
+  // Wireless Stories Transfer Session Store
+  interface TransferSession {
+    pin: string;
+    stories: any[];
+    meta?: any;
+    status: "ready" | "transferring" | "completed";
+    createdAt: number;
+  }
+  let activeTransferSession: TransferSession | null = null;
+
+  // 1. Prepare export stories session
+  app.post("/api/transfer/prepare", (req, res) => {
+    const { pin, stories, meta } = req.body;
+    if (!pin || !Array.isArray(stories)) {
+      res.status(400).json({ error: "Missing PIN or stories array" });
+      return;
+    }
+    activeTransferSession = {
+      pin: String(pin),
+      stories,
+      meta,
+      status: "ready",
+      createdAt: Date.now(),
+    };
+    res.json({ ok: true, pin, count: stories.length });
+  });
+
+  // 2. Fetch export stories by PIN
+  app.get("/api/transfer/stories", (req, res) => {
+    const pin = String(req.query.pin || "");
+    if (!activeTransferSession) {
+      res.status(404).json({ error: "لا توجد جلسة نقل نشطة حالياً" });
+      return;
+    }
+    if (activeTransferSession.pin && pin && activeTransferSession.pin !== pin) {
+      res.status(403).json({ error: "رمز PIN غير متطابق" });
+      return;
+    }
+    // Update status to transferring
+    activeTransferSession.status = "transferring";
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.json(activeTransferSession.stories);
+  });
+
+  // 3. Complete transfer confirmation
+  app.post("/api/transfer/complete", (req, res) => {
+    const { pin } = req.body;
+    if (activeTransferSession && (!pin || activeTransferSession.pin === String(pin))) {
+      activeTransferSession.status = "completed";
+    }
+    res.json({ ok: true });
+  });
+
+  // 4. Check transfer status (polling fallback)
+  app.get("/api/transfer/status", (req, res) => {
+    const pin = String(req.query.pin || "");
+    if (!activeTransferSession) {
+      res.json({ status: "idle" });
+      return;
+    }
+    if (pin && activeTransferSession.pin !== pin) {
+      res.json({ status: "idle" });
+      return;
+    }
+    res.json({
+      status: activeTransferSession.status,
+      count: activeTransferSession.stories.length,
+      createdAt: activeTransferSession.createdAt,
+    });
+  });
+
   // Helper function to resolve API key
   function resolveApiKey(providedKey?: string): string {
     const key = (providedKey && providedKey.trim()) || process.env.GEMINI_API_KEY || "";
@@ -634,7 +705,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
+    app.get(/.*/, (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
