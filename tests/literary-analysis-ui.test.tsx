@@ -19,7 +19,8 @@ afterEach(() => { dom.cleanup(); root.remove(); vi.unstubAllGlobals(); });
 async function send(message: string) { await input('textarea', message); await click('button[aria-label="إرسال"]'); }
 it('routes natural-language analysis to the real read-only executor, displays and persists its actual report', async () => {
   const before = root.innerHTML; await dom.render(view()); await settle(); await send('حلل الإيقاع'); await settle();
-  expect(fetch).toHaveBeenCalledTimes(1); expect(dom.host.textContent).toContain('تقرير الإيقاع التجريبي'); expect(dom.host.textContent).toContain('عينا سلمى خضراوان.'); expect(dom.host.textContent).toContain('فحص للقراءة فقط');
+  expect(fetch).toHaveBeenCalledTimes(1); expect(dom.host.textContent).toContain('تقرير الإيقاع التجريبي'); expect(dom.host.textContent).toContain('عينا سلمى خضراوان.');
+  expect(dom.host.textContent).toContain('للقراءة فقط؛ لن أغيّر أي كلمة.'); expect(dom.host.textContent).toContain('فحص واحد مكتمل');
   expect(dom.host.textContent).not.toContain('تم بحمد الله تطبيق التعديل'); expect(root.innerHTML).toBe(before); expect(commit).not.toHaveBeenCalled();
   const saved = loadStoredConversationsFromStorage('dar_alhikayat_ai_convs_story_analysis-story-A');
   expect(saved[0].messages.some(m => m.analysisReports?.[0]?.summary === 'تقرير الإيقاع التجريبي')).toBe(true);
