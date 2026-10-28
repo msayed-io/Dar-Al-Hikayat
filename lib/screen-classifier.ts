@@ -50,7 +50,8 @@ export const checkIsTabletOrWideScreen = (): ScreenClassification => {
         (sw > 0 && sh > 0 ? (sw > sh && w >= 600) : w > h)
       : w > h;
 
-  const canOpenAssistant = isDeviceWideCapable && isLandscape;
+  // Assistant can now be opened on all devices (full overlay on mobile, split-screen on wide screens)
+  const canOpenAssistant = true;
 
   return {
     isDeviceWideCapable,

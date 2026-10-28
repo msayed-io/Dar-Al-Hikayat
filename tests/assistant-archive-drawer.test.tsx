@@ -40,7 +40,7 @@ vi.mock("../lib/literary-agent", () => ({
 import Assistant from "../components/DarAlHikayatAIAssistant";
 
 let dom: ReturnType<typeof setupDom>;
-const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+const settle = (ms = 700) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 
 beforeEach(() => {
   dom = setupDom();

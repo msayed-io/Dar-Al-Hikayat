@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 import { hasHandwritingInk, type HandwritingSaveResult } from "../lib/handwriting-document";
 import {
   ArrowRight,
@@ -48,6 +50,7 @@ import {
   Save,
   PenTool,
   Smartphone,
+  MoreVertical,
 } from "lucide-react";
 import RemoteKeyboardModal from "./RemoteKeyboardModal";
 import EditorFontSheet from "./EditorFontSheet";
@@ -552,6 +555,7 @@ const DarAlHikayatMaster: React.FC = () => {
   ]);
   const [showTOC, setShowTOC] = useState(false);
   const [showNovelMenu, setShowNovelMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showFontSheet, setShowFontSheet] = useState(false);
   const [fontScope, setFontScope] = useState<'التحديد' | 'الفقرة' | 'الكل'>('الفقرة');
   const [fontInitial, setFontInitial] = useState({ family: 'Thmanyah Sans', weight: 400 });
@@ -645,21 +649,17 @@ const DarAlHikayatMaster: React.FC = () => {
   // 1. Hardware qualification:
   //    - Physical tablet: Smallest Width (minDim) >= 500dp AND Longest Side (maxDim) >= 720dp (e.g. Galaxy Tab A7 has minDim ~600dp, maxDim ~960dp).
   //    - OR Desktop browser: width >= 768px and height >= 500px.
-  // 2. Strict Orientation condition:
-  //    - Must be currently in Landscape (width > height).
-  //    - If a tablet is currently in Portrait (or any mobile phone in any orientation), the Assistant split-pane CANNOT open.
-  //    - Instead, clicking the button displays the elegant popover tooltip ("تحتاج مساحة عرض أكبر").
-  //    - As soon as the user rotates the tablet to Landscape, the Assistant becomes available to open in full split-screen.
+  // --- Device & Screen Classification for Literary Assistant ---
+  // On wide screens (landscape tablets/desktops), the Assistant appears as a comfortable 420px split studio pane.
+  // On mobile phones (and portrait mode), it appears as a full-screen overlay page over the editor.
+  // In both modes, once opened, the assistant remains alive and running in background when closed,
+  // so the writer never loses thoughts, chat messages, stream generation, or drafts while working in the editor.
   const [screenInfo, setScreenInfo] = useState(() => checkIsTabletOrWideScreen());
 
   useEffect(() => {
     const handleResize = () => {
       const info = checkIsTabletOrWideScreen();
       setScreenInfo(info);
-      // Auto-close assistant immediately if device leaves landscape or becomes unqualified
-      if (!info.canOpenAssistant) {
-        setShowAIAssistant(false);
-      }
     };
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleResize);
@@ -669,73 +669,35 @@ const DarAlHikayatMaster: React.FC = () => {
     };
   }, []);
 
-  // Assistant is available strictly in landscape mode on qualified tablets / wide displays
-  const isWideScreen = screenInfo.canOpenAssistant;
+  // Assistant dual-pane split is used strictly on qualified tablets / wide displays in landscape
+  const isWideScreen = screenInfo.isDeviceWideCapable && screenInfo.isLandscape;
   // In qualified Landscape orientation (width >= 720dp), a standard comfortable 420px split studio pane is used
   const paneWidthPx = isWideScreen ? 420 : 0;
   const paneWidthCss = `${paneWidthPx}px`;
 
   const [showAIAssistant, setShowAIAssistant] = useState(false);
-  // Popover / Tooltip state for Literary Assistant on unqualified screens / Portrait orientations
-  const [showMobileTooltip, setShowMobileTooltip] = useState(false);
-  const mobileTooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mobileTooltipRef = useRef<HTMLDivElement | null>(null);
+  const [hasActivatedAssistant, setHasActivatedAssistant] = useState(true);
 
-  // Clean up mobile tooltip timer on unmount
+  // Close AI assistant overlay with Android hardware back button on mobile phones
   useEffect(() => {
+    let handle: any = null;
+    if (showAIAssistant && !isWideScreen && Capacitor.isNativePlatform()) {
+      CapApp.addListener("backButton", () => {
+        setShowAIAssistant(false);
+      }).then((h) => {
+        handle = h;
+      }).catch(() => {});
+    }
     return () => {
-      if (mobileTooltipTimeoutRef.current) {
-        clearTimeout(mobileTooltipTimeoutRef.current);
-      }
+      handle?.remove?.();
     };
-  }, []);
-
-  // Dismiss mobile tooltip immediately when tapping anywhere outside
-  useEffect(() => {
-    if (!showMobileTooltip) return;
-
-    const handleDocumentClick = (e: MouseEvent | TouchEvent) => {
-      if (
-        mobileTooltipRef.current &&
-        !mobileTooltipRef.current.contains(e.target as Node)
-      ) {
-        setShowMobileTooltip(false);
-        if (mobileTooltipTimeoutRef.current) {
-          clearTimeout(mobileTooltipTimeoutRef.current);
-          mobileTooltipTimeoutRef.current = null;
-        }
-      }
-    };
-
-    document.addEventListener("mousedown", handleDocumentClick);
-    document.addEventListener("touchstart", handleDocumentClick);
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-      document.removeEventListener("touchstart", handleDocumentClick);
-    };
-  }, [showMobileTooltip]);
+  }, [showAIAssistant, isWideScreen]);
 
   const handleToggleAIAssistant = (e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
     }
-    const currentInfo = checkIsTabletOrWideScreen();
-    if (!currentInfo.canOpenAssistant) {
-      // Unqualified screen OR Tablet in Portrait mode:
-      // NEVER open assistant, NEVER call API, NEVER navigate.
-      // Show elegant popover tooltip directly above the button.
-      setShowMobileTooltip(true);
-      if (mobileTooltipTimeoutRef.current) {
-        clearTimeout(mobileTooltipTimeoutRef.current);
-      }
-      mobileTooltipTimeoutRef.current = setTimeout(() => {
-        setShowMobileTooltip(false);
-        mobileTooltipTimeoutRef.current = null;
-      }, 2500);
-      return;
-    }
-
-    // Qualified Tablet or Desktop in Landscape orientation: toggle dual pane assistant
+    setHasActivatedAssistant(true);
     setShowAIAssistant((prev) => !prev);
   };
 
@@ -2553,9 +2515,8 @@ const DarAlHikayatMaster: React.FC = () => {
         return next;
       });
 
-      if (screenInfo.canOpenAssistant) {
-        setShowAIAssistant(true);
-      }
+      setHasActivatedAssistant(true);
+      setShowAIAssistant(true);
       setToolbarVisible(false);
     }
   };
@@ -2656,7 +2617,8 @@ const DarAlHikayatMaster: React.FC = () => {
       if (!(event.target instanceof Element)) return;
       if (
         !event.target.closest(".toc-card") &&
-        !event.target.closest(".toc-toggle")
+        !event.target.closest(".toc-toggle") &&
+        !event.target.closest(".editor-more-menu")
       )
         setShowTOC(false);
       if (
@@ -2664,6 +2626,11 @@ const DarAlHikayatMaster: React.FC = () => {
         !event.target.closest(".novel-menu-trigger")
       )
         setShowNovelMenu(false);
+      if (
+        !event.target.closest(".editor-more-menu") &&
+        !event.target.closest(".editor-more-menu-trigger")
+      )
+        setShowMoreMenu(false);
       if (
         !event.target.closest(".session-toggle") &&
         !event.target.closest(".session-card")
@@ -2674,10 +2641,19 @@ const DarAlHikayatMaster: React.FC = () => {
         !event.target.closest(".stats-trigger")
       )
         setShowStatsPanel(false);
-      if (!event.target.closest(".lock-dialog")) setShowLockDialog(false);
+      if (
+        !event.target.closest(".lock-dialog") &&
+        !event.target.closest(".lock-dialog-trigger") &&
+        !event.target.closest(".editor-more-menu")
+      )
+        setShowLockDialog(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("click", handleClickOutside);
+    };
   }, []);
 
   const getBackgroundStyle = () => {
@@ -2905,17 +2881,14 @@ const DarAlHikayatMaster: React.FC = () => {
     ? chapters.reduce((acc, curr) => acc + getCleanCharCount(curr.content), 0)
     : getCleanCharCount(content);
 
-  // Auto-close assistant and hide tooltip if word count drops below the 50-word threshold
+  // Auto-close assistant if word count drops below the 50-word threshold
   useEffect(() => {
     if (wordCount < 50) {
       if (showAIAssistant) {
         setShowAIAssistant(false);
       }
-      if (showMobileTooltip) {
-        setShowMobileTooltip(false);
-      }
     }
-  }, [wordCount, showAIAssistant, showMobileTooltip]);
+  }, [wordCount, showAIAssistant]);
 
   // --- Professional Stats Calculation ---
   const readingTime = Math.ceil(wordCount / 200); // Average silent reading speed
@@ -3509,133 +3482,165 @@ const DarAlHikayatMaster: React.FC = () => {
           <div className="flex items-center gap-0.5 flex-shrink-0">
             {!isSavedMode ? (
               <>
-                {!isHandwritingMode && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowNovelMenu(!showNovelMenu)}
-                      className="novel-menu-trigger w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer relative"
-                      style={{
-                        color: isNovelMode
-                          ? currentTheme.accent
-                          : currentTheme.secondary,
-                      }}
-                      title="إعدادات الرواية"
-                    >
-                      <BookOpenText className="w-4 h-4" />
-                      {isNovelMode && (
-                        <span
-                          className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: currentTheme.accent }}
-                        ></span>
-                      )}
-                    </button>
-                    {showNovelMenu && (
-                      <div
-                        className="novel-menu absolute top-full left-0 mt-2 min-w-[195px] border rounded-2xl shadow-2xl z-[70] animate-in fade-in zoom-in-95 p-1.5 transition-all"
-                        style={{
-                          backgroundColor: currentTheme.bg,
-                          borderColor: currentTheme.border,
-                          boxShadow: `0 16px 36px -6px ${currentTheme.shadow || "rgba(0,0,0,0.25)"}`,
-                        }}
-                      >
-                        <button
-                          onClick={toggleNovelMode}
-                          className="w-full text-right px-3 py-2 rounded-xl active:scale-95 flex items-center justify-between gap-3 mb-1 cursor-pointer transition-all"
-                          style={{
-                            backgroundColor: "transparent",
-                            color: currentTheme.text,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = `${currentTheme.accent}14`;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = "transparent";
-                          }}
-                        >
-                          <span
-                            className="font-zain-bold text-xs whitespace-nowrap leading-none pt-0.5"
-                            style={{ color: currentTheme.text }}
-                          >
-                            {isNovelMode ? "تعطيل الرواية" : "تفعيل الرواية"}
-                          </span>
-                          <Book
-                            className="w-4 h-4 flex-shrink-0"
-                            style={{ color: currentTheme.accent }}
-                          />
-                        </button>
-                        {isNovelMode && (
-                          <button
-                            onClick={() => {
-                              setShowTOC(true);
-                              setShowNovelMenu(false);
-                            }}
-                            className="toc-toggle w-full text-right px-3 py-2 rounded-xl active:scale-95 flex items-center justify-between gap-3 cursor-pointer transition-all"
-                            style={{
-                              backgroundColor: "transparent",
-                              color: currentTheme.text,
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = `${currentTheme.accent}14`;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = "transparent";
-                            }}
-                          >
-                            <span
-                              className="font-zain-bold text-xs whitespace-nowrap leading-none pt-0.5"
-                              style={{ color: currentTheme.text }}
-                            >
-                              فهرس الفصول
-                            </span>
-                            <List
-                              className="w-4 h-4 flex-shrink-0"
-                              style={{ color: currentTheme.accent }}
-                            />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* REMOTE NOVEL KEYBOARD BUTTON */}
-                <button
-                  onClick={() => setIsRemoteModalOpen(true)}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer relative ${
-                    isRemoteConnected ? "text-emerald-500" : ""
-                  }`}
-                  style={{
-                    color: isRemoteConnected
-                      ? "#10B981"
-                      : currentTheme.secondary,
-                  }}
-                  title="لوحة المفاتيح اللاسلكية الروائية (عن بُعد)"
-                >
-                  <Smartphone className="w-4 h-4" />
-                  {isRemoteConnected && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  )}
-                </button>
-
-                {/* LOCK BUTTON */}
-                {showLockButton && (
+                {/* Unified 3-Dots More Options Menu */}
+                <div className="relative editor-more-menu-container">
                   <button
-                    onClick={() => setShowLockDialog(true)}
-                    className={`w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-95 transition-all cursor-pointer ${noteIsLocked ? "text-green-600" : ""}`}
-                    style={{
-                      color: noteIsLocked
-                        ? currentTheme.accent
-                        : currentTheme.secondary,
-                    }}
-                    title={noteIsLocked ? "الحكاية مؤمنة" : "تأمين الحكاية"}
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    className="editor-more-menu-trigger w-9 h-9 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/5 active:scale-90 transition-all cursor-pointer relative"
+                    style={{ color: currentTheme.text }}
+                    title="خيارات إضافية"
                   >
-                    {noteIsLocked ? (
-                      <Lock className="w-4 h-4" />
-                    ) : (
-                      <Unlock className="w-4 h-4" />
+                    <MoreVertical
+                      className="w-4 h-4"
+                      style={{ color: currentTheme.text }}
+                      strokeWidth={2.2}
+                    />
+                    {(isRemoteConnected || isNovelMode || noteIsLocked) && (
+                      <span
+                        className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                        style={{
+                          backgroundColor: isRemoteConnected
+                            ? "#10B981"
+                            : currentTheme.accent,
+                        }}
+                      />
                     )}
                   </button>
-                )}
+
+                  {/* Redesigned Menu Dropdown Card (Stable fixed width to prevent any jumping or shifting) */}
+                  <div
+                    className={`editor-more-menu absolute top-full left-0 mt-2 w-[178px] border-[0.5px] shadow-xl z-[70] overflow-hidden origin-top-left transition-[opacity,transform] duration-300 ease-out ${
+                      showMoreMenu
+                        ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                        : "opacity-0 -translate-y-3 scale-95 pointer-events-none"
+                    }`}
+                    style={{
+                      backgroundColor: currentTheme.mode === "apple_dark" ? "#2C2C2E" : currentTheme.bg,
+                      borderColor: currentTheme.mode === "apple_dark" ? "rgba(255, 255, 255, 0.12)" : currentTheme.border,
+                      borderRadius: "20px",
+                      boxShadow: currentTheme.mode === "apple_dark"
+                        ? "0 12px 36px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.6)"
+                        : `0 10px 24px -4px ${currentTheme.shadow}, 0 0 1px ${currentTheme.border}`,
+                    }}
+                  >
+                    <div className="flex flex-col p-1 gap-0.5">
+                      {/* 1. إعدادات الرواية */}
+                      {!isHandwritingMode && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleNovelMode();
+                            }}
+                            className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                            style={{
+                              color: currentTheme.text,
+                              borderRadius: "16px",
+                            }}
+                          >
+                            <BookOpenText
+                              className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                              style={{ color: isNovelMode ? currentTheme.accent : currentTheme.secondary }}
+                              strokeWidth={2}
+                            />
+                            <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                              {isNovelMode ? "تعطيل نمط الرواية" : "تفعيل نمط الرواية"}
+                            </span>
+                            {isNovelMode && (
+                              <span
+                                className="w-1.5 h-1.5 rounded-full mr-auto flex-shrink-0"
+                                style={{ backgroundColor: currentTheme.accent }}
+                              />
+                            )}
+                          </button>
+
+                          {isNovelMode && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowMoreMenu(false);
+                                setShowTOC(true);
+                              }}
+                              className="toc-toggle flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                              style={{
+                                color: currentTheme.text,
+                                borderRadius: "16px",
+                              }}
+                            >
+                              <List
+                                className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                                style={{ color: currentTheme.accent }}
+                                strokeWidth={2}
+                              />
+                              <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                                فهرس الفواصل
+                              </span>
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {/* 2. كيبورد الحكايات */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowMoreMenu(false);
+                          setIsRemoteModalOpen(true);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                        style={{
+                          color: currentTheme.text,
+                          borderRadius: "16px",
+                        }}
+                      >
+                        <Smartphone
+                          className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                          style={{ color: isRemoteConnected ? "#10B981" : currentTheme.secondary }}
+                          strokeWidth={2}
+                        />
+                        <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                          كيبورد الحكايات
+                        </span>
+                        {isRemoteConnected && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-auto flex-shrink-0" />
+                        )}
+                      </button>
+
+                      {/* 3. تأمين وقفل الحكاية */}
+                      {showLockButton && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMoreMenu(false);
+                            setShowLockDialog(true);
+                          }}
+                          className="lock-dialog-trigger flex items-center gap-2.5 px-3 py-1.5 text-right group transition-all hover:bg-black/5 active:scale-[0.98] cursor-pointer whitespace-nowrap w-full"
+                          style={{
+                            color: currentTheme.text,
+                            borderRadius: "16px",
+                          }}
+                        >
+                          {noteIsLocked ? (
+                            <Lock
+                              className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                              style={{ color: currentTheme.accent }}
+                              strokeWidth={2}
+                            />
+                          ) : (
+                            <Unlock
+                              className="w-3.5 h-3.5 group-hover:scale-110 transition-transform flex-shrink-0"
+                              style={{ color: currentTheme.secondary }}
+                              strokeWidth={2}
+                            />
+                          )}
+                          <span className="font-zain-reg text-[12px] leading-none pt-0.5 whitespace-nowrap">
+                            {noteIsLocked ? "الحكاية مؤمنة" : "تأمين الحكاية"}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 <div
                   className="w-px h-5 mx-0.5"
@@ -3750,7 +3755,7 @@ const DarAlHikayatMaster: React.FC = () => {
                 className="font-zain-xbold text-sm leading-none pt-0.5"
                 style={{ color: currentTheme.text }}
               >
-                فهرس الفصول
+                فهرس الفواصل
               </span>
               <span
                 className="text-[10px] font-zain-bold px-2 py-0.5 rounded-full leading-none"
@@ -3941,20 +3946,51 @@ const DarAlHikayatMaster: React.FC = () => {
         }`}
         dir="rtl"
       >
-        {/* AI Assistant Studio Pane: Completely fixed to the viewport - 100% immune to editor scrolling or text length */}
-        {showAIAssistant && isWideScreen && (
+        {/* AI Assistant Studio: Dual-Pane Split on Wide Screens / Full-Screen Overlay on Mobile Phones */}
+        {hasActivatedAssistant && (
           <aside
+            id="dar-alhikayat-ai-container"
             aria-label="المساعد الأدبي الذكي"
-            className="fixed top-0 bottom-0 right-0 h-screen max-h-screen z-40 border-l flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ease-in-out overscroll-contain"
-            style={{
-              width: paneWidthCss,
-              minWidth: paneWidthCss,
-              maxWidth: paneWidthCss,
-              height: "100vh",
-              maxHeight: "100vh",
-              backgroundColor: currentTheme.bg,
-              borderColor: currentTheme.border,
-            }}
+            className={`flex flex-col overflow-hidden shadow-2xl overscroll-contain ${
+              isWideScreen
+                ? "fixed top-0 bottom-0 right-0 h-screen max-h-screen z-40 border-l"
+                : "fixed inset-0 z-[60] w-full h-[100dvh] max-h-[100dvh]"
+            }`}
+            style={
+              isWideScreen
+                ? {
+                    width: paneWidthCss,
+                    minWidth: paneWidthCss,
+                    maxWidth: paneWidthCss,
+                    height: "100vh",
+                    maxHeight: "100vh",
+                    backgroundColor: currentTheme.bg,
+                    borderColor: currentTheme.border,
+                    display: "flex",
+                    transform: showAIAssistant ? "translateX(0)" : "translateX(100%)",
+                    opacity: showAIAssistant ? 1 : 0,
+                    pointerEvents: showAIAssistant ? "auto" : "none",
+                    visibility: showAIAssistant ? "visible" : "hidden",
+                    willChange: "transform, opacity",
+                    transition:
+                      "transform 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1), visibility 0.32s",
+                  }
+                : {
+                    width: "100%",
+                    maxWidth: "100vw",
+                    height: "100dvh",
+                    maxHeight: "100dvh",
+                    backgroundColor: currentTheme.bg,
+                    borderColor: currentTheme.border,
+                    transform: showAIAssistant ? "translateY(0)" : "translateY(100%)",
+                    opacity: showAIAssistant ? 1 : 0,
+                    pointerEvents: showAIAssistant ? "auto" : "none",
+                    visibility: showAIAssistant ? "visible" : "hidden",
+                    willChange: "transform, opacity",
+                    transition:
+                      "transform 0.32s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1), visibility 0.32s",
+                  }
+            }
           >
             <DarAlHikayatAIAssistant
               onClose={() => setShowAIAssistant(false)}
@@ -3978,11 +4014,13 @@ const DarAlHikayatMaster: React.FC = () => {
 
         {/* Editor Area: Offset by paneWidthCss on the right when assistant is open, fills 100% smoothly */}
         <div
-          className="min-w-0 min-h-screen relative flex flex-col transition-all duration-300 ease-in-out"
+          className="min-w-0 min-h-screen relative flex flex-col"
           style={{
             marginRight: showAIAssistant && isWideScreen ? paneWidthCss : "0",
             width: showAIAssistant && isWideScreen ? `calc(100% - ${paneWidthCss})` : "100%",
             minWidth: 0,
+            transition:
+              "margin-right 0.4s cubic-bezier(0.32, 0.72, 0, 1), width 0.4s cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
 
@@ -4132,45 +4170,6 @@ const DarAlHikayatMaster: React.FC = () => {
                   >
                     <Sparkles className="w-4 h-4" />
                   </button>
-
-                  {/* Popover / Tooltip when tapped on unqualified screens or tablet in Portrait mode */}
-                  {showMobileTooltip && (
-                    <div
-                      ref={mobileTooltipRef}
-                      id="ai-screen-size-tooltip"
-                      role="tooltip"
-                      className="absolute bottom-full right-0 mb-3 px-3 py-1.5 rounded-xl border shadow-2xl z-50 flex items-center gap-2 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200 pointer-events-auto select-none"
-                      style={{
-                        backgroundColor: currentTheme.isDark
-                          ? "#121A1B"
-                          : "#1A2223",
-                        borderColor: `${currentTheme.accent}55`,
-                        boxShadow: `0 12px 28px -4px rgba(0,0,0,0.5), 0 0 0 1px ${currentTheme.accent}25`,
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: currentTheme.accent }}
-                      />
-                      <span
-                        className="font-zain-bold text-xs tracking-wide leading-none"
-                        style={{ color: "#F4F1EA" }}
-                      >
-                        تحتاج مساحة عرض أكبر
-                      </span>
-                      {/* Tooltip beak arrow pointing down towards the button */}
-                      <div
-                        className="absolute -bottom-1 right-6 w-2.5 h-2.5 rotate-45 border-r border-b"
-                        style={{
-                          backgroundColor: currentTheme.isDark
-                            ? "#121A1B"
-                            : "#1A2223",
-                          borderColor: `${currentTheme.accent}55`,
-                        }}
-                      />
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -4699,7 +4698,7 @@ const DarAlHikayatMaster: React.FC = () => {
       )}
 
       {/* Separate Adjacent @ Mention Capsule Button */}
-      {toolbarVisible && !showFontSheet && !isAgentEditLocked() && screenInfo.canOpenAssistant && wordCount >= 50 && (
+      {toolbarVisible && !showFontSheet && !isAgentEditLocked() && wordCount >= 50 && (
         <button
           onMouseDown={(e) => {
             e.preventDefault();

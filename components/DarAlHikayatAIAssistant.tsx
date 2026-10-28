@@ -118,26 +118,57 @@ type DarAlHikayatAIAssistantProps = {
 };
 
 /**
- * Minimalist two-lines horizontal menu icon (identical to uploaded design asset)
+ * Sidebar drawer toggle icon (exact match to uploaded reference asset):
+ * - Outer squircle / rounded rectangle with smooth corner radius (rx=5, aspect ratio 19:18)
+ * - Stroke width 2.2 with rounded joins and caps
+ * - Inner vertical sidebar capsule / pill on the leading (left) side (rx=1.375) with equidistant padding (2.15px)
+ * - Solid fill matching currentColor
  */
-export const TwoLinesMenuIcon = ({ size = 18, color = "currentColor" }: { size?: number; color?: string }) => (
+export const SidebarMenuIcon = ({
+  size = 22,
+  color = "currentColor",
+  className = "",
+}: {
+  size?: number;
+  color?: string;
+  className?: string;
+}) => (
   <svg
     width={size}
     height={size}
     viewBox="0 0 24 24"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className="shrink-0"
+    className={`shrink-0 ${className}`}
+    aria-hidden="true"
   >
-    <path
-      d="M5 9.5H19M5 14.5H19"
+    {/* Outer squircle frame */}
+    <rect
+      x="2.5"
+      y="3"
+      width="19"
+      height="18"
+      rx="5"
       stroke={color}
-      strokeWidth="2.5"
+      strokeWidth="2.2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      fill="none"
+    />
+    {/* Inner sidebar indicator capsule/pill */}
+    <rect
+      x="5.75"
+      y="6.25"
+      width="2.75"
+      height="11.5"
+      rx="1.375"
+      fill={color}
     />
   </svg>
 );
+
+export const TwoLinesMenuIcon = SidebarMenuIcon;
+
 
 type WelcomeLine = {
   title: string;
@@ -685,235 +716,283 @@ interface AgentStepsMessageCardProps {
   message: Message;
   theme: any;
   live: boolean;
+  onRetry?: () => void;
 }
 
-export function AgentStepsMessageCard({ message, theme, live }: AgentStepsMessageCardProps) {
-  const steps = message.steps || [];
-  const result = message.agentResult;
-  const view = describeExecution(steps, result, live);
-  const isExecuting = view.running;
-  const [beamActive, setBeamActive] = useState(false);
-  useEffect(() => { if (view.running) setBeamActive(true); else if (!view.busy) setBeamActive(false); }, [view.running, view.busy]);
-  const showBeam = beamActive && view.running;
-  const hasActiveDiacritize = view.running && steps.some((s) => s.toolName === "diacritize_scope" && (s.status === "active" || s.status === "waiting"));
-  const checkboxId = `agent-tree-toggle-${message.id}`;
+const PROCESS_LOG_ACTIONS: Record<string, string> = {
+  replace_text: 'استبدال نص',
+  insert_text: 'إدراج نص',
+  delete_text: 'حذف نص',
+  ask_writer: 'طلب توضيح',
+  merge_blocks: 'دمج فقرتين',
+  move_block: 'نقل فقرة',
+  split_text: 'تقسيم فقرة',
+  replace_all: 'استبدال المواضع المطابقة',
+  diacritize_scope: 'الضبط اللغوي',
+  character_continuity_checker: 'فحص اتساق الشخصيات',
+  pacing_and_emotion_analyzer: 'تحليل الإيقاع والمشاعر',
+  plot_hole_detector: 'فحص الحبكة',
+  voice_and_tone_guardian: 'مراجعة النبرة والأسلوب',
+};
 
-  const headerLabel = view.header;
+function formatArabicApproved(n: number) {
+  if (n === 1) return 'تغيير واحد معتمد';
+  if (n === 2) return 'تغييران معتمدان';
+  if (n >= 3 && n <= 10) return `${n} تغييرات معتمدة`;
+  return `${n} تغييرًا معتمدًا`;
+}
 
-  const treeStrokeColor = theme.isDark
-    ? "rgba(255, 255, 255, 0.22)"
-    : "rgba(0, 0, 0, 0.22)";
+function AnimatedSpan({
+  text,
+  className,
+  id,
+  ariaLive,
+}: {
+  text: string;
+  className?: string;
+  id?: string;
+  ariaLive?: 'polite' | 'assertive';
+}) {
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const prevTextRef = useRef(text);
 
-  // Geometry for the curved branch line in RTL
-  const isRtl = true;
-  const stemX = 11;
-  const curveEndX = 2;
+  useEffect(() => {
+    if (prevTextRef.current !== text && spanRef.current) {
+      prevTextRef.current = text;
+      const reduce =
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduce && typeof spanRef.current.animate === 'function') {
+        spanRef.current.animate(
+          [
+            { opacity: 0, transform: 'translateY(5px)' },
+            { opacity: 1, transform: 'none' },
+          ],
+          { duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)' }
+        );
+      }
+    }
+  }, [text]);
 
   return (
-    <div dir="rtl" className="w-full my-1.5 select-none text-start relative">
-      {/* Pure CSS Hidden Checkbox Controller: collapsed by default */}
-      <input
-        type="checkbox"
-        id={checkboxId}
-        defaultChecked={false}
-        className="agent-tree-checkbox"
-        aria-label="تبديل عرض مسار الخطوات"
-      />
+    <span ref={spanRef} id={id} className={className} aria-live={ariaLive}>
+      {text}
+    </span>
+  );
+}
 
-      {/* 1. Header Trigger Line (Pure CSS label) */}
-      <label
-        htmlFor={checkboxId}
-        className="cursor-pointer py-1 px-1 rounded-md transition-opacity hover:opacity-90 group select-none"
-        title="عرض / طي تفاصيل الخطوات"
-        style={{
-          display: "inline-flex",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: "8px",
-          whiteSpace: "nowrap",
-          width: "auto",
-        }}
+export function AgentStepsMessageCard({
+  message,
+  theme,
+  live,
+  onRetry,
+}: AgentStepsMessageCardProps) {
+  const steps = message.steps || [];
+  const result = message.agentResult;
+  const [isOpen, setIsOpen] = useState(true);
+
+  // 1. Overall state: 'run' | 'done' | 'fail'
+  const isFailed = !!result?.failed || (!live && steps.some((s) => s.status === 'failed'));
+  const isDone =
+    !isFailed &&
+    (!!result?.completed ||
+      (!live && steps.length > 0 && steps.every((s) => s.status === 'completed')));
+
+  const overallState: 'run' | 'done' | 'fail' = isFailed ? 'fail' : isDone ? 'done' : 'run';
+
+  // 2. Header title (ht)
+  const headerTitle =
+    overallState === 'run'
+      ? 'جارٍ المعالجة'
+      : overallState === 'done'
+      ? 'انتهت المعالجة'
+      : 'تعذّرت المعالجة';
+
+  // 3. Header meta (hm)
+  let headerMeta = '';
+  if (overallState === 'run') {
+    const activeIdx = steps.findIndex((s) => s.status === 'active');
+    const completedCount = steps.filter((s) => s.status === 'completed').length;
+    const currentStep =
+      activeIdx !== -1
+        ? activeIdx + 1
+        : Math.min(completedCount + 1, Math.max(steps.length, 1));
+    const totalSteps = Math.max(steps.length, 1);
+    headerMeta = `الخطوة ${currentStep} من ${totalSteps}`;
+  } else if (overallState === 'done') {
+    const mutations = result?.totalMutations ?? 0;
+    if (mutations > 0) {
+      headerMeta = formatArabicApproved(mutations);
+    } else {
+      const readOnly =
+        steps.length > 0 &&
+        steps.every((s) =>
+          /^(character_continuity_checker|pacing_and_emotion_analyzer|plot_hole_detector|voice_and_tone_guardian)$/.test(
+            s.toolName
+          )
+        );
+      if (readOnly) {
+        headerMeta =
+          steps.length === 1
+            ? 'فحص واحد مكتمل'
+            : steps.length === 2
+            ? 'فحصان مكتملان'
+            : steps.length <= 10
+            ? `${steps.length} فحوصات مكتملة`
+            : `${steps.length} فحصًا مكتملًا`;
+      } else {
+        headerMeta = formatArabicApproved(steps.length || 1);
+      }
+    }
+  } else {
+    // fail
+    if (result?.totalMutations && result.totalMutations > 0) {
+      headerMeta = `${formatArabicApproved(result.totalMutations)} قبل التعذر`;
+    } else {
+      headerMeta = 'لم يُطبَّق أي تغيير';
+    }
+  }
+
+  // 4. CSS Variables mapped strictly to Dar Al-Hikayat house theme
+  const cssVars = {
+    '--bg': theme.bg,
+    '--ink': theme.text,
+    '--ink2': theme.secondary,
+    '--ink3': theme.isDark ? '#7a7a88' : '#80808c',
+    '--line': theme.isDark ? '#26262e' : '#dedee6',
+    '--accent': theme.accent,
+    '--ok': theme.isDark ? '#6fd8ae' : '#128a62',
+    '--err': theme.isDark ? '#ff8f87' : '#cf3f38',
+    '--ease': 'cubic-bezier(.2,.8,.2,1)',
+    fontFamily: '"IBM Plex Sans Arabic", "Zain", "Segoe UI", Tahoma, system-ui, sans-serif',
+  } as React.CSSProperties;
+
+  return (
+    <div
+      dir="rtl"
+      className={`agent-process-log log ${isOpen ? 'open' : ''}`}
+      data-state={overallState}
+      id={`log-${message.id}`}
+      style={cssVars}
+    >
+      <button
+        type="button"
+        className="head"
+        id={`toggle-${message.id}`}
+        aria-expanded={isOpen}
+        aria-controls={`b-${message.id}`}
+        onClick={() => setIsOpen((prev) => !prev)}
       >
-        <Zap
-          size={14}
-          strokeWidth={1.8}
-          className={`shrink-0 ${
-            isExecuting ? "text-amber-400 animate-pulse" : ""
-          }`}
-          style={{
-            display: "inline-block",
-            color: isExecuting
-              ? theme.accent
-              : theme.isDark
-              ? "#d1d5db"
-              : "#4b5563",
-          }}
+        <svg className="ico" viewBox="0 0 24 24" aria-hidden="true">
+          <circle className="track" cx="12" cy="12" r="10" />
+          <g className="spin">
+            <circle className="prog" cx="12" cy="12" r="10" pathLength={1} />
+          </g>
+          <path
+            className="bolt"
+            transform="translate(5.89 5.76) scale(.52)"
+            d="M13.2 3 5.5 13.4h5.3L10 21l8-10.6h-5.3L13.2 3z"
+          />
+          <path className="chk" pathLength={1} d="M7.8 12.4l3 3 5.6-6.2" />
+          <path
+            className="crs"
+            pathLength={1}
+            d="M8.8 8.8l6.4 6.4M15.2 8.8l-6.4 6.4"
+          />
+        </svg>
+        <AnimatedSpan
+          id={`ht-${message.id}`}
+          className={`ht ${overallState === 'run' ? 'shimmer' : ''}`}
+          text={headerTitle}
         />
-
-        <span
-          key={showBeam ? 'running' : 'static'}
-          className={`${showBeam ? 'dar-thinking-shimmer agent-shimmer-once ' : ''}text-xs font-zain-bold tracking-wide select-none`}
-          data-text={headerLabel}
-          onAnimationEnd={() => setBeamActive(false)}
-          style={{ display: 'inline-block', whiteSpace: 'nowrap', color: showBeam ? undefined : theme.text,
-            '--dar-shimmer-base': `color-mix(in srgb, ${theme.text} 50%, transparent)`,
-            '--dar-shimmer-highlight': theme.text } as React.CSSProperties}
-        >{headerLabel}</span>
-
-        {/* Pure CSS rotating chevron via .agent-tree-chevron */}
-        <ChevronDown
-          size={13}
-          strokeWidth={2.2}
-          className="shrink-0 agent-tree-chevron"
-          style={{
-            display: "inline-block",
-            color: theme.isDark ? "#9ca3af" : "#6b7280",
-            opacity: 0.75,
-          }}
+        <AnimatedSpan
+          id={`hm-${message.id}`}
+          className="hm"
+          ariaLive="polite"
+          text={headerMeta}
         />
-      </label>
+        <svg className="chev" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      </button>
 
-      {/* 2. Expanded Tree View (Pure CSS grid-template-rows: 0fr → 1fr) */}
-      <div className="agent-tree-toggle mt-0.5">
-        <div className="agent-tree-inner">
-          <div className="flex flex-col py-0.5">
-              {/* Step items */}
-              {steps.map((step, idx) => {
-                const isStepDone = step.status === "completed";
-                const isStepActive = view.running && step.status === "active";
-                const isStepFailed = step.status === "failed";
+      <div className="body" id={`b-${message.id}`}>
+        <div className="inner">
+          <ol className="steps">
+            {steps.map((step, idx) => {
+              const stepState: 'run' | 'pend' | 'done' | 'fail' =
+                step.status === 'completed'
+                  ? 'done'
+                  : step.status === 'failed'
+                  ? 'fail'
+                  : step.status === 'active'
+                  ? overallState === 'fail'
+                    ? 'fail'
+                    : 'run'
+                  : overallState === 'fail'
+                  ? 'pend'
+                  : overallState === 'done'
+                  ? 'done'
+                  : 'pend';
 
-                return (
-                  <div
-                    key={step.id || idx}
-                    className="flex items-center h-7 relative"
-                  >
-                    {/* SVG Curved Branch Connector (Aligned under the Zap icon) */}
-                    <div className="w-5 h-7 shrink-0 relative flex items-center justify-center">
-                      <svg
-                        className="w-5 h-7 absolute inset-0 pointer-events-none"
-                        viewBox="0 0 20 28"
-                        fill="none"
-                      >
-                        {/* Stem curves into row branch */}
-                        <path
-                          d={`M ${stemX} 0 L ${stemX} 5 Q ${stemX} 14 ${curveEndX} 14`}
-                          stroke={treeStrokeColor}
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        {/* Trunk continues straight down to next item */}
-                        <path
-                          d={`M ${stemX} 5 L ${stemX} 28`}
-                          stroke={treeStrokeColor}
-                          strokeWidth="1.5"
-                        />
-                      </svg>
-                    </div>
+              const stepName =
+                PROCESS_LOG_ACTIONS[step.toolName] || step.stepNote || 'معالجة نص';
 
-                    {/* Step Content: Bullet Dot + Step Note */}
-                    <div className="flex items-center gap-2 pr-1 min-w-0 flex-1">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 transition-transform ${
-                          isStepActive ? "animate-ping" : ""
-                        }`}
-                        style={{
-                          backgroundColor: isStepActive
-                            ? theme.accent
-                            : isStepFailed
-                            ? "#ef4444"
-                            : theme.isDark
-                            ? "rgba(255, 255, 255, 0.5)"
-                            : "rgba(0, 0, 0, 0.45)",
-                        }}
-                      />
-                      <span
-                        className={`text-[12px] font-zain-bold leading-normal truncate ${
-                          isStepDone ? "opacity-75" : ""
-                        }`}
-                        style={{
-                          color: isStepActive
-                            ? theme.accent
-                            : isStepFailed
-                            ? "#ef4444"
-                            : theme.text,
-                        }}
-                        title={view.rows[idx]}
-                      >
-                        {view.rows[idx]}
-                      </span>
-                    </div>
+              let stepStatusNote = '';
+              if (stepState === 'run') {
+                stepStatusNote = 'قيد التنفيذ';
+              } else if (stepState === 'pend') {
+                const hadFailBefore = steps.slice(0, idx).some((s) => s.status === 'failed');
+                stepStatusNote = hadFailBefore ? 'لم يُنفَّذ' : 'في الانتظار';
+              } else if (stepState === 'done') {
+                stepStatusNote = 'اكتملت الخطوة';
+              } else if (stepState === 'fail') {
+                stepStatusNote = step.error || result?.error || 'تعذرت الخطوة';
+              }
+
+              return (
+                <li
+                  key={step.id || idx}
+                  className="step"
+                  style={{ ['--i' as any]: idx }}
+                  data-s={stepState}
+                >
+                  <span className="mark">
+                    <i className="node" />
+                    <svg className="tk" viewBox="0 0 16 16" aria-hidden="true">
+                      <path pathLength={1} d="M3.5 8.6l3 3 6-7" />
+                    </svg>
+                    <svg className="cx" viewBox="0 0 16 16" aria-hidden="true">
+                      <path pathLength={1} d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+                    </svg>
+                  </span>
+                  <div className="row">
+                    <p className={`t ${stepState === 'run' ? 'shimmer' : ''}`}>
+                      {stepName}
+                    </p>
+                    <AnimatedSpan className="s" text={stepStatusNote} />
                   </div>
-                );
-              })}
-
-              {/* Terminal Row: Terminal Branch (Done / Executing / Failed) */}
-              <div className="flex items-center h-7 relative">
-                {/* Terminal SVG Curve (Stops and does not continue downwards) */}
-                <div className="w-5 h-7 shrink-0 relative flex items-center justify-center">
-                  <svg
-                    className="w-5 h-7 absolute inset-0 pointer-events-none"
-                    viewBox="0 0 20 28"
-                    fill="none"
-                  >
-                    <path
-                      d={`M ${stemX} 0 L ${stemX} 5 Q ${stemX} 14 ${curveEndX} 14`}
-                      stroke={treeStrokeColor}
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-
-                {/* Final status indicator */}
-                <div className="flex items-center gap-1.5 pr-1 min-w-0 flex-1">
-                  {view.state === "completed" ? (
-                    <div className="flex items-center gap-1.5 text-[12px] font-zain-bold text-emerald-500">
-                      <Check size={13} strokeWidth={2.5} className="shrink-0" />
-                      <span>{view.terminal}</span>
-                      <span className="text-[10px] font-sans opacity-60 font-zain-reg">
-                        (Done)
-                      </span>
-                    </div>
-                  ) : !view.busy ? (
-                    <div className="flex items-center gap-1.5 text-[12px] font-zain-bold text-rose-500">
-                      <AlertCircle size={13} strokeWidth={2} className="shrink-0" />
-                      <span>{view.terminal}</span>
-                    </div>
-                  ) : (
-                    <div
-                      className="flex items-center justify-between w-full text-[12px] font-zain-bold"
-                      style={{ color: theme.accent }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        {view.running ? <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" /> : <span className="w-2 h-2 rounded-full border border-current opacity-60 shrink-0" />}
-                        <span>{view.terminal}</span>
-                      </div>
-                      {hasActiveDiacritize && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            cancelDiacritizeJob();
-                          }}
-                          className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10.5px] font-zain-bold bg-rose-600 hover:bg-rose-700 active:scale-95 text-white transition-all shadow-xs cursor-pointer select-none border border-rose-700/50"
-                          title="إلغاء خط إنتاج الضبط والتراجع الفوري عن أي تغييرات"
-                        >
-                          <X size={11} strokeWidth={2.5} />
-                          <span>إلغاء الضبط</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="act">
+            <button
+              type="button"
+              className="retry"
+              id={`retry-${message.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onRetry) onRetry();
+              }}
+            >
+              أعد المحاولة
+            </button>
+          </p>
         </div>
       </div>
+    </div>
   );
 }
 
@@ -1015,6 +1094,8 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
   const [welcomeLineIndex, setWelcomeLineIndex] = useState(getInitialWelcomeLineIndex);
   const [conversations, setConversations] = useState<StoredConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+
+
   const [activeFullTextMention, setActiveFullTextMention] = useState<AttachedMention | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isConversationsLoading, setIsConversationsLoading] = useState(true);
@@ -2117,15 +2198,15 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
 
       {/* ── FLOATING TOP HEADER CAPSULES: ABSOLUTE OVERLAY (ZERO BACKGROUND BAR) ── */}
       <header
-        className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none select-none"
+        className="absolute top-4 left-4 right-4 z-40 flex items-center justify-between pointer-events-none select-none gap-2"
         style={{ left: "16px", right: "16px" }}
       >
-        {/* Right Side: Drawer/Archive Button + Title Capsule */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        {/* Right Side: Circular Drawer/Archive Button & 'دار الحكايات AI' capsule in empty state */}
+        <div className="flex items-center gap-2 pointer-events-auto shrink-0">
           <button
             type="button"
             onClick={() => setIsDrawerOpen(true)}
-            className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
+            className="border rounded-full flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
             style={{
               width: "44px",
               height: "44px",
@@ -2139,62 +2220,75 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
             aria-label="سجل محادثات هذه الحكاية"
             title="سجل محادثات هذه الحكاية"
           >
-            <TwoLinesMenuIcon size={18} color={currentTheme.accent} />
+            <SidebarMenuIcon
+              size={22}
+              color={currentTheme.text}
+            />
           </button>
 
-          <div
-            className="h-11 px-5 border flex items-center justify-center backdrop-blur-xl transition-all duration-300 shadow-md"
-            style={{
-              height: "44px",
-              backgroundColor: currentTheme.glass,
-              borderColor: currentTheme.border,
-              boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
-              borderRadius: "9999px",
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles size={15} style={{ color: currentTheme.accent }} />
-              <span
-                className="font-zain-xbold text-sm tracking-wide leading-none pt-0.5 select-none"
-                style={{ color: currentTheme.text }}
+          <AnimatePresence>
+            {messages.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, x: 8 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.95, x: 8 }}
+                transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+                className="h-11 px-4 border rounded-full flex items-center justify-center backdrop-blur-xl select-none shrink-0"
+                style={{
+                  height: "44px",
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+                }}
               >
-                دار الحكايات AI
-              </span>
-            </div>
-          </div>
+                <span
+                  className="font-zain-bold text-sm tracking-wide leading-none select-none"
+                  style={{ color: currentTheme.text }}
+                >
+                  دار الحكايات AI
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Left Side: Circular Action Buttons (New Chat & Close Button) */}
-        <div className="flex items-center gap-2 pointer-events-auto">
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={startNewConversation}
-              className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
-              style={{
-                width: "44px",
-                height: "44px",
-                minWidth: "44px",
-                minHeight: "44px",
-                backgroundColor: currentTheme.glass,
-                borderColor: currentTheme.border,
-                boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
-                borderRadius: "50%",
-              }}
-              aria-label="محادثة جديدة"
-              title="محادثة جديدة"
-            >
-              <MessageCirclePlus
-                className="w-4.5 h-4.5 transition-transform duration-200"
-                style={{ color: currentTheme.accent }}
-                strokeWidth={2.2}
-              />
-            </button>
-          )}
+        {/* Left Side: Circular Action Buttons (New Chat only when messages > 0 & Close Button) */}
+        <div className="flex items-center gap-2 pointer-events-auto shrink-0">
+          <AnimatePresence>
+            {messages.length > 0 && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                type="button"
+                onClick={startNewConversation}
+                className="border rounded-full flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
+                style={{
+                  width: "44px",
+                  height: "44px",
+                  minWidth: "44px",
+                  minHeight: "44px",
+                  backgroundColor: currentTheme.glass,
+                  borderColor: currentTheme.border,
+                  boxShadow: `0 8px 24px -4px ${currentTheme.shadow || "rgba(0,0,0,0.15)"}`,
+                  borderRadius: "50%",
+                }}
+                aria-label="محادثة جديدة"
+                title="محادثة جديدة"
+              >
+                <SquarePen
+                  className="w-4.5 h-4.5 transition-transform duration-200"
+                  style={{ color: currentTheme.accent }}
+                  strokeWidth={2.2}
+                />
+              </motion.button>
+            )}
+          </AnimatePresence>
           <button
             type="button"
             onClick={onClose}
-            className="border flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
+            className="border rounded-full flex items-center justify-center backdrop-blur-xl transition-all duration-300 hover:scale-105 active:scale-95 group flex-shrink-0 aspect-square cursor-pointer"
             style={{
               width: "44px",
               height: "44px",
@@ -2227,10 +2321,11 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                   key="drawer-backdrop"
                   aria-label="إغلاق قائمة المحادثات"
                   className="fixed inset-0 z-[65] bg-black/40 backdrop-blur-[2px] cursor-pointer"
+                  style={{ willChange: "opacity" }}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.16 }}
+                  transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
                   onClick={() => {
                     setIsDrawerOpen(false);
                     setOpenConversationMenuId(null);
@@ -2246,11 +2341,20 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                     borderColor: currentTheme.border,
                     color: currentTheme.text,
                     boxShadow: `0 16px 48px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px ${currentTheme.border}`,
+                    willChange: "transform, opacity",
+                    transform: "translate3d(0, 0, 0)",
+                    backfaceVisibility: "hidden",
+                    WebkitBackfaceVisibility: "hidden",
                   }}
-                  initial={{ opacity: 0, x: 20, scale: 0.98 }}
+                  initial={{ opacity: 0, x: 50, scale: 0.98 }}
                   animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: 20, scale: 0.98 }}
-                  transition={{ duration: 0.16, ease: "easeOut" }}
+                  exit={{ opacity: 0, x: 50, scale: 0.98 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 420,
+                    damping: 36,
+                    mass: 0.75,
+                  }}
                 >
                   {/* Header: Clean, only "محادثات الحكاية" and Close Button */}
                   <div
@@ -2299,10 +2403,12 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                       }}
                     >
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: currentTheme.accent }}>
-                          <path d="M4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20H8" />
-                          <path d="M13.5 9.5L17.5 13.5L11 20H7V16L13.5 9.5Z" />
-                        </svg>
+                        <SquarePen
+                          size={18}
+                          strokeWidth={2.2}
+                          style={{ color: currentTheme.accent }}
+                          className="shrink-0"
+                        />
                       </div>
                       <span className="text-sm font-zain-bold flex-1 truncate">محادثة جديدة</span>
                     </button>
@@ -2753,9 +2859,34 @@ export const DarAlHikayatAIAssistant = React.memo(function DarAlHikayatAIAssista
                 return (
                   <AgentStepsMessageCard
                     key={m.id}
-                    message={{ ...m, steps: m.steps?.map(step => ({ ...step, stepNote: presentMessageText(m, step.stepNote), error: step.error ? presentMessageText(m, step.error) : undefined })), agentResult: m.agentResult ? { ...m.agentResult, error: m.agentResult.error ? presentMessageText(m, m.agentResult.error) : undefined } : undefined }}
+                    message={{
+                      ...m,
+                      steps: m.steps?.map((step) => ({
+                        ...step,
+                        stepNote: presentMessageText(m, step.stepNote),
+                        error: step.error ? presentMessageText(m, step.error) : undefined,
+                      })),
+                      agentResult: m.agentResult
+                        ? {
+                            ...m.agentResult,
+                            error: m.agentResult.error
+                              ? presentMessageText(m, m.agentResult.error)
+                              : undefined,
+                          }
+                        : undefined,
+                    }}
                     theme={currentTheme}
                     live={isAgentExecuting && executionMessageId === m.id}
+                    onRetry={() => {
+                      const idx = messages.findIndex((msg) => msg.id === m.id);
+                      const prevUserMsg =
+                        idx > 0
+                          ? [...messages.slice(0, idx)].reverse().find((msg) => msg.role === "user")
+                          : null;
+                      if (prevUserMsg && prevUserMsg.content) {
+                        void handleSendMessage(prevUserMsg.content);
+                      }
+                    }}
                   />
                 );
               }

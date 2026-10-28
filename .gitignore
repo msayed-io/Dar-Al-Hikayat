@@ -32,3 +32,8 @@ dist-ssr
 # Android signing keys must never be committed
 *.keystore
 *.jks
+
+# AI Studio internal artifacts and temporary uploads
+.aistudio/
+public/assets/aistudio/
+
