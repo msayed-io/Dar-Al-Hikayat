@@ -30,6 +30,7 @@ import {
   RING_LENGTH,
 } from "../lib/prayer-content";
 import {
+  getPrayerTimeline,
   calculateSecondaryTimes,
   formatPrayerTime,
   SecondaryPrayerTimes,
@@ -106,87 +107,29 @@ const PrayerPage: React.FC = () => {
   const countryName = prayerState.location?.countryNameAr || "مصر";
   const timezoneId = prayerState.location?.timezoneId ?? "Africa/Cairo";
 
-  /* ── Prayer Schedule Calculations ── */
-  const calculationData = useMemo(() => {
-    const coordinates = new Coordinates(latitude, longitude);
-    const params = CalculationMethod.Egyptian();
-    const pt = new AdhanPrayerTimes(coordinates, now, params);
-
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const ptTomorrow = new AdhanPrayerTimes(coordinates, tomorrow, params);
-
-    // List of 6 prayers including Sunrise
-    const schedule = [
-      { key: "fajr", name: "الفجر", date: pt.fajr, isMandatory: true },
-      { key: "sunrise", name: "الشروق", date: pt.sunrise, isMandatory: false },
-      { key: "dhuhr", name: "الظهر", date: pt.dhuhr, isMandatory: true },
-      { key: "asr", name: "العصر", date: pt.asr, isMandatory: true },
-      { key: "maghrib", name: "المغرب", date: pt.maghrib, isMandatory: true },
-      { key: "isha", name: "العشاء", date: pt.isha, isMandatory: true },
-    ];
-
-    // Mandatory prayers for current/next calculation
-    const mandatorySchedule = schedule.filter((p) => p.isMandatory);
-
-    const nowTimeMs = now.getTime();
-
-    // Determine current prayer & next prayer
-    let currentIndex = mandatorySchedule.length - 1; // Default to Isha yesterday
-    for (let i = mandatorySchedule.length - 1; i >= 0; i--) {
-      if (nowTimeMs >= mandatorySchedule[i].date.getTime()) {
-        currentIndex = i;
-        break;
-      }
-    }
-
-    const current = mandatorySchedule[currentIndex];
-    const isNextTomorrow = currentIndex === mandatorySchedule.length - 1;
-    const next = isNextTomorrow
-      ? { key: "fajr", name: "الفجر", date: ptTomorrow.fajr, isMandatory: true }
-      : mandatorySchedule[currentIndex + 1];
-
-    // Progress & Countdown
-    const currentStartMs = current.date.getTime();
-    const nextStartMs = next.date.getTime();
-    const totalPeriodMs = Math.max(1, nextStartMs - currentStartMs);
-    const elapsedMs = Math.max(0, nowTimeMs - currentStartMs);
-    const progress = Math.min(1, Math.max(0, elapsedMs / totalPeriodMs));
-
-    // Seconds Remaining
-    const remainingSeconds = Math.max(0, Math.floor((nextStartMs - nowTimeMs) / 1000));
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-    const seconds = remainingSeconds % 60;
-    const countdownLabel = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-
-    // Augmented schedule for display
-    const augmented = schedule.map((p) => {
-      const isCurrent = p.key === current.key;
-      const isNext = p.key === next.key;
-      let status = "";
-      if (isCurrent) status = "الآن";
-      else if (isNext) status = "التالية";
-      else if (nowTimeMs > p.date.getTime()) status = "تمت";
-      else status = "قادمة";
-
-      return {
-        ...p,
-        timeFormatted: formatPrayerTime(p.date, timezoneId),
-        isCurrent,
-        isNext,
-        status,
-      };
-    });
-
-    return {
-      current,
-      next,
-      progress,
-      countdownLabel,
-      augmented,
+  /* ── Prayer Schedule Calculations (Universal UTC + IANA Timezone Engine) ── */
+  const timelineData = useMemo(() => {
+    const loc = prayerState.location || {
+      cityName: cityName,
+      cityNameAr: cityName,
+      countryNameAr: countryName,
+      latitude,
+      longitude,
+      timezoneId,
     };
-  }, [now, latitude, longitude, timezoneId]);
+    return getPrayerTimeline(loc, prayerState.method, now);
+  }, [now, latitude, longitude, timezoneId, cityName, countryName, prayerState.location, prayerState.method]);
+
+  const calculationData = useMemo(() => {
+    return {
+      current: timelineData.current,
+      next: timelineData.next,
+      progress: timelineData.progress,
+      countdownLabel: timelineData.countdownLabel,
+      augmented: timelineData.augmentedSchedule,
+      timezoneInfo: timelineData.timezoneInfo,
+    };
+  }, [timelineData]);
 
   /* ── Date Strings (Hijri & Gregorian) ── */
   const dateStrings = useMemo(() => {
@@ -201,17 +144,16 @@ const PrayerPage: React.FC = () => {
         day: "numeric",
         month: "long",
         year: "numeric",
+        timeZone: timezoneId,
       }).format(now);
       return { hijriDate, gregorianDate };
     } catch {
       return { hijriDate: "اليوم المبارك", gregorianDate: now.toLocaleDateString("ar-EG") };
     }
-  }, [now]);
+  }, [now, timezoneId]);
 
   /* ── Secondary Times ── */
-  const secondaryTimes: SecondaryPrayerTimes = useMemo(() => {
-    return calculateSecondaryTimes(latitude, longitude, now, "egyptian", timezoneId);
-  }, [latitude, longitude, now, timezoneId]);
+  const secondaryTimes: SecondaryPrayerTimes = timelineData.secondaryTimes;
 
   /* ── Ring Offset Calculation ── */
   const ringOffset = RING_LENGTH * (1 - calculationData.progress);

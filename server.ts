@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { getModelsToTry, isModelFallbackError } from "./lib/gemini-models";
 import { mapNativeCommandToPayload } from "./lib/remote-keyboard-service";
+import { getPrayerTimeline, formatIsoWithOffset } from "./lib/prayer-times";
 
 // Active SSE client connections for remote keyboard
 const remoteKeyboardClients = new Set<express.Response>();
@@ -33,6 +34,46 @@ async function startServer() {
   // API routes FIRST
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Universal UTC & IANA Timezone Prayer Times API (Back-End Sync with ISO 8601 Offsets)
+  app.get("/api/prayer-times", (req, res) => {
+    try {
+      const lat = parseFloat(String(req.query.lat || req.query.latitude || "30.0444"));
+      const lng = parseFloat(String(req.query.lng || req.query.longitude || "31.2357"));
+      const timezone = String(req.query.tz || req.query.timezoneId || "Africa/Cairo");
+      const method = (String(req.query.method || "egyptian")) as any;
+      const ts = req.query.timestamp ? new Date(Number(req.query.timestamp)) : new Date();
+
+      const timeline = getPrayerTimeline(
+        {
+          cityName: "Location",
+          cityNameAr: "الموقع المختار",
+          countryNameAr: "البلد",
+          latitude: isNaN(lat) ? 30.0444 : lat,
+          longitude: isNaN(lng) ? 31.2357 : lng,
+          timezoneId: timezone,
+        },
+        method,
+        ts
+      );
+
+      res.json({
+        ok: true,
+        serverTimeUtc: ts.toISOString(),
+        serverTimeIsoWithOffset: formatIsoWithOffset(ts, timezone),
+        timezone: timeline.timezoneInfo,
+        currentPrayer: timeline.current,
+        nextPrayer: timeline.next,
+        remainingSeconds: timeline.remainingSeconds,
+        countdownLabel: timeline.countdownLabel,
+        progress: timeline.progress,
+        todaySchedule: timeline.augmentedSchedule,
+        secondaryTimes: timeline.secondaryTimes,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err?.message || "Prayer calculation error" });
+    }
   });
 
   // PWA Manifest Endpoint for Remote Keyboard

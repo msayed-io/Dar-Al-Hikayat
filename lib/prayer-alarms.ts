@@ -11,7 +11,7 @@ import {
   PRE_ALARM_MINUTES,
   type PrayerState,
 } from "./prayer-config";
-import { getDayPrayers, getTodayAndTomorrow } from "./prayer-times";
+import { getDayPrayers, getTodayAndTomorrow, getCivilDate } from "./prayer-times";
 import { CITIES, type CityData } from "./prayer-cities";
 import { reverseGeocodeCoordinates } from "./reverse-geocoding";
 
@@ -258,8 +258,7 @@ async function schedulePrayerAlarmsInternal(
     const DAYS_TO_SCHEDULE = 30;
 
     for (let dayOffset = 0; dayOffset < DAYS_TO_SCHEDULE; dayOffset++) {
-      const targetDate = new Date(now);
-      targetDate.setDate(targetDate.getDate() + dayOffset);
+      const targetDate = getCivilDate(new Date(now), dayOffset, tz);
       const dayPrayers = getDayPrayers(
         location.latitude,
         location.longitude,
